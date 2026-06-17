@@ -1,0 +1,194 @@
+{
+  "projectName": "本地mac",
+  "scheduler": {
+    "enabled": false,
+    "cron": "*/20 * * * *",
+    "only_error_notification": false
+  },
+  "dailyInspection": {
+    "enabled": true,
+    "hour": 9,
+    "minute": 25,
+    "only_error_notification": false
+  },
+  "realTimeMonitoring": {
+    "enabled": false,
+    "interval": 120,
+    "items": {
+      "cpu": false,
+      "memory": false,
+      "disk": false,
+      "disk_io": false,
+      "swap": false,
+      "processes": false,
+      "slow_sql": false,
+      "worker_output_with_color_size": false,
+      "worker_output_without_color_size": false,
+      "worker_output_sfd": false,
+      "mes_hanging": false
+    },
+    "notification": {
+      "enabled": true,
+      "only_error": true,
+      "alert_levels": [
+        "warning",
+        "critical"
+      ],
+      "dingtalk": true,
+      "cooldown_period": 600
+    },
+    "performance": {
+      "max_concurrent_checks": 3,
+      "timeout": 10,
+      "resource_limit": {
+        "cpu_percent": 15,
+        "memory_mb": 200
+      }
+    }
+  },
+  "thresholds": {
+    "cpu": {
+      "warning": 80,
+      "critical": 90
+    },
+    "memory": {
+      "warning": 80,
+      "critical": 90
+    },
+    "disk": {
+      "warning": 80,
+      "critical": 90
+    },
+    "disk_free": {
+      "warning": 20,
+      "critical": 15
+    },
+    "slow_sql": {
+      "warning": 5,
+      "critical": 10
+    }
+  },
+  "inspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false
+  },
+  "scheduledInspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false,
+    "database": false,
+    "network": false,
+    "worker_output_with_color_size": false,
+    "worker_output_without_color_size": false,
+    "worker_output_sfd": false,
+    "mes_hanging": false
+  },
+  "dailyInspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false,
+    "database": false,
+    "network": false,
+    "worker_output_with_color_size": false,
+    "worker_output_without_color_size": true,
+    "worker_output_sfd": false,
+    "mes_hanging": true
+  },
+  "dingtalk": {
+    "enabled": true,
+    "webhooks": [
+      "https://oapi.dingtalk.com/robot/send?access_token=8f305abd6ecfcd1a08969a2229d3dba6099a7e4ff521598409413cfee5329605"
+    ],
+    "secret": "",
+    "show_details": false
+  },
+  "databaseConfig": {
+    "mes": {
+      "type": "postgresql",
+      "host": "10.10.164.106",
+      "port": 5432,
+      "user": "postgres",
+      "password": "Jack_2024",
+      "database": "sangsha_test"
+    },
+    "hanging": {
+      "type": "mysql",
+      "host": "10.118.23.50",
+      "port": 3306,
+      "user": "root",
+      "password": "7bb98050796b649e",
+      "database": "middle-sangsha"
+    }
+  },
+  "inspectionDateConfig": {
+    "enabled": true,
+    "options": {
+      "yesterday": true,
+      "today": false,
+      "current_month_to_yesterday": true,
+      "current_month_to_today": false,
+      "custom": false
+    },
+    "custom_date_range": {
+      "start_date": "",
+      "end_date": ""
+    }
+  },
+  "arthasServers": [
+    {
+      "name": "JX",
+      "host": "192.168.99.138",
+      "ssh_port": 32122,
+      "username": "jack",
+      "auth_type": "password",
+      "password": "HUHoLs10@NpOU-y",
+      "private_key_path": "",
+      "arthas_port": 8563,
+      "connection_mode": "ssh_tunnel",
+      "ssh_local_port": 18563,
+      "id": 1
+    },
+    {
+      "name": "saas_dev",
+      "host": "192.168.0.243",
+      "ssh_port": 32122,
+      "username": "jack",
+      "auth_type": "password",
+      "password": "HUHoLs10@NpOU-y",
+      "private_key_path": "",
+      "arthas_port": 8563,
+      "connection_mode": "ssh_tunnel",
+      "ssh_local_port": 18563,
+      "id": 2
+    },
+    {
+      "name": "桑莎开发测试",
+      "host": "192.168.0.203",
+      "ssh_port": 32122,
+      "username": "jack",
+      "auth_type": "password",
+      "password": "HUHoLs10@NpOU-y",
+      "private_key_path": "",
+      "arthas_port": 8563,
+      "connection_mode": "ssh_tunnel",
+      "ssh_local_port": 18563,
+      "id": 3
+    }
+  ]
+}

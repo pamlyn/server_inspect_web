@@ -1,0 +1,95 @@
+<div id="customInspectContent" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
+                style="background: var(--primary-light);">
+                <i class="fa fa-code text-sm" style="color: var(--primary-color);"></i>
+            </div>
+            自定义稽核
+        </h2>
+        <div class="space-y-4">
+            <div class="relative">
+                <label class="block text-sm font-medium text-gray-700 mb-1">选择稽核脚本</label>
+                <div class="relative">
+                    <input type="text" id="customScriptSearch" placeholder="搜索脚本名称..."
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all pr-10"
+                        style="--tw-ring-color: var(--primary-color);">
+                    <i class="fa fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer"
+                        id="customScriptDropdownToggle"></i>
+                </div>
+                <div id="customScriptDropdown"
+                    class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 shadow-lg max-h-60 overflow-y-auto hidden">
+                    <div id="customScriptDropdownOptions"></div>
+                </div>
+                <input type="hidden" id="customScriptSelect" value="">
+            </div>
+            <div id="selectedScriptInfo" class="hidden bg-gray-50 rounded-lg p-4">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700" id="selectedScriptName"></p>
+                        <p class="text-xs text-gray-500 mt-1" id="selectedScriptDatabase"></p>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">脚本内容</label>
+                    <pre id="selectedScriptContent"
+                        class="text-xs text-gray-600 bg-white border border-gray-200 rounded p-3 max-h-40 overflow-y-auto whitespace-pre-wrap"></pre>
+                </div>
+                <div class="mt-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">SQL内容（替换参数后）</label>
+                    <pre id="selectedScriptSqlContent"
+                        class="text-xs text-gray-600 bg-white border border-gray-200 rounded p-3 max-h-40 overflow-y-auto whitespace-pre-wrap"></pre>
+                </div>
+            </div>
+            <div id="scriptParamsConfig" class="hidden bg-gray-50 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+                    <i class="fa fa-sliders-h mr-2" style="color: var(--primary-color);"></i>
+                    脚本参数配置
+                </h3>
+                <p class="text-xs text-gray-500 mb-3" id="scriptAvailableVariables">可用变量: -</p>
+                <div id="dynamicParamsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 动态参数输入框将通过JavaScript生成 -->
+                </div>
+            </div>
+            <div id="scriptRulesConfig" class="hidden bg-gray-50 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+                    <i class="fa fa-list-alt mr-2" style="color: var(--primary-color);"></i>
+                    规则配置
+                </h3>
+                <p class="text-xs text-gray-500 mb-3">配置判断规则，用于自动判断结果是否正常</p>
+                <button id="addRuleBtn"
+                    class="px-3 py-1 text-xs text-primary border border-primary rounded hover:bg-primary hover:bg-opacity-10 transition-all mb-4">
+                    <i class="fa fa-plus mr-1"></i>添加规则
+                </button>
+                <p class="text-xs text-gray-400 mb-2">规则判断逻辑：满足任一"异常"规则则标记为异常；满足任一"正常"规则则标记为正常；异常优先</p>
+                <div id="rulesList" class="space-y-3">
+                    <!-- 规则将通过JavaScript生成 -->
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button id="executeCustomScriptBtn"
+                    class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium"
+                    disabled>
+                    <i class="fa fa-play mr-2"></i>执行稽核
+                </button>
+                <button id="exportCustomScriptBtn"
+                    class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary hover:bg-opacity-10 transition-all text-sm font-medium hidden">
+                    <i class="fa fa-download mr-2"></i>导出结果
+                </button>
+            </div>
+        </div>
+        <div id="customScriptResult" class="mt-6 hidden">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">稽核结果</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead id="customScriptResultHeader" class="bg-gray-50">
+                        <!-- 表头将通过JavaScript动态生成 -->
+                    </thead>
+                    <tbody id="customScriptResultBody" class="bg-white divide-y divide-gray-200">
+                        <!-- 数据将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

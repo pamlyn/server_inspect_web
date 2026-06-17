@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 服务器巡检系统</title>
+    <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 font-sans theme-blue flex items-center justify-center">
+    <div class="w-full max-w-md p-8 bg-white rounded-xl shadow-lg card-hover fade-in">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border border-blue-200">
+                <i class="fa fa-server text-2xl text-blue-600"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">服务器巡检系统</h1>
+            <p class="text-gray-500 mt-2">请登录以访问系统</p>
+        </div>
+        
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                <input type="text" id="username" name="username" value="admin" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+            </div>
+            
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                <input type="password" id="password" name="password" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+            </div>
+            
+            <div id="captchaContainer" class="hidden">
+                <label for="captcha" class="block text-sm font-medium text-gray-700 mb-1">验证码</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="captcha" name="captcha" 
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="请输入验证码">
+                    <div class="flex-shrink-0">
+                        <img id="captchaImage" src="/api/captcha" alt="验证码" 
+                            class="h-10 w-32 rounded-lg border border-gray-300 cursor-pointer">
+                    </div>
+                </div>
+            </div>
+            
+            <div id="errorMessage" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm"></div>
+            
+            <button type="submit" id="loginBtn" 
+                class="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center justify-center">
+                <i class="fa fa-sign-in mr-2"></i>登录
+            </button>
+        </form>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('loginForm');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const captchaInput = document.getElementById('captcha');
+            const captchaImage = document.getElementById('captchaImage');
+            const captchaContainer = document.getElementById('captchaContainer');
+            const errorMessage = document.getElementById('errorMessage');
+            const loginBtn = document.getElementById('loginBtn');
+            
+            // 刷新验证码
+            captchaImage.addEventListener('click', function() {
+                this.src = '/api/captcha?' + new Date().getTime();
+            });
+            
+            // 表单提交
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value;
+                const captcha = captchaInput ? captchaInput.value.trim() : '';
+                
+                // 获取验证码ID
+                const captchaId = getCookie('captcha_id');
+                
+                // 显示加载状态
+                loginBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>登录中...';
+                loginBtn.disabled = true;
+                
+                // 发送登录请求
+                fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams({
+                        username: username,
+                        password: password,
+                        captcha_id: captchaId,
+                        captcha: captcha
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 恢复按钮状态
+                    loginBtn.innerHTML = '<i class="fa fa-sign-in mr-2"></i>登录';
+                    loginBtn.disabled = false;
+                    
+                    if (data.success) {
+                        // 登录成功，跳转到首页
+                        window.location.href = '/';
+                    } else {
+                        // 显示错误信息
+                        errorMessage.textContent = data.message;
+                        errorMessage.classList.remove('hidden');
+                        
+                        // 如果需要验证码，显示验证码输入框
+                        if (data.need_captcha) {
+                            captchaContainer.classList.remove('hidden');
+                            // 刷新验证码
+                            captchaImage.src = '/api/captcha?' + new Date().getTime();
+                        }
+                    }
+                })
+                .catch(error => {
+                    // 恢复按钮状态
+                    loginBtn.innerHTML = '<i class="fa fa-sign-in mr-2"></i>登录';
+                    loginBtn.disabled = false;
+                    
+                    errorMessage.textContent = '登录失败，请重试';
+                    errorMessage.classList.remove('hidden');
+                });
+            });
+            
+            // 获取cookie
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+            }
+        });
+    </script>
+</body>
+
+</html>

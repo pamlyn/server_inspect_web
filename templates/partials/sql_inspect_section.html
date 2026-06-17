@@ -1,0 +1,82 @@
+<div id="sqlInspectContent" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
+                style="background: var(--primary-light);">
+                <i class="fa fa-search text-sm" style="color: var(--primary-color);"></i>
+            </div>
+            数据稽查
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">稽查类型</label>
+                <select id="sqlInspectType"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style="--tw-ring-color: var(--primary-color);">
+                    <option value="custom">自定义SQL</option>
+                    <option value="worker_output">工人产量与报工明细稽查</option>
+                    <option value="worker_output_sfd">工人产量与报工明细数据稽核(sfd)</option>
+                    <option value="mes_hanging">MES报工明细与吊挂报工明细稽查</option>
+                </select>
+            </div>
+            <div id="dateRangeContainer" class="hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-1">日期范围（必须在同一月）</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="date" id="inspectDateStart"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                    <input type="date" id="inspectDateEnd"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+                <p id="dateRangeHint" class="text-xs text-gray-500 mt-1">请选择开始和结束日期（同一月内）</p>
+            </div>
+            <div id="colorSizeContainer" class="hidden">
+                <label class="flex items-center">
+                    <input type="checkbox" id="includeColorSize"
+                        class="mr-2 h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
+                    <span class="text-sm text-gray-700">包含颜色尺码维度</span>
+                </label>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">选择数据库</label>
+                <select id="sqlDatabase"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style="--tw-ring-color: var(--primary-color);">
+                    <option value="mes">MES数据库</option>
+                    <option value="hanging">吊挂中间库</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">SQL语句</label>
+                <textarea id="sqlQuery" rows="6"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all pre-wrap"
+                    style="--tw-ring-color: var(--primary-color); resize: vertical; min-height: 120px;"
+                    placeholder="请输入SQL语句..."></textarea>
+            </div>
+            <div class="flex space-x-3">
+                <button id="executeSqlBtn"
+                    class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium">
+                    <i class="fa fa-play mr-2"></i>执行SQL
+                </button>
+                <button id="exportSqlBtn"
+                    class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary hover:bg-opacity-10 transition-all text-sm font-medium">
+                    <i class="fa fa-download mr-2"></i>导出结果
+                </button>
+            </div>
+        </div>
+        <div id="sqlResult" class="mt-6 hidden">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">查询结果</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead id="sqlResultHeader" class="bg-gray-50">
+                        <!-- 表头将通过JavaScript动态生成 -->
+                    </thead>
+                    <tbody id="sqlResultBody" class="bg-white divide-y divide-gray-200">
+                        <!-- 数据将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

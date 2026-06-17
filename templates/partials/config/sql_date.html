@@ -1,0 +1,48 @@
+<!-- 数据稽查日期配置 -->
+<div class="border border-gray-200 rounded-lg p-4">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+        <i class="fa fa-calendar-check-o mr-2" style="color: var(--primary-color);"></i>
+        数据稽查日期配置
+    </h3>
+    <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateYesterday" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">昨日</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateToday" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">今日</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateCurrentMonthToYesterday" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">当前月到昨天</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateCurrentMonthToToday" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">当前月到今天</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateCustom" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">自定义日期范围</span>
+            </label>
+        </div>
+        <div id="customDateRange" class="hidden">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">开始日期</label>
+                    <input type="date" id="customStartDate"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">结束日期</label>
+                    <input type="date" id="customEndDate"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">注：开始日期和结束日期必须在同一个月</p>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project_name | default('服务器巡检系统') }}</title>
+    <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+    <!-- 外部JS模块（app.js必须最先加载，提供共享工具函数） -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 font-sans theme-blue" id="appBody">
+    <!-- Toast 提示容器 -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <div class="flex h-screen overflow-hidden">
+        {% include 'partials/sidebar.html' %}
+
+        <!-- 右侧主内容区 -->
+        <main class="flex-1 overflow-y-auto p-6">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- 模块JS（按依赖顺序加载） -->
+    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sql_inspect.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/custom_inspect.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/inspection.js') }}"></script>
+    <!-- Arthas诊断模块已隐藏 -->
+    <!-- <script src="{{ url_for('static', filename='js/arthas.js') }}"></script> -->
+</body>
+
+</html>

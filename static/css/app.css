@@ -1,0 +1,27 @@
+.content-auto { content-visibility: auto; }
+.transition-height { transition: max-height 0.3s ease; }
+.pre-wrap { white-space: pre-wrap; word-wrap: break-word; }
+.code-block {
+    background-color: #f8f9fa;
+    border-left: 4px solid #3b82f6;
+    padding: 12px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+.fade-in { animation: fadeIn 0.5s ease-in-out; }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.button-press { transform: scale(0.98); transition: transform 0.1s ease; }
+.card-hover { transition: all 0.3s ease; }
+.card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+.theme-blue { --primary-color: #3b82f6; --primary-light: #dbeafe; --primary-dark: #1d4ed8; }
+.theme-green { --primary-color: #10b981; --primary-light: #d1fae5; --primary-dark: #047857; }
+.theme-purple { --primary-color: #8b5cf6; --primary-light: #ede9fe; --primary-dark: #6d28d9; }
+.theme-orange { --primary-color: #f59e0b; --primary-light: #fef3c7; --primary-dark: #b45309; }
+.theme-red { --primary-color: #ef4444; --primary-light: #fee2e2; --primary-dark: #b91c1c; }
+.theme-cyan { --primary-color: #06b6d4; --primary-light: #cffafe; --primary-dark: #0891b2; }

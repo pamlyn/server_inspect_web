@@ -1,0 +1,122 @@
+<!-- 自定义稽核脚本配置 -->
+<div class="border border-gray-200 rounded-lg p-4">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+        <i class="fa fa-code mr-2" style="color: var(--primary-color);"></i>
+        <span id="scriptFormTitle">自定义稽核脚本配置</span>
+    </h3>
+    <input type="hidden" id="customScriptId">
+    <div class="space-y-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">脚本名称</label>
+            <input type="text" id="customScriptName"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style="--tw-ring-color: var(--primary-color);" placeholder="输入脚本名称">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">选择数据库</label>
+            <select id="customScriptDatabase"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style="--tw-ring-color: var(--primary-color);">
+                <option value="mes">MES数据库</option>
+                <option value="hanging">吊挂中间库</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">执行选项</label>
+            <div class="grid grid-cols-3 gap-2">
+                <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" id="customScriptScheduled" class="w-4 h-4 rounded border-gray-300">
+                    <span class="ml-2 text-sm text-gray-700">定时巡检</span>
+                </label>
+                <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" id="customScriptDaily" class="w-4 h-4 rounded border-gray-300">
+                    <span class="ml-2 text-sm text-gray-700">日常巡检</span>
+                </label>
+                <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" id="customScriptRealTime" class="w-4 h-4 rounded border-gray-300">
+                    <span class="ml-2 text-sm text-gray-700">实时监测</span>
+                </label>
+            </div>
+        </div>
+        <!-- 自定义变量配置 -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-medium text-gray-600">自定义变量配置</label>
+                <button type="button" id="addVariableBtn"
+                    class="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-all">
+                    <i class="fa fa-plus mr-1"></i>添加变量
+                </button>
+            </div>
+            <div id="variablesList" class="space-y-2">
+                <!-- 变量列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+        <!-- 规则配置 -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-medium text-gray-600">规则配置</label>
+                <button type="button" id="addRuleBtnConfig"
+                    class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-all">
+                    <i class="fa fa-plus mr-1"></i>添加规则
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mb-2">
+                规则判断逻辑：满足任一"异常"规则则标记为异常；满足任一"正常"规则则标记为正常；异常优先</p>
+            <div id="rulesListConfig" class="space-y-2">
+                <!-- 规则列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">脚本内容</label>
+            <p class="text-xs text-gray-500 mb-2" id="availableVariablesHint">可用变量: -</p>
+            <textarea id="customScriptContent" rows="8"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all pre-wrap"
+                style="--tw-ring-color: var(--primary-color); resize: vertical; min-height: 160px;"
+                placeholder="请输入SQL脚本..."></textarea>
+        </div>
+        <div class="flex space-x-3">
+            <button type="button" id="saveCustomScriptBtn"
+                class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium">
+                <i class="fa fa-save mr-2"></i>保存脚本
+            </button>
+            <button type="button" id="testCustomScriptBtn"
+                class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary hover:bg-opacity-10 transition-all text-sm font-medium">
+                <i class="fa fa-play mr-2"></i>测试脚本
+            </button>
+            <button type="button" id="cancelEditScriptBtn"
+                class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-all text-sm font-medium hidden">
+                <i class="fa fa-times mr-2"></i>取消编辑
+            </button>
+        </div>
+        <!-- 测试结果展示区域 -->
+        <div id="testScriptResult" class="mt-6 hidden">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                <i class="fa fa-check-circle mr-2" style="color: var(--primary-color);"></i>
+                测试结果
+            </h3>
+            <div class="overflow-x-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead id="testScriptResultHeader" class="bg-gray-50">
+                        <!-- 表头将通过JavaScript动态生成 -->
+                    </thead>
+                    <tbody id="testScriptResultBody" class="divide-y divide-gray-200">
+                        <!-- 数据将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+                <span class="text-xs text-gray-500" id="testScriptResultCount"></span>
+                <button type="button" id="clearTestScriptResultBtn"
+                    class="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all">
+                    <i class="fa fa-times mr-1"></i>清除结果
+                </button>
+            </div>
+        </div>
+        <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-2">已保存的脚本</label>
+            <div id="savedScriptsList" class="space-y-2">
+                <!-- 已保存的脚本列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+</div>

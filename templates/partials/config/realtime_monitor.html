@@ -1,0 +1,104 @@
+<!-- 实时监测配置 -->
+<div class="border border-gray-200 rounded-lg p-4">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+        <i class="fa fa-eye mr-2" style="color: var(--primary-color);"></i>
+        实时监测配置
+    </h3>
+    <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">是否启用</label>
+            <select id="realTimeMonitoringEnabled"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style="--tw-ring-color: var(--primary-color);">
+                <option value="true">启用</option>
+                <option value="false">禁用</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">监测间隔(秒)</label>
+            <input type="number" id="realTimeMonitoringInterval"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style="--tw-ring-color: var(--primary-color);" min="5" value="30">
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">是否异常通知</label>
+            <select id="realTimeMonitoringOnlyErrorNotification"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style="--tw-ring-color: var(--primary-color);">
+                <option value="true">开启（有异常才通知）</option>
+                <option value="false">关闭（无论是否异常都通知）</option>
+            </select>
+        </div>
+    </div>
+    <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-600 mb-2">监测项</label>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmCpu" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">CPU</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmMemory" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">内存</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmDisk" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">磁盘</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmDiskIo" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">磁盘IO</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmSwap" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">交换分区</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmProcesses" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">进程</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmSlowSql" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">慢SQL</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmWorkerOutput" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">工人产量与报工明细稽核（含颜色尺码）</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmWorkerOutputWithoutColorSize" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">工人产量与报工明细稽核（不含颜色尺码）</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmWorkerOutputSfd" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">工人产量与报工明细数据稽核(sfd)</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="rtmMesHanging" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">MES报工明细与吊挂报工明细稽核</span>
+            </label>
+        </div>
+    </div>
+    <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-600 mb-2">通知设置</label>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">是否启用通知</label>
+                <select id="rtmNotificationEnabled"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style="--tw-ring-color: var(--primary-color);">
+                    <option value="true">启用</option>
+                    <option value="false">禁用</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">冷却周期(秒)</label>
+                <input type="number" id="rtmCooldownPeriod"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style="--tw-ring-color: var(--primary-color);" min="60" value="300">
+            </div>
+        </div>
+    </div>
+</div>

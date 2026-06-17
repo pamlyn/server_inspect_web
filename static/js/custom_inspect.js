@@ -1,0 +1,1444 @@
+/**
+ * custom_inspect.js — Custom scripts page JS for the Server Inspection System
+ * Contains: showCustomInspect(), loadCustomScripts(), loadSavedScripts(),
+ * custom script CRUD operations (save, edit, delete, test), script execution,
+ * variable rendering, rules config rendering, script search/select dropdown,
+ * export custom script results, date utility functions, and record status evaluation.
+ * Depends on: app.js (showToast, showConfirm, hideAllContent)
+ */
+
+// ========== Module-level state variables ==========
+
+let currentSelectedScriptName = '';
+let currentRules = [];
+let customScriptColumns = [];
+let customScriptRows = [];
+let allCustomScripts = [];
+let selectedScriptId = null;
+let currentFilteredScripts = [];
+let highlightedIndex = -1;
+let currentVariables = [];
+
+// ========== Date utility functions (exposed globally for template onclick handlers) ==========
+
+window.getTodayDate = function () {
+    return new Date().toISOString().split('T')[0];
+};
+window.getYesterdayDate = function () {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+};
+window.getMonthFirstDate = function () {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+};
+window.getTodayStartTime = function () {
+    return window.getTodayDate() + ' 00:00:00';
+};
+window.getTodayEndTime = function () {
+    return window.getTodayDate() + ' 23:59:59';
+};
+window.getYesterdayStartTime = function () {
+    return window.getYesterdayDate() + ' 00:00:00';
+};
+window.getYesterdayEndTime = function () {
+    return window.getYesterdayDate() + ' 23:59:59';
+};
+window.getMonthFirstStartTime = function () {
+    return window.getMonthFirstDate() + ' 00:00:00';
+};
+
+// ========== showCustomInspect — overwrite the app.js placeholder ==========
+
+window.showCustomInspect = function () {
+    hideAllContent();
+    const results = document.getElementById('results');
+    const customInspectContent = document.getElementById('customInspectContent');
+    results.classList.remove('hidden');
+    customInspectContent.classList.remove('hidden');
+    loadCustomScripts();
+};
+
+// ========== Clear script form ==========
+
+function clearScriptForm() {
+    document.getElementById('customScriptId').value = '';
+    document.getElementById('customScriptName').value = '';
+    document.getElementById('customScriptContent').value = '';
+    document.getElementById('customScriptScheduled').checked = false;
+    document.getElementById('customScriptDaily').checked = false;
+    document.getElementById('customScriptRealTime').checked = false;
+    document.getElementById('scriptFormTitle').textContent = '自定义稽核脚本配置';
+    const cancelEditScriptBtn = document.getElementById('cancelEditScriptBtn');
+    cancelEditScriptBtn.classList.add('hidden');
+
+    // Clear variables
+    currentVariables = [];
+    renderVariables();
+
+    // Clear rules
+    currentRules = [];
+    renderRulesConfig();
+}
+
+// ========== Evaluate record status based on rules ==========
+
+function evaluateRecordStatus(row, columns, rules) {
+    if (!rules || rules.length === 0) {
+        return '正常';
+    }
+
+    const abnormalRules = [];
+    const normalRules = [];
+
+    rules.forEach(rule => {
+        if (rule.result === '异常') {
+            abnormalRules.push(rule);
+        } else {
+            normalRules.push(rule);
+        }
+    });
+
+    // Check abnormal rules: any match = abnormal
+    for (const rule of abnormalRules) {
+        if (checkRuleMatch(row, columns, rule)) {
+            return '异常';
+        }
+    }
+
+    // Check normal rules: any match = normal
+    for (const rule of normalRules) {
+        if (checkRuleMatch(row, columns, rule)) {
+            return '正常';
+        }
+    }
+
+    // Default: normal
+    return '正常';
+}
+
+function checkRuleMatch(row, columns, rule) {
+    const { column, operator, value } = rule;
+    let cellValue = '';
+
+    const colIndex = columns.indexOf(column);
+    if (colIndex !== -1) {
+        if (Array.isArray(row)) {
+            cellValue = row[colIndex];
+        } else {
+            cellValue = row[column];
+        }
+    } else {
+        return false;
+    }
+
+    switch (operator) {
+        case '=':
+            return cellValue == value;
+        case '>':
+            return !isNaN(parseFloat(cellValue)) && !isNaN(parseFloat(value)) && parseFloat(cellValue) > parseFloat(value);
+        case '<':
+            return !isNaN(parseFloat(cellValue)) && !isNaN(parseFloat(value)) && parseFloat(cellValue) < parseFloat(value);
+        case '>=':
+            return !isNaN(parseFloat(cellValue)) && !isNaN(parseFloat(value)) && parseFloat(cellValue) >= parseFloat(value);
+        case '<=':
+            return !isNaN(parseFloat(cellValue)) && !isNaN(parseFloat(value)) && parseFloat(cellValue) <= parseFloat(value);
+        case '!=':
+            return cellValue != value;
+        case 'is null':
+            return cellValue === null || cellValue === undefined || cellValue === '';
+        case 'is not null':
+            return cellValue !== null && cellValue !== undefined && cellValue !== '';
+        default:
+            return false;
+    }
+}
+
+// ========== Render variables list ==========
+
+function renderVariables() {
+    const variablesList = document.getElementById('variablesList');
+    const availableVariablesHint = document.getElementById('availableVariablesHint');
+
+    if (!variablesList) return;
+
+    variablesList.innerHTML = '';
+
+    if (currentVariables.length === 0) {
+        variablesList.innerHTML = '<p class="text-gray-500 text-xs">暂无变量，点击"添加变量"开始配置</p>';
+        availableVariablesHint.textContent = '可用变量: -';
+        return;
+    }
+
+    const varNames = currentVariables.map(v => `#{${v.name}}`).join(', ');
+    availableVariablesHint.textContent = `可用变量: ${varNames}`;
+
+    currentVariables.forEach((variable, index) => {
+        const varDiv = document.createElement('div');
+        varDiv.className = 'flex items-center space-x-2 p-2 bg-white border rounded-lg';
+
+        let defaultValueInputHtml = '';
+        const today = window.getTodayDate();
+        const yesterday = window.getYesterdayDate();
+        const monthFirst = window.getMonthFirstDate();
+        const todayStart = window.getTodayStartTime();
+        const todayEnd = window.getTodayEndTime();
+        const yesterdayStart = window.getYesterdayStartTime();
+        const yesterdayEnd = window.getYesterdayEndTime();
+        const monthFirstStart = window.getMonthFirstStartTime();
+        const defaultValue = variable.default_value || '';
+
+        if (variable.type === 'date') {
+            let selectedPreset = '';
+            let hiddenClass = '';
+            if (defaultValue === today) {
+                selectedPreset = 'today';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === yesterday) {
+                selectedPreset = 'yesterday';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === monthFirst) {
+                selectedPreset = 'monthFirst';
+                hiddenClass = 'hidden';
+            }
+
+            defaultValueInputHtml = `
+                <div class="space-y-1">
+                    <select class="w-full px-2 py-1 text-sm border rounded" onchange="window.handleVariableDatePresetChange(${index}, this.value)">
+                        <option value="" ${selectedPreset === '' ? 'selected' : ''}>选择预设...</option>
+                        <option value="today" ${selectedPreset === 'today' ? 'selected' : ''}>今天 (${today})</option>
+                        <option value="yesterday" ${selectedPreset === 'yesterday' ? 'selected' : ''}>昨天 (${yesterday})</option>
+                        <option value="monthFirst" ${selectedPreset === 'monthFirst' ? 'selected' : ''}>当前月第一天 (${monthFirst})</option>
+                        <option value="custom">自定义日期</option>
+                    </select>
+                    <input type="date" class="w-full px-2 py-1 text-sm border rounded ${hiddenClass}" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">
+                </div>
+            `;
+        } else if (variable.type === 'time') {
+            let selectedPreset = '';
+            let hiddenClass = '';
+            if (defaultValue === todayStart) {
+                selectedPreset = 'todayStart';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === todayEnd) {
+                selectedPreset = 'todayEnd';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === yesterdayStart) {
+                selectedPreset = 'yesterdayStart';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === yesterdayEnd) {
+                selectedPreset = 'yesterdayEnd';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === monthFirstStart) {
+                selectedPreset = 'monthFirstStart';
+                hiddenClass = 'hidden';
+            }
+
+            defaultValueInputHtml = `
+                <div class="space-y-1">
+                    <select class="w-full px-2 py-1 text-sm border rounded" onchange="window.handleVariableTimePresetChange(${index}, this.value)">
+                        <option value="" ${selectedPreset === '' ? 'selected' : ''}>选择预设...</option>
+                        <option value="todayStart" ${selectedPreset === 'todayStart' ? 'selected' : ''}>今天开始时间 (${todayStart})</option>
+                        <option value="todayEnd" ${selectedPreset === 'todayEnd' ? 'selected' : ''}>今天结束时间 (${todayEnd})</option>
+                        <option value="yesterdayStart" ${selectedPreset === 'yesterdayStart' ? 'selected' : ''}>昨天开始时间 (${yesterdayStart})</option>
+                        <option value="yesterdayEnd" ${selectedPreset === 'yesterdayEnd' ? 'selected' : ''}>昨天结束时间 (${yesterdayEnd})</option>
+                        <option value="monthFirstStart" ${selectedPreset === 'monthFirstStart' ? 'selected' : ''}>当前月第一天开始时间 (${monthFirstStart})</option>
+                        <option value="custom">自定义时间</option>
+                    </select>
+                    <input type="text" class="w-full px-2 py-1 text-sm border rounded ${hiddenClass}" placeholder="默认值 (YYYY-MM-DD HH:mm:ss)" value="${defaultValue}" data-index="${index}" data-field="default_value">
+                </div>
+            `;
+        } else if (variable.type === 'number') {
+            defaultValueInputHtml = `<input type="number" class="w-full px-2 py-1 text-sm border rounded" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">`;
+        } else {
+            defaultValueInputHtml = `<input type="text" class="w-full px-2 py-1 text-sm border rounded" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">`;
+        }
+
+        varDiv.innerHTML = `
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                    <input type="text" class="w-full px-2 py-1 text-sm border rounded" placeholder="变量名" value="${variable.name}" data-index="${index}" data-field="name">
+                </div>
+                <div>
+                    <select class="w-full px-2 py-1 text-sm border rounded" data-index="${index}" data-field="type" onchange="window.handleVariableTypeChange(${index})"><option value="text" ${variable.type === 'text' ? 'selected' : ''}>文本</option>
+                        <option value="date" ${variable.type === 'date' ? 'selected' : ''}>日期</option>
+                        <option value="time" ${variable.type === 'time' ? 'selected' : ''}>时间</option>
+                        <option value="number" ${variable.type === 'number' ? 'selected' : ''}>数字</option>
+                    </select>
+                </div>
+                <div id="defaultValueDiv_${index}">
+                    ${defaultValueInputHtml}
+                </div>
+            </div>
+            <button type="button" class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-all" onclick="removeVariable(${index})">
+                <i class="fa fa-trash"></i>
+            </button>
+        `;
+        variablesList.appendChild(varDiv);
+    });
+
+    // Add change event listeners
+    variablesList.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('change', function () {
+            const index = parseInt(this.dataset.index);
+            const field = this.dataset.field;
+            if (currentVariables[index]) {
+                currentVariables[index][field] = this.value;
+
+                const varNames = currentVariables.map(v => `#{${v.name}}`).join(', ');
+                availableVariablesHint.textContent = `可用变量: ${varNames}`;
+            }
+        });
+    });
+}
+
+// ========== Variable manipulation (global for onclick) ==========
+
+window.addVariable = function () {
+    const newVar = {
+        name: `var${currentVariables.length + 1}`,
+        type: 'text',
+        default_value: ''
+    };
+    currentVariables.push(newVar);
+    renderVariables();
+};
+
+window.removeVariable = async function (index) {
+    const confirmed = await showConfirm('确定要删除这个变量吗？', '确认删除');
+    if (confirmed) {
+        currentVariables.splice(index, 1);
+        renderVariables();
+    }
+};
+
+window.handleVariableTypeChange = function (index) {
+    const select = document.querySelector(`[data-index="${index}"][data-field="type"]`);
+    if (select) {
+        const newType = select.value;
+        currentVariables[index].type = newType;
+        if (newType === 'date') {
+            currentVariables[index].default_value = window.getTodayDate();
+        } else if (newType === 'time') {
+            currentVariables[index].default_value = window.getTodayStartTime();
+        } else if (newType === 'number') {
+            currentVariables[index].default_value = '';
+        } else {
+            currentVariables[index].default_value = '';
+        }
+        renderVariables();
+    }
+};
+
+window.handleVariableDatePresetChange = function (index, preset) {
+    const input = document.querySelector(`[data-index="${index}"][data-field="default_value"]`);
+
+    if (preset === 'custom') {
+        if (input) input.classList.remove('hidden');
+    } else if (preset) {
+        let value;
+        if (preset === 'today') {
+            value = window.getTodayDate();
+        } else if (preset === 'yesterday') {
+            value = window.getYesterdayDate();
+        } else if (preset === 'monthFirst') {
+            value = window.getMonthFirstDate();
+        }
+
+        if (input) {
+            input.value = value;
+            input.classList.add('hidden');
+        }
+        currentVariables[index].default_value = value;
+    }
+};
+
+window.handleVariableTimePresetChange = function (index, preset) {
+    const input = document.querySelector(`[data-index="${index}"][data-field="default_value"]`);
+
+    if (preset === 'custom') {
+        if (input) input.classList.remove('hidden');
+    } else if (preset) {
+        let value;
+        if (preset === 'todayStart') {
+            value = window.getTodayStartTime();
+        } else if (preset === 'todayEnd') {
+            value = window.getTodayEndTime();
+        } else if (preset === 'yesterdayStart') {
+            value = window.getYesterdayStartTime();
+        } else if (preset === 'yesterdayEnd') {
+            value = window.getYesterdayEndTime();
+        } else if (preset === 'monthFirstStart') {
+            value = window.getMonthFirstStartTime();
+        }
+
+        if (input) {
+            input.value = value;
+            input.classList.add('hidden');
+        }
+        currentVariables[index].default_value = value;
+    }
+};
+
+// ========== Render dynamic params inputs for script execution ==========
+
+function renderParamsInputs(variables) {
+    const paramsList = document.getElementById('dynamicParamsList');
+    const availableVarsHint = document.getElementById('scriptAvailableVariables');
+
+    if (!paramsList) return;
+
+    paramsList.innerHTML = '';
+
+    if (!variables || variables.length === 0) {
+        availableVarsHint.textContent = '可用变量: -';
+        return;
+    }
+
+    const varNames = variables.map(v => `#{${v.name}}`).join(', ');
+    availableVarsHint.textContent = `可用变量: ${varNames}`;
+
+    variables.forEach((variable) => {
+        const paramDiv = document.createElement('div');
+        let inputHtml = '';
+
+        if (variable.type === 'date') {
+            const today = window.getTodayDate();
+            const yesterday = window.getYesterdayDate();
+            const monthFirst = window.getMonthFirstDate();
+            const defaultValue = variable.default_value || today;
+
+            let selectedPreset = 'custom';
+            let hiddenClass = '';
+            if (defaultValue === today) {
+                selectedPreset = 'today';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === yesterday) {
+                selectedPreset = 'yesterday';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === monthFirst) {
+                selectedPreset = 'monthFirst';
+                hiddenClass = 'hidden';
+            }
+
+            inputHtml = `
+                <div class="space-y-2">
+                    <select class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="preset_${variable.name}" onchange="window.handleDatePresetChange('${variable.name}')">
+                        <option value="today" ${selectedPreset === 'today' ? 'selected' : ''}>今天 (${today})</option>
+                        <option value="yesterday" ${selectedPreset === 'yesterday' ? 'selected' : ''}>昨天 (${yesterday})</option>
+                        <option value="monthFirst" ${selectedPreset === 'monthFirst' ? 'selected' : ''}>当前月第一天 (${monthFirst})</option>
+                        <option value="custom" ${selectedPreset === 'custom' ? 'selected' : ''}>自定义日期</option>
+                    </select>
+                    <input type="date" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all ${hiddenClass}" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${defaultValue}">
+                </div>
+            `;
+        } else if (variable.type === 'time') {
+            const todayStart = window.getTodayStartTime();
+            const todayEnd = window.getTodayEndTime();
+            const yesterdayStart = window.getYesterdayStartTime();
+            const yesterdayEnd = window.getYesterdayEndTime();
+            const monthFirstStart = window.getMonthFirstStartTime();
+            const defaultValue = variable.default_value || todayStart;
+
+            let selectedPreset = 'custom';
+            let hiddenClass = '';
+            if (defaultValue === todayStart) {
+                selectedPreset = 'todayStart';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === todayEnd) {
+                selectedPreset = 'todayEnd';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === yesterdayStart) {
+                selectedPreset = 'yesterdayStart';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === yesterdayEnd) {
+                selectedPreset = 'yesterdayEnd';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === monthFirstStart) {
+                selectedPreset = 'monthFirstStart';
+                hiddenClass = 'hidden';
+            }
+
+            inputHtml = `
+                <div class="space-y-2">
+                    <select class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="preset_${variable.name}" onchange="window.handleTimePresetChange('${variable.name}')">
+                        <option value="todayStart" ${selectedPreset === 'todayStart' ? 'selected' : ''}>今天开始时间 (${todayStart})</option>
+                        <option value="todayEnd" ${selectedPreset === 'todayEnd' ? 'selected' : ''}>今天结束时间 (${todayEnd})</option>
+                        <option value="yesterdayStart" ${selectedPreset === 'yesterdayStart' ? 'selected' : ''}>昨天开始时间 (${yesterdayStart})</option>
+                        <option value="yesterdayEnd" ${selectedPreset === 'yesterdayEnd' ? 'selected' : ''}>昨天结束时间 (${yesterdayEnd})</option>
+                        <option value="monthFirstStart" ${selectedPreset === 'monthFirstStart' ? 'selected' : ''}>当前月第一天开始时间 (${monthFirstStart})</option>
+                        <option value="custom" ${selectedPreset === 'custom' ? 'selected' : ''}>自定义时间</option>
+                    </select>
+                    <input type="text" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all ${hiddenClass}" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${defaultValue}" placeholder="格式: YYYY-MM-DD HH:mm:ss">
+                </div>
+            `;
+        } else if (variable.type === 'number') {
+            inputHtml = `<input type="number" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${variable.default_value || ''}" placeholder="请输入数字">`;
+        } else {
+            inputHtml = `<input type="text" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${variable.default_value || ''}" placeholder="请输入文本">`;
+        }
+
+        paramDiv.innerHTML = `
+            <label class="block text-xs font-medium text-gray-600 mb-1">${variable.name}</label>
+            ${inputHtml}
+        `;
+        paramsList.appendChild(paramDiv);
+    });
+
+    // Add change event listeners for param inputs and preset selects
+    document.querySelectorAll('[id^="param_"]').forEach(input => {
+        input.addEventListener('change', updateSqlContent);
+    });
+
+    document.querySelectorAll('[id^="preset_"]').forEach(select => {
+        select.addEventListener('change', updateSqlContent);
+    });
+}
+
+// ========== Date/time preset change handlers (global for onchange) ==========
+
+window.handleDatePresetChange = function (varName) {
+    const presetSelect = document.getElementById(`preset_${varName}`);
+    const dateInput = document.getElementById(`param_${varName}`);
+
+    if (presetSelect.value === 'custom') {
+        dateInput.classList.remove('hidden');
+    } else {
+        dateInput.classList.add('hidden');
+        let value;
+        if (presetSelect.value === 'today') {
+            value = window.getTodayDate();
+        } else if (presetSelect.value === 'yesterday') {
+            value = window.getYesterdayDate();
+        } else if (presetSelect.value === 'monthFirst') {
+            value = window.getMonthFirstDate();
+        }
+        dateInput.value = value;
+        updateSqlContent();
+    }
+};
+
+window.handleTimePresetChange = function (varName) {
+    const presetSelect = document.getElementById(`preset_${varName}`);
+    const timeInput = document.getElementById(`param_${varName}`);
+
+    if (presetSelect.value === 'custom') {
+        timeInput.classList.remove('hidden');
+    } else {
+        timeInput.classList.add('hidden');
+        let value;
+        if (presetSelect.value === 'todayStart') {
+            value = window.getTodayStartTime();
+        } else if (presetSelect.value === 'todayEnd') {
+            value = window.getTodayEndTime();
+        } else if (presetSelect.value === 'yesterdayStart') {
+            value = window.getYesterdayStartTime();
+        } else if (presetSelect.value === 'yesterdayEnd') {
+            value = window.getYesterdayEndTime();
+        } else if (presetSelect.value === 'monthFirstStart') {
+            value = window.getMonthFirstStartTime();
+        }
+        timeInput.value = value;
+        updateSqlContent();
+    }
+};
+
+// ========== Get current param values ==========
+
+function getParamsValues(variables) {
+    const params = {};
+    if (!variables) return params;
+
+    variables.forEach((variable) => {
+        const input = document.getElementById(`param_${variable.name}`);
+        if (input) {
+            params[variable.name] = input.value;
+        } else {
+            params[variable.name] = variable.default_value || '';
+        }
+    });
+    return params;
+}
+
+// ========== Generate SQL content by replacing param placeholders ==========
+
+function generateSqlContent(scriptContent, params) {
+    if (!scriptContent) return '';
+    let sqlContent = scriptContent;
+    for (const [key, value] of Object.entries(params)) {
+        const placeholder = `#{${key}}`;
+        sqlContent = sqlContent.replace(new RegExp(placeholder, 'g'), value);
+    }
+    return sqlContent;
+}
+
+// ========== Update SQL content display ==========
+
+function updateSqlContent() {
+    const scriptId = document.getElementById('customScriptSelect').value;
+    if (!scriptId) return;
+
+    const currentScript = allCustomScripts.find(s => s.id === scriptId);
+    if (!currentScript) return;
+
+    const params = getParamsValues(currentScript.variables);
+    const sqlContent = generateSqlContent(currentScript.content, params);
+    document.getElementById('selectedScriptSqlContent').textContent = sqlContent;
+}
+
+// ========== Render script dropdown options ==========
+
+function renderScriptOptions(scripts) {
+    currentFilteredScripts = scripts;
+    highlightedIndex = -1;
+    const dropdownOptions = document.getElementById('customScriptDropdownOptions');
+    dropdownOptions.innerHTML = '';
+
+    if (scripts && scripts.length > 0) {
+        scripts.forEach((script, index) => {
+            const option = document.createElement('div');
+            option.className = 'px-3 py-2 text-sm cursor-pointer hover:bg-gray-100';
+            option.textContent = script.name;
+            option.dataset.id = script.id;
+            option.dataset.index = index;
+            option.addEventListener('click', function () {
+                selectScript(script);
+            });
+            dropdownOptions.appendChild(option);
+        });
+    } else {
+        const option = document.createElement('div');
+        option.className = 'px-3 py-2 text-sm text-gray-500';
+        option.textContent = '没有匹配的脚本';
+        dropdownOptions.appendChild(option);
+    }
+}
+
+// ========== Highlight dropdown option ==========
+
+function highlightOption(index) {
+    const dropdownOptions = document.getElementById('customScriptDropdownOptions');
+    const options = dropdownOptions.querySelectorAll('div');
+
+    options.forEach((option, i) => {
+        if (option.dataset.index !== undefined) {
+            if (i === index) {
+                option.classList.add('bg-gray-100');
+            } else {
+                option.classList.remove('bg-gray-100');
+            }
+        }
+    });
+
+    if (options[index]) {
+        options[index].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+// ========== Select a script ==========
+
+function selectScript(script) {
+    selectedScriptId = script.id;
+    currentSelectedScriptName = script.name;
+    document.getElementById('customScriptSelect').value = script.id;
+    document.getElementById('customScriptSearch').value = script.name;
+
+    // Close dropdown
+    document.getElementById('customScriptDropdown').classList.add('hidden');
+
+    // Show script info
+    const scriptInfo = document.getElementById('selectedScriptInfo');
+    const paramsConfig = document.getElementById('scriptParamsConfig');
+    const rulesConfig = document.getElementById('scriptRulesConfig');
+    const executeBtn = document.getElementById('executeCustomScriptBtn');
+    const exportBtn = document.getElementById('exportCustomScriptBtn');
+
+    document.getElementById('selectedScriptName').textContent = script.name;
+    document.getElementById('selectedScriptDatabase').textContent =
+        script.database === 'mes' ? 'MES数据库' : '吊挂中间库';
+    document.getElementById('selectedScriptContent').textContent = script.content;
+    scriptInfo.classList.remove('hidden');
+    paramsConfig.classList.remove('hidden');
+    rulesConfig.classList.remove('hidden');
+
+    // Generate param inputs from variables config
+    renderParamsInputs(script.variables);
+    // Render rules list
+    renderRulesList(script.rules || []);
+    // Update SQL content
+    updateSqlContent();
+
+    executeBtn.disabled = false;
+}
+
+// ========== Load custom scripts (for execution dropdown) ==========
+
+function loadCustomScripts() {
+    fetch('/api/custom_scripts')
+        .then(response => response.json())
+        .then(data => {
+            allCustomScripts = data.scripts || [];
+            renderScriptOptions(allCustomScripts);
+        })
+        .catch(error => {
+            console.error('加载脚本列表失败:', error);
+        });
+}
+
+// ========== Load saved scripts (for saved list in config) ==========
+
+function loadSavedScripts() {
+    const savedScriptsList = document.getElementById('savedScriptsList');
+    fetch('/api/custom_scripts')
+        .then(response => response.json())
+        .then(data => {
+            if (savedScriptsList) {
+                savedScriptsList.innerHTML = '';
+                if (data.scripts && data.scripts.length > 0) {
+                    data.scripts.forEach(script => {
+                        const scriptItem = document.createElement('div');
+                        scriptItem.className = 'p-2 border rounded-lg';
+
+                        // Generate execution type tags
+                        let executionTags = '';
+                        if (script.scheduled) {
+                            executionTags += '<span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs mr-1">定时</span>';
+                        }
+                        if (script.daily) {
+                            executionTags += '<span class="inline-block px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs mr-1">日常</span>';
+                        }
+                        if (script.realtime) {
+                            executionTags += '<span class="inline-block px-2 py-0.5 bg-purple-100 text-purple-600 rounded text-xs mr-1">实时</span>';
+                        }
+                        if (!executionTags) {
+                            executionTags = '<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs mr-1">无</span>';
+                        }
+
+                        scriptItem.innerHTML = `
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-medium text-sm">${script.name}</div>
+                                    <div class="text-xs text-gray-500 mb-1">${script.database}</div>
+                                    <div class="flex items-center">
+                                        <span class="text-xs text-gray-400 mr-2">执行：</span>
+                                        ${executionTags}
+                                    </div>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button type="button" class="text-xs px-2 py-1 bg-primary text-white rounded hover:bg-opacity-90 transition-all" onclick="editScript('${script.id}')">编辑</button>
+                                    <button type="button" class="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-opacity-90 transition-all" onclick="deleteScript('${script.id}')">删除</button>
+                                </div>
+                            </div>
+                        `;
+                        savedScriptsList.appendChild(scriptItem);
+                    });
+                } else {
+                    savedScriptsList.innerHTML = '<p class="text-gray-500 text-sm">暂无已保存的脚本</p>';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('加载脚本失败:', error);
+        });
+}
+
+// ========== Edit script (global for onclick) ==========
+
+window.editScript = function (scriptId) {
+    fetch(`/api/custom_scripts/${scriptId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.script) {
+                document.getElementById('customScriptId').value = data.script.id;
+                document.getElementById('customScriptName').value = data.script.name;
+                document.getElementById('customScriptDatabase').value = data.script.database;
+                document.getElementById('customScriptContent').value = data.script.content;
+                document.getElementById('customScriptScheduled').checked = data.script.scheduled || false;
+                document.getElementById('customScriptDaily').checked = data.script.daily || false;
+                document.getElementById('customScriptRealTime').checked = data.script.realtime || false;
+                document.getElementById('scriptFormTitle').textContent = '编辑稽核脚本';
+                document.getElementById('cancelEditScriptBtn').classList.remove('hidden');
+
+                // Load variables
+                currentVariables = data.script.variables || [];
+                renderVariables();
+
+                // Load rules
+                currentRules = data.script.rules || [];
+                renderRulesConfig();
+            }
+        })
+        .catch(error => {
+            console.error('加载脚本失败:', error);
+        });
+};
+
+// ========== Delete script (global for onclick) ==========
+
+window.deleteScript = async function (scriptId) {
+    const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
+    if (confirmed) {
+        fetch(`/api/custom_scripts/${scriptId}`, {
+            method: 'DELETE'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    showToast('脚本删除成功！', 'success');
+                    loadSavedScripts();
+                } else {
+                    showToast('脚本删除失败: ' + (data.error || '未知错误'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('删除脚本失败:', error);
+                showToast('脚本删除失败，请检查网络连接', 'error');
+            });
+    }
+};
+
+// ========== Show test script result ==========
+
+function showTestScriptResult(result, rules) {
+    const resultDiv = document.getElementById('testScriptResult');
+    const headerEl = document.getElementById('testScriptResultHeader');
+    const bodyEl = document.getElementById('testScriptResultBody');
+    const countEl = document.getElementById('testScriptResultCount');
+
+    headerEl.innerHTML = '';
+    bodyEl.innerHTML = '';
+
+    if (!result || !result.columns || !result.rows || result.rows.length === 0) {
+        bodyEl.innerHTML = '<tr><td colspan="100" class="px-4 py-8 text-center text-sm text-gray-500">查询结果为空</td></tr>';
+        countEl.textContent = '共 0 条记录';
+        resultDiv.classList.remove('hidden');
+        return;
+    }
+
+    const columns = result.columns;
+    const rows = result.rows;
+
+    // Render header
+    let headerHtml = '<tr>';
+    columns.forEach(col => {
+        headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col}</th>`;
+    });
+    if (rules && rules.length > 0) {
+        headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
+    }
+    headerHtml += '</tr>';
+    headerEl.innerHTML = headerHtml;
+
+    // Render body
+    let bodyHtml = '';
+    rows.forEach((row, index) => {
+        const status = rules && rules.length > 0 ? evaluateRecordStatus(row, columns, rules) : '';
+        const statusClass = status === '异常' ? 'bg-red-50' : status === '正常' ? 'bg-green-50' : '';
+
+        bodyHtml += `<tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${statusClass} hover:bg-gray-100 transition-colors">`;
+        columns.forEach((col, colIndex) => {
+            let cellValue = '';
+            if (Array.isArray(row)) {
+                cellValue = row[colIndex] !== null && row[colIndex] !== undefined ? row[colIndex] : '';
+            } else {
+                cellValue = row[col] !== null && row[col] !== undefined ? row[col] : '';
+            }
+            bodyHtml += `<td class="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">${cellValue}</td>`;
+        });
+        if (rules && rules.length > 0) {
+            const statusBadgeClass = status === '异常'
+                ? 'bg-red-100 text-red-600'
+                : status === '正常'
+                    ? 'bg-green-100 text-green-600'
+                    : 'bg-gray-100 text-gray-600';
+            bodyHtml += `<td class="px-4 py-3 text-sm whitespace-nowrap">
+                <span class="px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass}">${status}</span>
+            </td>`;
+        }
+        bodyHtml += '</tr>';
+    });
+    bodyEl.innerHTML = bodyHtml;
+
+    countEl.textContent = `共 ${rows.length} 条记录`;
+    resultDiv.classList.remove('hidden');
+}
+
+// ========== Render custom script result ==========
+
+function renderCustomScriptResult(columns, rows) {
+    const headerEl = document.getElementById('customScriptResultHeader');
+    const bodyEl = document.getElementById('customScriptResultBody');
+
+    const currentScript = allCustomScripts.find(s => s.id === selectedScriptId);
+    const rules = currentScript ? currentScript.rules : [];
+
+    // Render header
+    let headerHtml = '<tr>';
+    columns.forEach(col => {
+        headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col}</th>`;
+    });
+    headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
+    headerHtml += '</tr>';
+    headerEl.innerHTML = headerHtml;
+
+    // Render body
+    let bodyHtml = '';
+    if (rows.length === 0) {
+        bodyHtml = `<tr><td colspan="${columns.length + 1}" class="px-4 py-4 text-center text-sm text-gray-500">暂无数据</td></tr>`;
+    } else {
+        rows.forEach(row => {
+            const status = evaluateRecordStatus(row, columns, rules);
+            const statusClass = status === '正常' ? 'bg-green-50' : 'bg-red-50';
+            const statusTextClass = status === '正常' ? 'text-green-700' : 'text-red-700';
+
+            bodyHtml += `<tr class="hover:bg-gray-50 ${statusClass}">`;
+            columns.forEach((col, colIndex) => {
+                let value = '';
+                if (Array.isArray(row)) {
+                    value = row[colIndex];
+                } else {
+                    value = row[col];
+                }
+                if (value === null || value === undefined) {
+                    value = '';
+                } else if (typeof value === 'number') {
+                    if (Number.isInteger(value) && Math.abs(value).toString().length > 12) {
+                        value = value.toString();
+                    }
+                }
+                bodyHtml += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">${value}</td>`;
+            });
+            bodyHtml += `<td class="px-4 py-2 text-sm ${statusTextClass} whitespace-nowrap font-medium">${status}</td>`;
+            bodyHtml += '</tr>';
+        });
+    }
+    bodyEl.innerHTML = bodyHtml;
+}
+
+// ========== Render rules list (for selected script execution) ==========
+
+function renderRulesList(rules) {
+    const rulesList = document.getElementById('rulesList');
+    rulesList.innerHTML = '';
+
+    if (rules.length === 0) {
+        rulesList.innerHTML = '<p class="text-xs text-gray-500">暂无规则配置</p>';
+        return;
+    }
+
+    rules.forEach((rule, index) => {
+        const ruleDiv = document.createElement('div');
+        ruleDiv.className = 'bg-white border border-gray-200 rounded-lg p-3';
+        ruleDiv.innerHTML = `
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-gray-700">规则 ${index + 1}</span>
+                <button type="button" class="delete-rule-btn text-xs text-red-500 hover:text-red-700" data-index="${index}">
+                    <i class="fa fa-trash mr-1"></i>删除
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">目标列</label>
+                    <input type="text" class="rule-column w-full px-2 py-1 text-xs border border-gray-200 rounded" value="${rule.column}" placeholder="例如：报工次数">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">操作符</label>
+                    <select class="rule-operator w-full px-2 py-1 text-xs border border-gray-200 rounded">
+                        <option value="=" ${rule.operator === '=' ? 'selected' : ''}>等于</option>
+                        <option value=">" ${rule.operator === '>' ? 'selected' : ''}>大于</option>
+                        <option value="<" ${rule.operator === '<' ? 'selected' : ''}>小于</option>
+                        <option value=">=" ${rule.operator === '>=' ? 'selected' : ''}>大于等于</option>
+                        <option value="<=" ${rule.operator === '<=' ? 'selected' : ''}>小于等于</option>
+                        <option value="!=" ${rule.operator === '!=' ? 'selected' : ''}>不等于</option>
+                        <option value="is null" ${rule.operator === 'is null' ? 'selected' : ''}>是null</option>
+                        <option value="is not null" ${rule.operator === 'is not null' ? 'selected' : ''}>不是null</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">参考值</label>
+                    <input type="text" class="rule-value w-full px-2 py-1 text-xs border border-gray-200 rounded" value="${rule.value}" placeholder="例如：1">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">结果</label>
+                    <select class="rule-result w-full px-2 py-1 text-xs border border-gray-200 rounded">
+                        <option value="正常" ${rule.result === '正常' ? 'selected' : ''}>正常</option>
+                        <option value="异常" ${rule.result === '异常' ? 'selected' : ''}>异常</option>
+                    </select>
+                </div>
+            </div>
+        `;
+        rulesList.appendChild(ruleDiv);
+    });
+
+    // Delete rule button click events
+    document.querySelectorAll('.delete-rule-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const index = parseInt(this.getAttribute('data-index'));
+            const currentScript = allCustomScripts.find(s => s.id === selectedScriptId);
+            if (currentScript) {
+                currentScript.rules.splice(index, 1);
+                renderRulesList(currentScript.rules);
+            }
+        });
+    });
+
+    // Rule input change events
+    document.querySelectorAll('.rule-column, .rule-operator, .rule-value, .rule-result').forEach(input => {
+        input.addEventListener('change', function () {
+            const ruleDiv = this.closest('.bg-white.border.border-gray-200.rounded-lg.p-3');
+            const rules = ruleDiv.parentElement.querySelectorAll('.bg-white.border.border-gray-200.rounded-lg.p-3');
+            const index = Array.from(rules).indexOf(ruleDiv);
+
+            const currentScript = allCustomScripts.find(s => s.id === selectedScriptId);
+            if (currentScript && currentScript.rules[index]) {
+                if (this.classList.contains('rule-column')) {
+                    currentScript.rules[index].column = this.value;
+                } else if (this.classList.contains('rule-operator')) {
+                    currentScript.rules[index].operator = this.value;
+                } else if (this.classList.contains('rule-value')) {
+                    currentScript.rules[index].value = this.value;
+                } else if (this.classList.contains('rule-result')) {
+                    currentScript.rules[index].result = this.value;
+                }
+            }
+        });
+    });
+}
+
+// ========== Render rules config (for script editing form) ==========
+
+function renderRulesConfig() {
+    const rulesList = document.getElementById('rulesListConfig');
+
+    if (!rulesList) return;
+
+    rulesList.innerHTML = '';
+
+    if (currentRules.length === 0) {
+        rulesList.innerHTML = '<p class="text-gray-500 text-xs">暂无规则，点击"添加规则"开始配置</p>';
+        return;
+    }
+
+    currentRules.forEach((rule, index) => {
+        const ruleDiv = document.createElement('div');
+        ruleDiv.className = 'flex items-center space-x-2 p-2 bg-white border rounded-lg';
+
+        ruleDiv.innerHTML = `
+            <div class="flex-1">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">目标列</label>
+                        <input type="text" placeholder="例如：报工次数" value="${rule.column || ''}" data-index="${index}" data-field="column" class="w-full px-2 py-1 text-sm border rounded">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">操作符</label>
+                        <select data-index="${index}" data-field="operator" class="w-full px-2 py-1 text-sm border rounded">
+                            <option value="=" ${rule.operator === '=' ? 'selected' : ''}>等于</option>
+                            <option value=">" ${rule.operator === '>' ? 'selected' : ''}>大于</option>
+                            <option value="<" ${rule.operator === '<' ? 'selected' : ''}>小于</option>
+                            <option value=">=" ${rule.operator === '>=' ? 'selected' : ''}>大于等于</option>
+                            <option value="<=" ${rule.operator === '<=' ? 'selected' : ''}>小于等于</option>
+                            <option value="!=" ${rule.operator === '!=' ? 'selected' : ''}>不等于</option>
+                            <option value="is null" ${rule.operator === 'is null' ? 'selected' : ''}>是null</option>
+                            <option value="is not null" ${rule.operator === 'is not null' ? 'selected' : ''}>不是null</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">参考值</label>
+                        <input type="text" placeholder="例如：1" value="${rule.value || ''}" data-index="${index}" data-field="value" class="w-full px-2 py-1 text-sm border rounded">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">结果</label>
+                        <select data-index="${index}" data-field="result" class="w-full px-2 py-1 text-sm border rounded">
+                            <option value="正常" ${rule.result === '正常' ? 'selected' : ''}>正常</option>
+                            <option value="异常" ${rule.result === '异常' ? 'selected' : ''}>异常</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="p-1 text-red-500 hover:bg-red-50 rounded" onclick="window.removeRule(${index})"><i class="fa fa-trash"></i></button>
+        `;
+
+        rulesList.appendChild(ruleDiv);
+    });
+
+    // Bind input change events
+    rulesList.querySelectorAll('input, select').forEach(input => {
+        input.addEventListener('change', function () {
+            const index = parseInt(this.dataset.index);
+            const field = this.dataset.field;
+            const value = this.value;
+            if (currentRules[index]) {
+                currentRules[index][field] = value;
+            }
+        });
+    });
+}
+
+// ========== Delete rule (global for onclick) ==========
+
+window.removeRule = function (index) {
+    if (currentRules[index]) {
+        currentRules.splice(index, 1);
+        renderRulesConfig();
+    }
+};
+
+// ========== DOMContentLoaded Setup ==========
+
+document.addEventListener('DOMContentLoaded', function () {
+    const saveCustomScriptBtn = document.getElementById('saveCustomScriptBtn');
+    const testCustomScriptBtn = document.getElementById('testCustomScriptBtn');
+    const cancelEditScriptBtn = document.getElementById('cancelEditScriptBtn');
+    const addVariableBtn = document.getElementById('addVariableBtn');
+    const addRuleBtnConfig = document.getElementById('addRuleBtnConfig');
+    const savedScriptsList = document.getElementById('savedScriptsList');
+
+    // ========== Save script button ==========
+
+    if (saveCustomScriptBtn) {
+        saveCustomScriptBtn.addEventListener('click', function () {
+            const scriptId = document.getElementById('customScriptId').value;
+            const scriptName = document.getElementById('customScriptName').value;
+            const database = document.getElementById('customScriptDatabase').value;
+            const content = document.getElementById('customScriptContent').value;
+            const scheduled = document.getElementById('customScriptScheduled').checked;
+            const daily = document.getElementById('customScriptDaily').checked;
+            const realTime = document.getElementById('customScriptRealTime').checked;
+
+            if (!scriptName || !content) {
+                showToast('请输入脚本名称和内容', 'warning');
+                return;
+            }
+
+            const requestData = {
+                name: scriptName,
+                database: database,
+                content: content,
+                scheduled: scheduled,
+                daily: daily,
+                realtime: realTime,
+                variables: currentVariables,
+                rules: currentRules
+            };
+
+            if (scriptId) {
+                requestData.id = scriptId;
+            }
+
+            fetch('/api/custom_scripts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        showToast('脚本保存成功！', 'success');
+                        loadSavedScripts();
+                        clearScriptForm();
+                    } else {
+                        showToast('脚本保存失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('保存脚本失败:', error);
+                    showToast('脚本保存失败，请检查网络连接', 'error');
+                });
+        });
+    }
+
+    // ========== Cancel edit button ==========
+
+    if (cancelEditScriptBtn) {
+        cancelEditScriptBtn.addEventListener('click', clearScriptForm);
+    }
+
+    // ========== Test script button ==========
+
+    if (testCustomScriptBtn) {
+        testCustomScriptBtn.addEventListener('click', function () {
+            const scriptName = document.getElementById('customScriptName').value;
+            const database = document.getElementById('customScriptDatabase').value;
+            const content = document.getElementById('customScriptContent').value;
+
+            if (!content) {
+                showToast('请输入脚本内容', 'warning');
+                return;
+            }
+
+            // Build default params
+            const params = {};
+            const today = new Date().toISOString().split('T')[0];
+            const todayStart = today + ' 00:00:00';
+            currentVariables.forEach(v => {
+                if (v.type === 'date' && !v.default_value) {
+                    params[v.name] = today;
+                } else if (v.type === 'time' && !v.default_value) {
+                    params[v.name] = todayStart;
+                } else {
+                    params[v.name] = v.default_value || '';
+                }
+            });
+
+            const rules = currentRules;
+
+            fetch('/api/test_custom_script', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: scriptName, database: database, content: content, params: params, variables: currentVariables })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showTestScriptResult(data.result, rules);
+                    } else {
+                        showToast('脚本测试失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('测试脚本失败:', error);
+                    showToast('脚本测试失败，请检查网络连接', 'error');
+                });
+        });
+    }
+
+    // ========== Clear test result button ==========
+
+    const clearTestScriptResultBtn = document.getElementById('clearTestScriptResultBtn');
+    if (clearTestScriptResultBtn) {
+        clearTestScriptResultBtn.addEventListener('click', function () {
+            const resultDiv = document.getElementById('testScriptResult');
+            resultDiv.classList.add('hidden');
+            document.getElementById('testScriptResultHeader').innerHTML = '';
+            document.getElementById('testScriptResultBody').innerHTML = '';
+            document.getElementById('testScriptResultCount').textContent = '';
+        });
+    }
+
+    // ========== Script search dropdown ==========
+
+    const customScriptSearch = document.getElementById('customScriptSearch');
+    if (customScriptSearch) {
+        // Focus shows dropdown
+        customScriptSearch.addEventListener('focus', function () {
+            document.getElementById('customScriptDropdown').classList.remove('hidden');
+        });
+
+        // Search filtering
+        customScriptSearch.addEventListener('input', function () {
+            const searchText = this.value.toLowerCase();
+            const filteredScripts = allCustomScripts.filter(script =>
+                script.name.toLowerCase().includes(searchText)
+            );
+            renderScriptOptions(filteredScripts);
+            document.getElementById('customScriptDropdown').classList.remove('hidden');
+        });
+
+        // Keyboard navigation
+        customScriptSearch.addEventListener('keydown', function (e) {
+            const dropdown = document.getElementById('customScriptDropdown');
+
+            if (dropdown.classList.contains('hidden')) {
+                if (e.key === 'ArrowDown') {
+                    dropdown.classList.remove('hidden');
+                    highlightedIndex = -1;
+                }
+                return;
+            }
+
+            const optionsCount = currentFilteredScripts.length;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (optionsCount > 0) {
+                    highlightedIndex = (highlightedIndex + 1) % optionsCount;
+                    highlightOption(highlightedIndex);
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (optionsCount > 0) {
+                    highlightedIndex = highlightedIndex <= 0 ? optionsCount - 1 : highlightedIndex - 1;
+                    highlightOption(highlightedIndex);
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlightedIndex >= 0 && highlightedIndex < optionsCount) {
+                    selectScript(currentFilteredScripts[highlightedIndex]);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.add('hidden');
+                highlightedIndex = -1;
+            }
+        });
+    }
+
+    // Dropdown toggle button
+    const dropdownToggle = document.getElementById('customScriptDropdownToggle');
+    if (dropdownToggle) {
+        dropdownToggle.addEventListener('click', function () {
+            const dropdown = document.getElementById('customScriptDropdown');
+            if (dropdown.classList.contains('hidden')) {
+                dropdown.classList.remove('hidden');
+                customScriptSearch.focus();
+            } else {
+                dropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    // Click outside closes dropdown
+    document.addEventListener('click', function (e) {
+        const container = e.target.closest('.relative');
+        if (!container || !container.querySelector('#customScriptSearch')) {
+            document.getElementById('customScriptDropdown').classList.add('hidden');
+        }
+    });
+
+    // ========== Execute custom script button ==========
+
+    const executeCustomScriptBtn = document.getElementById('executeCustomScriptBtn');
+    if (executeCustomScriptBtn) {
+        executeCustomScriptBtn.addEventListener('click', function () {
+            const scriptId = document.getElementById('customScriptSelect').value;
+            if (!scriptId) {
+                showToast('请先选择脚本', 'warning');
+                return;
+            }
+
+            this.disabled = true;
+            this.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>执行中...';
+
+            const currentScript = allCustomScripts.find(s => s.id === scriptId);
+            const params = getParamsValues(currentScript?.variables);
+
+            fetch(`/api/custom_scripts/${scriptId}/execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(params)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.columns && data.rows !== undefined) {
+                        customScriptColumns = data.columns;
+                        customScriptRows = data.rows;
+
+                        renderCustomScriptResult(data.columns, data.rows);
+
+                        document.getElementById('exportCustomScriptBtn').classList.remove('hidden');
+                        document.getElementById('customScriptResult').classList.remove('hidden');
+                    } else {
+                        showToast('执行失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('执行脚本失败:', error);
+                    showToast('执行失败，请检查网络连接', 'error');
+                })
+                .finally(() => {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fa fa-play mr-2"></i>执行稽核';
+                });
+        });
+    }
+
+    // ========== Add rule button (execution view) ==========
+
+    const addRuleBtn = document.getElementById('addRuleBtn');
+    if (addRuleBtn) {
+        addRuleBtn.addEventListener('click', function () {
+            const currentScript = allCustomScripts.find(s => s.id === selectedScriptId);
+            if (currentScript) {
+                if (!currentScript.rules) {
+                    currentScript.rules = [];
+                }
+                currentScript.rules.push({
+                    column: '',
+                    operator: '=',
+                    value: '',
+                    result: '异常'
+                });
+                renderRulesList(currentScript.rules);
+            }
+        });
+    }
+
+    // ========== Export custom script results ==========
+
+    const exportCustomScriptBtn = document.getElementById('exportCustomScriptBtn');
+    if (exportCustomScriptBtn) {
+        exportCustomScriptBtn.addEventListener('click', function () {
+            if (customScriptColumns.length === 0 || customScriptRows.length === 0) {
+                showToast('没有可导出的数据', 'warning');
+                return;
+            }
+
+            // Generate CSV
+            let csv = customScriptColumns.join(',') + '\n';
+            customScriptRows.forEach(row => {
+                const values = customScriptColumns.map((col, colIndex) => {
+                    let value = '';
+                    if (Array.isArray(row)) {
+                        value = row[colIndex];
+                    } else {
+                        value = row[col];
+                    }
+                    if (value === null || value === undefined) {
+                        value = '';
+                    } else if (typeof value === 'number') {
+                        if (Number.isInteger(value) && Math.abs(value).toString().length > 12) {
+                            value = value.toString();
+                        }
+                    }
+                    if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+                        value = '"' + value.replace(/"/g, '""') + '"';
+                    }
+                    return value;
+                });
+                csv += values.join(',') + '\n';
+            });
+
+            // Download
+            const fileName = currentSelectedScriptName ? `${currentSelectedScriptName}_${new Date().toISOString().split('T')[0]}.csv` : `稽核结果_${new Date().toISOString().split('T')[0]}.csv`;
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    // ========== Add variable button ==========
+
+    if (addVariableBtn) {
+        addVariableBtn.addEventListener('click', window.addVariable);
+    }
+
+    // ========== Add rule button (config view) ==========
+
+    if (addRuleBtnConfig) {
+        addRuleBtnConfig.addEventListener('click', function () {
+            currentRules.push({ column: '', operator: '=', value: '', result: '异常' });
+            renderRulesConfig();
+        });
+    }
+
+    // ========== Load saved scripts on page load ==========
+
+    if (savedScriptsList) {
+        loadSavedScripts();
+    }
+
+    // ========== Initialize variable and rules rendering ==========
+
+    renderVariables();
+    renderRulesConfig();
+});

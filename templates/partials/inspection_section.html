@@ -1,0 +1,35 @@
+<div id="inspectionContent" class="hidden">
+    <!-- 汇总表格（完整巡检时显示，单项巡检时隐藏） -->
+    <div id="summaryTableWrapper" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-800 flex items-center">
+                <i class="fa fa-list-alt mr-2" style="color: var(--primary-color);"></i>
+                巡检汇总
+            </h3>
+            <div class="flex gap-4 text-xs text-gray-500">
+                <span id="startTime"><i class="fa fa-clock-o mr-1"></i>开始时间: --</span>
+                <span id="endTime"><i class="fa fa-clock-o mr-1"></i>结束时间: --</span>
+                <span id="duration"><i class="fa fa-hourglass mr-1"></i>耗时: --</span>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">巡检项</th>
+                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500">状态</th>
+                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500">紧急</th>
+                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500">警告</th>
+                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500">正常</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryTableBody" class="divide-y divide-gray-100">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 详细结果 -->
+    <div id="inspectionResults" class="space-y-4">
+    </div>
+</div>

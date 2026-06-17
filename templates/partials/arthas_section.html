@@ -1,0 +1,370 @@
+<div id="arthasContent" class="hidden">
+    <!-- ====== 连接面板 ====== -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-4">
+        <h3 class="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <i class="fa fa-plug text-xs" style="color: var(--primary-color);"></i>
+            服务器连接
+        </h3>
+
+        <!-- 本机 / 远程 切换 -->
+        <div class="flex gap-2 mb-4">
+            <button id="arthasModeLocal" onclick="arthasSetMode('local')"
+                class="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-primary text-white">
+                本机
+            </button>
+            <button id="arthasModeRemote" onclick="arthasSetMode('remote')"
+                class="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-gray-100 text-gray-600 hover:bg-gray-200">
+                远程服务器
+            </button>
+        </div>
+
+        <!-- 远程连接表单 -->
+        <div id="arthasRemoteConnForm" class="hidden mb-4">
+            <!-- 已保存服务器下拉 + 新增按钮 -->
+            <div class="flex gap-3 items-end mb-3">
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">已保存服务器</label>
+                    <select id="arthasSavedServer" onchange="arthasOnSavedServerSelected()"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="">选择服务器...</option>
+                    </select>
+                </div>
+                <button onclick="arthasLoadSavedServers()"
+                    class="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
+                    <i class="fa fa-refresh text-xs text-gray-400"></i> 刷新
+                </button>
+                <button onclick="arthasToggleNewServerForm()"
+                    class="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
+                    <i class="fa fa-plus text-xs text-gray-400"></i> 新增
+                </button>
+            </div>
+
+            <!-- SSH 连接表单（手动输入） -->
+            <div id="arthasSSHForm" class="hidden p-4 bg-gray-50 rounded-lg border border-gray-200 mb-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">主机地址</label>
+                        <input id="arthasSSHHost" type="text" placeholder="IP地址"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">SSH端口</label>
+                        <input id="arthasSSHPort" type="number" value="22"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">用户名</label>
+                        <input id="arthasSSHUsername" type="text" value="root"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">认证方式</label>
+                        <select id="arthasSSHAuthType" onchange="arthasToggleSSHAuthFields()"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                            <option value="password">密码</option>
+                            <option value="key">私钥</option>
+                        </select>
+                    </div>
+                    <div id="arthasSSHPasswordDiv">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">密码</label>
+                        <input id="arthasSSHPassword" type="password"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div id="arthasSSHKeyDiv" class="hidden">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">私钥路径</label>
+                        <input id="arthasSSHKeyPath" type="text"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-3">
+                    <button onclick="arthasConnectSSH()"
+                        class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-opacity-90 transition-all flex items-center gap-2">
+                        <i class="fa fa-plug"></i> 连接
+                    </button>
+                </div>
+            </div>
+
+            <!-- 新增服务器表单 -->
+            <div id="arthasNewServerForm" class="hidden p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">名称</label>
+                        <input id="arthasNewServerName" type="text" placeholder="如: 生产服务器1"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">主机地址</label>
+                        <input id="arthasNewServerHost" type="text" placeholder="IP地址"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">SSH端口</label>
+                        <input id="arthasNewServerSSHPort" type="number" value="22"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">用户名</label>
+                        <input id="arthasNewServerUsername" type="text" value="root"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">密码</label>
+                        <input id="arthasNewServerPassword" type="password"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-3">
+                    <button onclick="arthasToggleNewServerForm()"
+                        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 transition-all text-gray-600">取消</button>
+                    <button onclick="arthasSaveNewServer()"
+                        class="px-3 py-1.5 text-sm rounded-lg bg-primary text-white hover:bg-opacity-90 transition-all">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 容器选择 -->
+        <div id="arthasContainerSection" class="hidden mb-3">
+            <div class="flex gap-3 items-end">
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Docker容器</label>
+                    <select id="arthasContainerSelect" onchange="arthasOnContainerSelected()"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="">主机进程（不使用容器）</option>
+                    </select>
+                </div>
+                <button onclick="arthasLoadContainers()"
+                    class="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
+                    <i class="fa fa-refresh text-xs text-gray-400"></i> 刷新
+                </button>
+            </div>
+        </div>
+
+        <!-- Java 进程选择 -->
+        <div id="arthasProcessSection" class="hidden mb-3">
+            <div class="flex gap-3 items-end">
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Java进程</label>
+                    <select id="arthasProcessSelect" onchange="arthasOnProcessSelected()"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="">请先刷新进程列表</option>
+                    </select>
+                </div>
+                <button onclick="arthasLoadJavaProcesses()"
+                    class="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
+                    <i class="fa fa-refresh text-xs text-gray-400"></i> 刷新
+                </button>
+            </div>
+            <!-- 手动输入PID（未找到进程时显示） -->
+            <div id="arthasManualPidDiv" class="hidden mt-3">
+                <div class="flex gap-3 items-center">
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">手动输入进程PID</label>
+                        <input id="arthasManualPid" type="number" placeholder="输入Java进程PID"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                    </div>
+                    <button onclick="arthasSetManualPid()"
+                        class="px-3 py-2 rounded-lg text-sm bg-primary text-white hover:bg-opacity-90 transition-all flex items-center gap-1">
+                        <i class="fa fa-check text-xs"></i> 使用此PID
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arthas端口 -->
+        <div class="mb-4">
+            <label class="block text-xs font-medium text-gray-500 mb-1">Arthas端口</label>
+            <input id="arthasHttpPort" type="number" value="8563"
+                class="w-full max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg">
+        </div>
+
+        <!-- 容器日志查看 -->
+        <div id="arthasContainerLogSection" class="hidden mb-4">
+            <div class="flex gap-3 items-center flex-wrap">
+                <button onclick="arthasShowContainerLogs()"
+                    class="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
+                    <i class="fa fa-file-text-o text-xs text-gray-400"></i> 查看日志
+                </button>
+                <button onclick="arthasStopContainerLogs()" id="arthasLogStopBtn" style="display:none;"
+                    class="px-3 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600 transition-all flex items-center gap-1">
+                    <i class="fa fa-stop text-xs"></i> 停止
+                </button>
+                <label class="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" id="arthasLogFollow" class="w-4 h-4 accent-green-500">
+                    <span class="text-sm text-gray-600">实时</span>
+                </label>
+                <input id="arthasLogLines" type="number" value="100" placeholder="行数"
+                    class="w-20 px-2 py-2 text-sm border border-gray-200 rounded-lg">
+                <span class="text-xs text-gray-500">行</span>
+            </div>
+        </div>
+
+        <!-- 状态栏 + 启动/停止按钮 -->
+        <div class="flex gap-3 items-center">
+            <div id="arthasStatusDot" class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-gray-300"></div>
+                <span class="text-sm text-gray-500">未检测</span>
+            </div>
+            <button id="arthasStartBtn" onclick="arthasStart()"
+                class="px-4 py-2 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition-all flex items-center gap-2">
+                <i class="fa fa-play text-xs"></i> 启动Arthas
+            </button>
+            <button id="arthasStopBtn" onclick="arthasStop()"
+                class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-all flex items-center gap-2 hidden">
+                <i class="fa fa-stop text-xs"></i> 停止Arthas
+            </button>
+            <button onclick="arthasCheckStatus()"
+                class="px-4 py-2 rounded-lg border border-gray-200 text-sm hover:bg-gray-50 transition-all flex items-center gap-2">
+                <i class="fa fa-bolt text-xs text-gray-400"></i> 检测连接
+            </button>
+        </div>
+    </div>
+
+    <!-- ====== 命令面板 ====== -->
+    <div id="arthasCommandPanel" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-4 hidden">
+        <!-- 命令分类标签 -->
+        <div class="flex gap-2 mb-4 border-b border-gray-200 pb-3">
+            <button onclick="arthasShowCmdTab('quick')" id="arthasCmdTabQuick"
+                class="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary text-white transition-all">
+                快捷命令
+            </button>
+            <button onclick="arthasShowCmdTab('method')" id="arthasCmdTabMethod"
+                class="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all">
+                方法观测
+            </button>
+            <button onclick="arthasShowCmdTab('custom')" id="arthasCmdTabCustom"
+                class="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all">
+                自定义命令
+            </button>
+        </div>
+
+        <!-- 快捷命令网格 -->
+        <div id="arthasCmdQuick" class="grid grid-cols-3 md:grid-cols-4 gap-2">
+            <button onclick="arthasExecQuick('dashboard -n 1')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                全局面板
+            </button>
+            <button onclick="arthasExecQuick('thread')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                线程总览
+            </button>
+            <button onclick="arthasExecQuick('thread -n 10 -i 1000')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                CPU Top 10
+            </button>
+            <button onclick="arthasExecQuick('thread -b')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                阻塞线程
+            </button>
+            <button onclick="arthasExecQuick('memory')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                内存信息
+            </button>
+            <button onclick="arthasExecQuick('jvm')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                JVM信息
+            </button>
+            <button onclick="arthasExecQuick('sysprop')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                系统属性
+            </button>
+            <button onclick="arthasExecQuick('logger')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                日志级别
+            </button>
+            <button onclick="arthasExecQuick('vmoption')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                JVM选项
+            </button>
+            <button onclick="arthasExecQuick('sc *Controller')"
+                class="px-3 py-2 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary-light transition-all text-sm text-gray-700">
+                搜索Controller
+            </button>
+            <button onclick="arthasExecQuick('profiler start')"
+                class="px-3 py-2 rounded-lg border border-orange-200 hover:border-orange-400 text-orange-600 text-sm">
+                开始采样
+            </button>
+            <button onclick="arthasExecQuick('profiler stop --format html')"
+                class="px-3 py-2 rounded-lg border border-orange-200 hover:border-orange-400 text-orange-600 text-sm">
+                生成火焰图
+            </button>
+        </div>
+
+        <!-- 方法观测 -->
+        <div id="arthasCmdMethod" class="hidden">
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">类名匹配 (如 com.example.Service)</label>
+                    <input id="arthasMethodClass" type="text"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">方法名匹配 (如 doSomething)</label>
+                    <input id="arthasMethodMethod" type="text"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="arthasExecMethod('watch')"
+                    class="px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm hover:bg-blue-100 transition-all flex items-center gap-1">
+                    <i class="fa fa-eye text-xs"></i> watch 观测
+                </button>
+                <button onclick="arthasExecMethod('trace')"
+                    class="px-3 py-2 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-sm hover:bg-purple-100 transition-all flex items-center gap-1">
+                    <i class="fa fa-code-branch text-xs"></i> trace 链路
+                </button>
+                <button onclick="arthasExecMethod('stack')"
+                    class="px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm hover:bg-green-100 transition-all flex items-center gap-1">
+                    <i class="fa fa-layer-group text-xs"></i> stack 调用栈
+                </button>
+            </div>
+        </div>
+
+        <!-- 自定义命令 -->
+        <div id="arthasCmdCustom" class="hidden">
+            <div class="flex gap-3">
+                <input id="arthasCustomCmdInput" type="text" placeholder="输入Arthas命令，如: thread -n 3"
+                    class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
+                    style="--tw-ring-color: var(--primary-color);">
+                <button onclick="arthasExecCustom()"
+                    class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-opacity-90 transition-all">
+                    执行
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== 输出面板 ====== -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <i class="fa fa-terminal text-xs" style="color: var(--primary-color);"></i>
+                诊断结果
+            </h3>
+            <div class="flex gap-2 items-center">
+                <!-- 异步监听控制 -->
+                <div id="arthasAsyncControls" class="hidden flex gap-2 items-center">
+                    <span class="text-xs text-orange-600 flex items-center gap-1">
+                        <i class="fa fa-spinner fa-spin"></i> 异步监听中...
+                    </span>
+                    <button onclick="arthasInterruptAsync()"
+                        class="px-2 py-1 rounded-lg text-xs border border-red-200 text-red-600 hover:bg-red-50 transition-all">
+                        停止监听
+                    </button>
+                </div>
+                <button onclick="arthasClearOutput()"
+                    class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 transition-all text-gray-600 flex items-center gap-1">
+                    <i class="fa fa-trash text-xs"></i> 清空
+                </button>
+            </div>
+        </div>
+        <div id="arthasOutputArea" class="space-y-3">
+            <div class="text-center py-8 text-gray-400 text-sm">
+                <i class="fa fa-terminal text-2xl mb-2 block"></i>
+                请先连接服务器并启动Arthas，然后执行诊断命令
+            </div>
+        </div>
+    </div>
+</div>

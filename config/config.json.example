@@ -1,0 +1,154 @@
+{
+  "projectName": "服务器巡检系统",
+  "scheduler": {
+    "enabled": false,
+    "cron": "*/20 * * * *",
+    "only_error_notification": false
+  },
+  "dailyInspection": {
+    "enabled": true,
+    "hour": 7,
+    "minute": 28,
+    "only_error_notification": false
+  },
+  "realTimeMonitoring": {
+    "enabled": false,
+    "interval": 120,
+    "items": {
+      "cpu": false,
+      "memory": false,
+      "disk": false,
+      "disk_io": false,
+      "swap": false,
+      "processes": false,
+      "slow_sql": false,
+      "worker_output_with_color_size": false,
+      "worker_output_without_color_size": false,
+      "worker_output_sfd": false,
+      "mes_hanging": false
+    },
+    "notification": {
+      "enabled": true,
+      "only_error": true,
+      "alert_levels": [
+        "warning",
+        "critical"
+      ],
+      "dingtalk": true,
+      "cooldown_period": 600
+    },
+    "performance": {
+      "max_concurrent_checks": 3,
+      "timeout": 10,
+      "resource_limit": {
+        "cpu_percent": 15,
+        "memory_mb": 200
+      }
+    }
+  },
+  "thresholds": {
+    "cpu": {
+      "warning": 80,
+      "critical": 90
+    },
+    "memory": {
+      "warning": 80,
+      "critical": 90
+    },
+    "disk": {
+      "warning": 80,
+      "critical": 90
+    },
+    "disk_free": {
+      "warning": 20,
+      "critical": 15
+    },
+    "slow_sql": {
+      "warning": 5,
+      "critical": 10
+    }
+  },
+  "inspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false
+  },
+  "scheduledInspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false,
+    "database": false,
+    "network": false,
+    "worker_output_with_color_size": false,
+    "worker_output_without_color_size": false,
+    "worker_output_sfd": false,
+    "mes_hanging": false
+  },
+  "dailyInspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false,
+    "database": false,
+    "network": false,
+    "worker_output_with_color_size": false,
+    "worker_output_without_color_size": false,
+    "worker_output_sfd": false,
+    "mes_hanging": false
+  },
+  "dingtalk": {
+    "enabled": true,
+    "webhooks": [
+      "https://oapi.dingtalk.com/robot/send?access_token=YOUR_DINGTALK_TOKEN"
+    ],
+    "secret": "",
+    "show_details": false
+  },
+  "databaseConfig": {
+    "mes": {
+      "type": "postgresql",
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "password": "your_password",
+      "database": "mes"
+    },
+    "hanging": {
+      "type": "mysql",
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "password": "your_password",
+      "database": "hanging"
+    }
+  },
+  "inspectionDateConfig": {
+    "enabled": true,
+    "options": {
+      "yesterday": true,
+      "today": false,
+      "current_month_to_yesterday": false,
+      "current_month_to_today": false,
+      "custom": false
+    },
+    "custom_date_range": {
+      "start_date": "",
+      "end_date": ""
+    }
+  },
+  "arthasServers": []
+}

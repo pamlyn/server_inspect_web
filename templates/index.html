@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- 去重选项 -->
+<div id="deduplicateOption"
+    class="mb-4 flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm max-w-md">
+    <input type="checkbox" id="deduplicateCheckbox" checked
+        class="w-4 h-4 rounded border-gray-300 focus:ring-2 transition-all cursor-pointer"
+        style="color: var(--primary-color);">
+    <label for="deduplicateCheckbox" class="ml-2 text-sm text-gray-700 cursor-pointer">
+        慢SQL去重（默认开启，去除重复的SQL语句）
+    </label>
+</div>
+
+<!-- 加载中 -->
+<div id="loading" class="hidden text-center py-16">
+    <div class="inline-block animate-spin rounded-full h-12 w-12 border-4"
+        style="border-color: var(--primary-light); border-top-color: var(--primary-color);">
+    </div>
+    <p class="mt-4 text-gray-600 text-sm">正在执行巡检，请稍候...</p>
+</div>
+
+<!-- 结果区域 -->
+<div id="results" class="hidden space-y-4">
+    {% include 'partials/sql_inspect_section.html' %}
+    {% include 'partials/custom_inspect_section.html' %}
+    {% include 'partials/config_section.html' %}
+    {% include 'partials/inspection_section.html' %}
+</div>
+
+<!-- Arthas诊断（独立区块，不在快速巡检中显示） -->
+{% include 'partials/arthas_section.html' %}
+{% endblock %}

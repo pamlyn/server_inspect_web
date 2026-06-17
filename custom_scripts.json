@@ -1,0 +1,56 @@
+{
+  "scripts": [
+    {
+      "id": "1",
+      "name": "同工序版本一道工序报工多次的工票",
+      "database": "mes",
+      "content": "SELECT *\nFROM (\n  SELECT \n    process_version_id as 工序版本id,\n    crop_order_ticket_id as 工票id,\n    process_serial_no as 工序号,\n    produce_process_name as 工序名称,\n    ROW_NUMBER() OVER (\n      PARTITION BY process_version_id,crop_order_ticket_id, process_serial_no \n      ORDER BY id ASC\n    ) AS  报工次数\n  FROM jack_mes.produce_produce_reporting_work\n  WHERE \n    is_deleted = 0 and crop_order_ticket_id IS NOT NULL\n) t\nWHERE t.报工次数 > 1;",
+      "scheduled": false,
+      "daily": true,
+      "realtime": false,
+      "created_at": "2026-04-24 09:32:30",
+      "updated_at": "2026-06-06 11:10:19",
+      "variables": [],
+      "rules": [
+        {
+          "column": "报工次数",
+          "operator": ">",
+          "result": "异常",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "一道工序多次报工的工票",
+      "database": "mes",
+      "content": "SELECT *\nFROM (\n  SELECT \n    crop_order_ticket_id as 工票id,\n    process_serial_no as 工序号,\n    produce_process_name as 工序名称,\n    ROW_NUMBER() OVER (\n      PARTITION BY crop_order_ticket_id, process_serial_no \n      ORDER BY id ASC\n    ) AS  报工次数\n  FROM jack_mes.produce_produce_reporting_work\n  WHERE \n    is_deleted = 0 \n) t\nWHERE t.报工次数 > 1;\n",
+      "scheduled": false,
+      "daily": true,
+      "realtime": false,
+      "created_at": "2026-04-24 13:06:57",
+      "variables": [
+        {
+          "default_value": "",
+          "name": "var1",
+          "type": "date"
+        }
+      ],
+      "updated_at": "2026-04-27 11:16:27"
+    },
+    {
+      "id": "4",
+      "name": "同工序版本工序号重复",
+      "database": "mes",
+      "content": "select \n    h_id 工序版本id,\n    craft_seq 工序号,\n    count(*) as 数量\nfrom \n    jack_mes.product_product_process_info \nwhere\n    is_deleted = 0\ngroup by \n    h_id,craft_seq\nhaving \n    count(*) > 1\n",
+      "scheduled": false,
+      "daily": true,
+      "realtime": false,
+      "created_at": "2026-04-24 13:36:12",
+      "updated_at": "2026-05-12 11:00:46",
+      "variables": [],
+      "rules": []
+    }
+  ],
+  "next_id": 10
+}

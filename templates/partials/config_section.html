@@ -1,0 +1,20 @@
+<div id="configContent" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
+                style="background: var(--primary-light);">
+                <i class="fa fa-cog text-sm" style="color: var(--primary-color);"></i>
+            </div>
+            系统配置
+        </h2>
+        <form id="mainConfigForm" class="space-y-6">
+            {% include 'partials/config/project_and_scheduler.html' %}
+            {% include 'partials/config/daily_inspection.html' %}
+            {% include 'partials/config/realtime_monitor.html' %}
+            {% include 'partials/config/sql_date.html' %}
+            {% include 'partials/config/custom_script.html' %}
+            {% include 'partials/config/inspection_items.html' %}
+            {% include 'partials/config/database_and_dingtalk.html' %}
+        </form>
+    </div>
+</div>
