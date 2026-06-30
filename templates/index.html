@@ -28,6 +28,5 @@
     {% include 'partials/inspection_section.html' %}
 </div>
 
-<!-- Arthas诊断（独立区块，不在快速巡检中显示） -->
-{% include 'partials/arthas_section.html' %}
+{# Arthas诊断（独立区块，不在快速巡检中显示） - 使用Jinja2注释防止渲染 #}
 {% endblock %}

@@ -29,8 +29,7 @@
     <script src="{{ url_for('static', filename='js/sql_inspect.js') }}"></script>
     <script src="{{ url_for('static', filename='js/custom_inspect.js') }}"></script>
     <script src="{{ url_for('static', filename='js/inspection.js') }}"></script>
-    <!-- Arthas诊断模块已隐藏 -->
-    <!-- <script src="{{ url_for('static', filename='js/arthas.js') }}"></script> -->
+    {# Arthas诊断模块已隐藏 - 使用Jinja2注释防止渲染 #}
 </body>
 
 </html>
