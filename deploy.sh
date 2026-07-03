@@ -324,8 +324,8 @@ start_container() {
         # 添加配置目录挂载
         if [ -d "${CONFIG_DIR}" ]; then
             DOCKER_CMD="${DOCKER_CMD} \
-                -v ${CONFIG_DIR}/config.json:/app/config.json \
-                -v ${CONFIG_DIR}/custom_scripts.json:/app/custom_scripts.json"
+                -v ${CONFIG_DIR}/config.json:/app/config/config.json \
+                -v ${CONFIG_DIR}/custom_scripts.json:/app/config/custom_scripts.json"
         fi
 
         # 添加 Cookies 文件（如果存在）
