@@ -49,6 +49,42 @@ def config():
         return jsonify({'message': '配置保存成功'})
 
 
+@config_mgmt_bp.route('/test_database', methods=['POST'])
+@login_required
+def test_database():
+    """测试数据库连接"""
+    try:
+        data = request.json
+        db_type = data.get('type')
+        host = data.get('host')
+        port = data.get('port')
+        user = data.get('user')
+        password = data.get('password')
+        database = data.get('database')
+        
+        from modules.inspection.helpers import execute_sql
+        
+        config = {
+            'type': db_type,
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password,
+            'database': database
+        }
+        
+        columns, rows = execute_sql(db_type, config, 'SELECT 1')
+        if columns is None:
+            return jsonify({'success': False, 'error': rows}), 500
+        
+        return jsonify({'success': True, 'message': '数据库连接测试成功'})
+    except Exception as e:
+        print(f"测试数据库连接失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @config_mgmt_bp.route('/reload', methods=['POST'])
 @login_required
 def reload_config():

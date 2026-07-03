@@ -13,6 +13,15 @@
                 style="--tw-ring-color: var(--primary-color);" placeholder="输入脚本名称">
         </div>
         <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">执行模式</label>
+            <select id="customScriptMode"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style="--tw-ring-color: var(--primary-color);">
+                <option value="single_db">单库模式</option>
+                <option value="cross_db">跨库对比模式</option>
+            </select>
+        </div>
+        <div id="singleDbConfig">
             <label class="block text-xs font-medium text-gray-600 mb-1">选择数据库</label>
             <select id="customScriptDatabase"
                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
@@ -20,6 +29,42 @@
                 <option value="mes">MES数据库</option>
                 <option value="hanging">吊挂中间库</option>
             </select>
+        </div>
+        <div id="crossDbConfig" class="hidden">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">源数据库</label>
+                    <select id="customScriptSourceDb"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="mes">MES数据库</option>
+                        <option value="hanging">吊挂中间库</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">目标数据库</label>
+                    <select id="customScriptTargetDb"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="mes">MES数据库</option>
+                        <option value="hanging">吊挂中间库</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1">源数据库SQL</label>
+                <textarea id="customScriptSourceSql" rows="4"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all pre-wrap"
+                    style="--tw-ring-color: var(--primary-color); resize: vertical;"
+                    placeholder="请输入源数据库查询SQL..."></textarea>
+            </div>
+            <div class="mt-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1">目标数据库SQL</label>
+                <textarea id="customScriptTargetSql" rows="4"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all pre-wrap"
+                    style="--tw-ring-color: var(--primary-color); resize: vertical;"
+                    placeholder="请输入目标数据库查询SQL..."></textarea>
+            </div>
         </div>
         <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">执行选项</label>

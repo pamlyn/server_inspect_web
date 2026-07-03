@@ -130,10 +130,15 @@ def run_full_inspection(deduplicate=None):
         deduplicate = True
     functions = get_inspection_functions()
     results = {}
+    
+    from modules.config_mgmt.helpers import get_config
+    full_inspection_items = get_config('fullInspectionItems', {})
+    
     for item, func in functions.items():
-        if item == 'slow_sql':
-            result = func(deduplicate)
-        else:
-            result = func()
-        results[item] = result.to_dict()
+        if full_inspection_items.get(item, True):
+            if item == 'slow_sql':
+                result = func(deduplicate)
+            else:
+                result = func()
+            results[item] = result.to_dict()
     return results

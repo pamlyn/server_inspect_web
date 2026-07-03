@@ -43,6 +43,15 @@ _config_state = {
         'worker_output_without_color_size': True,
         'mes_hanging': True
     },
+    'fullInspectionItems': {
+        'system_info': True, 'cpu': True, 'memory': True, 'swap': True,
+        'disk': True, 'disk_io': True, 'processes': True, 'slow_sql': True,
+        'database': True, 'network': True,
+        'worker_output_with_color_size': True,
+        'worker_output_without_color_size': True,
+        'worker_output_sfd': True,
+        'mes_hanging': True
+    },
     'dingtalk': DINGTALK_CONFIG,
     'realTimeMonitoring': REAL_TIME_MONITORING,
     'inspectionDateConfig': INSPECTION_DATE_CONFIG,

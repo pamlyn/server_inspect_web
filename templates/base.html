@@ -8,7 +8,7 @@
     <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
     <!-- 外部JS模块（app.js必须最先加载，提供共享工具函数） -->
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260703d"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260703e"></script>
 </head>
 
 <body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 font-sans theme-blue" id="appBody">
@@ -25,10 +25,10 @@
     </div>
 
     <!-- 模块JS（按依赖顺序加载） -->
-    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260703d"></script>
-    <script src="{{ url_for('static', filename='js/sql_inspect.js') }}?v=20260703d"></script>
-    <script src="{{ url_for('static', filename='js/custom_inspect.js') }}?v=20260703d"></script>
-    <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260703d"></script>
+    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260703e"></script>
+    <script src="{{ url_for('static', filename='js/sql_inspect.js') }}?v=20260703e"></script>
+    <script src="{{ url_for('static', filename='js/custom_inspect.js') }}?v=20260703g"></script>
+    <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260703e"></script>
     {# Arthas诊断模块已隐藏 - 使用Jinja2注释防止渲染 #}
 </body>
 

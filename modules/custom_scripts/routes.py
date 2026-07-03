@@ -25,13 +25,12 @@ def custom_scripts_api():
         data = request.json
         script_id = data.get('id')
         name = data.get('name')
-        database = data.get('database')
-        content = data.get('content')
+        mode = data.get('mode', 'single_db')
         variables = data.get('variables', [])
         rules = data.get('rules', [])
 
-        if not name or not content:
-            return jsonify({'error': '脚本名称和内容不能为空'}), 400
+        if not name:
+            return jsonify({'error': '脚本名称不能为空'}), 400
 
         if script_id:
             script = next((s for s in custom_scripts if s['id'] == script_id), None)
@@ -39,27 +38,54 @@ def custom_scripts_api():
                 return jsonify({'error': '脚本不存在'}), 404
 
             script['name'] = name
-            script['database'] = database
-            script['content'] = content
+            script['mode'] = mode
             script['variables'] = variables
             script['rules'] = rules
             script['scheduled'] = data.get('scheduled', False)
             script['daily'] = data.get('daily', False)
             script['realtime'] = data.get('realtime', False)
             script['updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            if mode == 'single_db':
+                script['database'] = data.get('database')
+                script['content'] = data.get('content')
+                script.pop('source_db', None)
+                script.pop('target_db', None)
+                script.pop('source_sql', None)
+                script.pop('target_sql', None)
+            else:
+                script['source_db'] = data.get('source_db')
+                script['target_db'] = data.get('target_db')
+                script['source_sql'] = data.get('source_sql')
+                script['target_sql'] = data.get('target_sql')
+                script.pop('database', None)
+                script.pop('content', None)
         else:
             new_script = {
                 'id': str(script_id_counter),
                 'name': name,
-                'database': database,
-                'content': content,
-                'variables': variables,
-                'rules': rules,
+                'mode': mode,
                 'scheduled': data.get('scheduled', False),
                 'daily': data.get('daily', False),
                 'realtime': data.get('realtime', False),
+                'variables': variables,
+                'rules': rules,
                 'created_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
+
+            if mode == 'single_db':
+                new_script['database'] = data.get('database')
+                new_script['content'] = data.get('content')
+                if not new_script['content']:
+                    return jsonify({'error': '脚本内容不能为空'}), 400
+            else:
+                new_script['source_db'] = data.get('source_db')
+                new_script['target_db'] = data.get('target_db')
+                new_script['source_sql'] = data.get('source_sql')
+                new_script['target_sql'] = data.get('target_sql')
+                if not new_script['source_sql'] or not new_script['target_sql']:
+                    return jsonify({'error': '源数据库和目标数据库SQL不能为空'}), 400
+
             custom_scripts.append(new_script)
             script_id_counter += 1
 
@@ -110,33 +136,75 @@ def execute_custom_script(script_id):
 
     try:
         params = request.get_json() or {}
-        sql_content = script.get('content', '')
-        variables = script.get('variables', [])
-
-        for var in variables:
-            var_name = var.get('name', '')
-            var_type = var.get('type', 'text')
-            var_value = params.get(var_name, var.get('default_value', ''))
-            formatted_value = format_sql_value(var_type, var_value)
-            sql_content = sql_content.replace(f'#{{{var_name}}}', formatted_value)
-
         DATABASE_CONFIG = get_config('databaseConfig')
-        database = script.get('database')
-        if database == 'mes':
-            db_config = DATABASE_CONFIG.get('mes')
-        elif database == 'hanging':
-            db_config = DATABASE_CONFIG.get('hanging')
+        mode = script.get('mode', 'single_db')
+
+        if mode == 'single_db':
+            sql_content = script.get('content', '')
+            variables = script.get('variables', [])
+
+            for var in variables:
+                var_name = var.get('name', '')
+                var_type = var.get('type', 'text')
+                var_value = params.get(var_name, var.get('default_value', ''))
+                formatted_value = format_sql_value(var_type, var_value)
+                sql_content = sql_content.replace(f'#{{{var_name}}}', formatted_value)
+
+            database = script.get('database')
+            db_config = DATABASE_CONFIG.get(database)
+            if not db_config:
+                return jsonify({'error': '数据库配置不存在'}), 400
+
+            columns, rows = execute_sql(db_config['type'], db_config, sql_content)
+            if columns is None:
+                return jsonify({'error': rows}), 500
+
+            return jsonify({'columns': columns, 'rows': rows})
         else:
-            return jsonify({'error': '不支持的数据库类型'}), 400
+            source_db = script.get('source_db')
+            target_db = script.get('target_db')
+            source_sql = script.get('source_sql', '')
+            target_sql = script.get('target_sql', '')
+            variables = script.get('variables', [])
 
-        if not db_config:
-            return jsonify({'error': '数据库配置不存在'}), 400
+            for var in variables:
+                var_name = var.get('name', '')
+                var_type = var.get('type', 'text')
+                var_value = params.get(var_name, var.get('default_value', ''))
+                formatted_value = format_sql_value(var_type, var_value)
+                source_sql = source_sql.replace(f'#{{{var_name}}}', formatted_value)
+                target_sql = target_sql.replace(f'#{{{var_name}}}', formatted_value)
 
-        columns, rows = execute_sql(db_config['type'], db_config, sql_content)
-        if columns is None:
-            return jsonify({'error': rows}), 500
+            source_db_config = DATABASE_CONFIG.get(source_db)
+            target_db_config = DATABASE_CONFIG.get(target_db)
 
-        return jsonify({'columns': columns, 'rows': rows})
+            if not source_db_config or not target_db_config:
+                return jsonify({'error': '数据库配置不存在'}), 400
+
+            source_columns, source_rows = execute_sql(source_db_config['type'], source_db_config, source_sql)
+            if source_columns is None:
+                return jsonify({'error': f'源数据库查询失败: {source_rows}'}), 500
+
+            target_columns, target_rows = execute_sql(target_db_config['type'], target_db_config, target_sql)
+            if target_columns is None:
+                return jsonify({'error': f'目标数据库查询失败: {target_rows}'}), 500
+
+            result_columns = ['数据源'] + source_columns
+            result_rows = []
+
+            for row in source_rows:
+                if isinstance(row, dict):
+                    result_rows.append(['源数据库'] + [row.get(col, '') for col in source_columns])
+                else:
+                    result_rows.append(['源数据库'] + list(row))
+
+            for row in target_rows:
+                if isinstance(row, dict):
+                    result_rows.append(['目标数据库'] + [row.get(col, '') for col in target_columns])
+                else:
+                    result_rows.append(['目标数据库'] + list(row))
+
+            return jsonify({'columns': result_columns, 'rows': result_rows})
     except Exception as e:
         print(f"执行脚本失败: {e}")
         import traceback

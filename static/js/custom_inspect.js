@@ -18,6 +18,7 @@ let selectedScriptId = null;
 let currentFilteredScripts = [];
 let highlightedIndex = -1;
 let currentVariables = [];
+let databaseOptions = [];
 
 // ========== Date utility functions (exposed globally for template onclick handlers) ==========
 
@@ -66,7 +67,10 @@ window.showCustomInspect = function () {
 function clearScriptForm() {
     document.getElementById('customScriptId').value = '';
     document.getElementById('customScriptName').value = '';
+    document.getElementById('customScriptMode').value = 'single_db';
     document.getElementById('customScriptContent').value = '';
+    document.getElementById('customScriptSourceSql').value = '';
+    document.getElementById('customScriptTargetSql').value = '';
     document.getElementById('customScriptScheduled').checked = false;
     document.getElementById('customScriptDaily').checked = false;
     document.getElementById('customScriptRealTime').checked = false;
@@ -74,13 +78,54 @@ function clearScriptForm() {
     const cancelEditScriptBtn = document.getElementById('cancelEditScriptBtn');
     cancelEditScriptBtn.classList.add('hidden');
 
-    // Clear variables
+    const singleDbConfig = document.getElementById('singleDbConfig');
+    const crossDbConfig = document.getElementById('crossDbConfig');
+    const customScriptContent = document.getElementById('customScriptContent');
+    singleDbConfig.classList.remove('hidden');
+    crossDbConfig.classList.add('hidden');
+    customScriptContent.parentElement.classList.remove('hidden');
+
     currentVariables = [];
     renderVariables();
 
-    // Clear rules
     currentRules = [];
     renderRulesConfig();
+}
+
+function loadDatabaseOptions() {
+    fetch('/api/config')
+        .then(response => response.json())
+        .then(data => {
+            const dbConfig = data.databaseConfig || {};
+            databaseOptions = Object.keys(dbConfig);
+            
+            const databaseSelect = document.getElementById('customScriptDatabase');
+            const sourceDbSelect = document.getElementById('customScriptSourceDb');
+            const targetDbSelect = document.getElementById('customScriptTargetDb');
+
+            if (databaseOptions.length === 0) {
+                databaseOptions = ['mes', 'hanging'];
+            }
+
+            function populateSelect(selectElement) {
+                if (!selectElement) return;
+                selectElement.innerHTML = '';
+                databaseOptions.forEach(dbId => {
+                    const option = document.createElement('option');
+                    option.value = dbId;
+                    option.textContent = dbId;
+                    selectElement.appendChild(option);
+                });
+            }
+
+            populateSelect(databaseSelect);
+            populateSelect(sourceDbSelect);
+            populateSelect(targetDbSelect);
+        })
+        .catch(error => {
+            console.error('加载数据库配置失败:', error);
+            databaseOptions = ['mes', 'hanging'];
+        });
 }
 
 // ========== Evaluate record status based on rules ==========
@@ -697,13 +742,13 @@ function loadSavedScripts() {
         .then(data => {
             savedScriptsList.innerHTML = '';
             if (data.scripts && data.scripts.length > 0) {
-                data.scripts.forEach(script => {
-                    // 用 DOM API 创建每个元素，避免 innerHTML 导致事件丢失
+                data.scripts.forEach(function(script) {
+                    const currentScriptId = script.id;
+                    
                     const scriptItem = document.createElement('div');
                     scriptItem.className = 'p-2 border rounded-lg';
-                    scriptItem.dataset.scriptId = script.id;
+                    scriptItem.dataset.scriptId = currentScriptId;
 
-                    // 左侧信息区
                     const infoDiv = document.createElement('div');
 
                     const nameDiv = document.createElement('div');
@@ -713,10 +758,9 @@ function loadSavedScripts() {
 
                     const dbDiv = document.createElement('div');
                     dbDiv.className = 'text-xs text-gray-500 mb-1';
-                    dbDiv.textContent = script.database;
+                    dbDiv.textContent = script.database || (script.mode === 'cross_db' ? '跨库对比' : '未配置');
                     infoDiv.appendChild(dbDiv);
 
-                    // 执行标签
                     const tagsDiv = document.createElement('div');
                     tagsDiv.className = 'flex items-center';
                     const labelSpan = document.createElement('span');
@@ -732,7 +776,6 @@ function loadSavedScripts() {
                     }
                     infoDiv.appendChild(tagsDiv);
 
-                    // 右侧按钮区
                     const btnDiv = document.createElement('div');
                     btnDiv.className = 'flex space-x-2';
 
@@ -740,22 +783,43 @@ function loadSavedScripts() {
                     editBtn.type = 'button';
                     editBtn.className = 'text-xs px-2 py-1 bg-primary text-white rounded hover:bg-opacity-90 transition-all';
                     editBtn.textContent = '编辑';
-                    editBtn.addEventListener('click', function () {
-                        window.editScript(script.id);
+                    editBtn.addEventListener('click', function() {
+                        window.editScript(currentScriptId);
                     });
 
                     const deleteBtn = document.createElement('button');
                     deleteBtn.type = 'button';
                     deleteBtn.className = 'text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-opacity-90 transition-all';
                     deleteBtn.textContent = '删除';
-                    deleteBtn.addEventListener('click', function () {
-                        window.deleteScript(script.id);
+                    deleteBtn.addEventListener('click', function() {
+                        if (confirm('确定要删除这个脚本吗？')) {
+                            fetch('/api/custom_scripts/' + currentScriptId, {
+                                method: 'DELETE',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                }
+                            })
+                            .then(function(response) {
+                                return response.json();
+                            })
+                            .then(function(result) {
+                                if (result.message) {
+                                    showToast('脚本删除成功！', 'success');
+                                    loadSavedScripts();
+                                } else {
+                                    showToast('脚本删除失败: ' + (result.error || '未知错误'), 'error');
+                                }
+                            })
+                            .catch(function(error) {
+                                console.error('删除脚本失败:', error);
+                                showToast('脚本删除失败，请检查网络连接', 'error');
+                            });
+                        }
                     });
 
                     btnDiv.appendChild(editBtn);
                     btnDiv.appendChild(deleteBtn);
 
-                    // 组装
                     const wrapper = document.createElement('div');
                     wrapper.className = 'flex justify-between items-center';
                     wrapper.appendChild(infoDiv);
@@ -794,15 +858,36 @@ window.editScript = function (scriptId) {
         .then(response => response.json())
         .then(data => {
             if (data.script) {
-                document.getElementById('customScriptId').value = data.script.id;
-                document.getElementById('customScriptName').value = data.script.name;
-                document.getElementById('customScriptDatabase').value = data.script.database;
-                document.getElementById('customScriptContent').value = data.script.content;
-                document.getElementById('customScriptScheduled').checked = data.script.scheduled || false;
-                document.getElementById('customScriptDaily').checked = data.script.daily || false;
-                document.getElementById('customScriptRealTime').checked = data.script.realtime || false;
+                const script = data.script;
+                document.getElementById('customScriptId').value = script.id;
+                document.getElementById('customScriptName').value = script.name;
+                document.getElementById('customScriptMode').value = script.mode || 'single_db';
+                document.getElementById('customScriptScheduled').checked = script.scheduled || false;
+                document.getElementById('customScriptDaily').checked = script.daily || false;
+                document.getElementById('customScriptRealTime').checked = script.realtime || false;
                 document.getElementById('scriptFormTitle').textContent = '编辑稽核脚本';
                 document.getElementById('cancelEditScriptBtn').classList.remove('hidden');
+
+                const mode = script.mode || 'single_db';
+                const singleDbConfig = document.getElementById('singleDbConfig');
+                const crossDbConfig = document.getElementById('crossDbConfig');
+                const customScriptContent = document.getElementById('customScriptContent');
+
+                if (mode === 'single_db') {
+                    document.getElementById('customScriptDatabase').value = script.database;
+                    document.getElementById('customScriptContent').value = script.content;
+                    singleDbConfig.classList.remove('hidden');
+                    crossDbConfig.classList.add('hidden');
+                    customScriptContent.parentElement.classList.remove('hidden');
+                } else {
+                    document.getElementById('customScriptSourceDb').value = script.source_db;
+                    document.getElementById('customScriptTargetDb').value = script.target_db;
+                    document.getElementById('customScriptSourceSql').value = script.source_sql;
+                    document.getElementById('customScriptTargetSql').value = script.target_sql;
+                    singleDbConfig.classList.add('hidden');
+                    crossDbConfig.classList.remove('hidden');
+                    customScriptContent.parentElement.classList.add('hidden');
+                }
 
                 // Load variables
                 currentVariables = data.script.variables || [];
@@ -1136,6 +1221,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const addVariableBtn = document.getElementById('addVariableBtn');
     const addRuleBtnConfig = document.getElementById('addRuleBtnConfig');
     const savedScriptsList = document.getElementById('savedScriptsList');
+    const customScriptMode = document.getElementById('customScriptMode');
+
+    // ========== Mode switch handler ==========
+
+    if (customScriptMode) {
+        customScriptMode.addEventListener('change', function () {
+            const mode = this.value;
+            const singleDbConfig = document.getElementById('singleDbConfig');
+            const crossDbConfig = document.getElementById('crossDbConfig');
+            const customScriptContent = document.getElementById('customScriptContent');
+            
+            if (mode === 'single_db') {
+                singleDbConfig.classList.remove('hidden');
+                crossDbConfig.classList.add('hidden');
+                customScriptContent.parentElement.classList.remove('hidden');
+            } else {
+                singleDbConfig.classList.add('hidden');
+                crossDbConfig.classList.remove('hidden');
+                customScriptContent.parentElement.classList.add('hidden');
+            }
+        });
+    }
 
     // ========== Save script button ==========
 
@@ -1143,27 +1250,43 @@ document.addEventListener('DOMContentLoaded', function () {
         saveCustomScriptBtn.addEventListener('click', function () {
             const scriptId = document.getElementById('customScriptId').value;
             const scriptName = document.getElementById('customScriptName').value;
-            const database = document.getElementById('customScriptDatabase').value;
-            const content = document.getElementById('customScriptContent').value;
+            const mode = document.getElementById('customScriptMode').value;
             const scheduled = document.getElementById('customScriptScheduled').checked;
             const daily = document.getElementById('customScriptDaily').checked;
             const realTime = document.getElementById('customScriptRealTime').checked;
 
-            if (!scriptName || !content) {
-                showToast('请输入脚本名称和内容', 'warning');
+            if (!scriptName) {
+                showToast('请输入脚本名称', 'warning');
                 return;
             }
 
             const requestData = {
                 name: scriptName,
-                database: database,
-                content: content,
+                mode: mode,
                 scheduled: scheduled,
                 daily: daily,
                 realtime: realTime,
                 variables: currentVariables,
                 rules: currentRules
             };
+
+            if (mode === 'single_db') {
+                requestData.database = document.getElementById('customScriptDatabase').value;
+                requestData.content = document.getElementById('customScriptContent').value;
+                if (!requestData.content) {
+                    showToast('请输入脚本内容', 'warning');
+                    return;
+                }
+            } else {
+                requestData.source_db = document.getElementById('customScriptSourceDb').value;
+                requestData.target_db = document.getElementById('customScriptTargetDb').value;
+                requestData.source_sql = document.getElementById('customScriptSourceSql').value;
+                requestData.target_sql = document.getElementById('customScriptTargetSql').value;
+                if (!requestData.source_sql || !requestData.target_sql) {
+                    showToast('请输入源数据库和目标数据库SQL', 'warning');
+                    return;
+                }
+            }
 
             if (scriptId) {
                 requestData.id = scriptId;
@@ -1202,15 +1325,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (testCustomScriptBtn) {
         testCustomScriptBtn.addEventListener('click', function () {
             const scriptName = document.getElementById('customScriptName').value;
-            const database = document.getElementById('customScriptDatabase').value;
-            const content = document.getElementById('customScriptContent').value;
+            const mode = document.getElementById('customScriptMode').value;
 
-            if (!content) {
-                showToast('请输入脚本内容', 'warning');
-                return;
-            }
-
-            // Build default params
             const params = {};
             const today = new Date().toISOString().split('T')[0];
             const todayStart = today + ' 00:00:00';
@@ -1225,11 +1341,38 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             const rules = currentRules;
+            let requestData = { params: params, variables: currentVariables };
+
+            if (mode === 'single_db') {
+                const database = document.getElementById('customScriptDatabase').value;
+                const content = document.getElementById('customScriptContent').value;
+                if (!content) {
+                    showToast('请输入脚本内容', 'warning');
+                    return;
+                }
+                requestData.mode = 'single_db';
+                requestData.database = database;
+                requestData.content = content;
+            } else {
+                const sourceDb = document.getElementById('customScriptSourceDb').value;
+                const targetDb = document.getElementById('customScriptTargetDb').value;
+                const sourceSql = document.getElementById('customScriptSourceSql').value;
+                const targetSql = document.getElementById('customScriptTargetSql').value;
+                if (!sourceSql || !targetSql) {
+                    showToast('请输入源数据库和目标数据库SQL', 'warning');
+                    return;
+                }
+                requestData.mode = 'cross_db';
+                requestData.source_db = sourceDb;
+                requestData.target_db = targetDb;
+                requestData.source_sql = sourceSql;
+                requestData.target_sql = targetSql;
+            }
 
             fetch('/api/test_custom_script', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: scriptName, database: database, content: content, params: params, variables: currentVariables })
+                body: JSON.stringify(requestData)
             })
                 .then(response => response.json())
                 .then(data => {
@@ -1477,6 +1620,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (savedScriptsList) {
         loadSavedScripts();
     }
+
+    // ========== Load database options ==========
+
+    loadDatabaseOptions();
 
     // ========== Initialize variable and rules rendering ==========
 
