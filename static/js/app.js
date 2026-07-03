@@ -315,6 +315,7 @@ window.showConfig = function () {
     results.classList.remove('hidden');
     configContent.classList.remove('hidden');
     if (typeof loadConfig === 'function') loadConfig();
+    if (typeof loadSavedScripts === 'function') loadSavedScripts();
 };
 
 window.showSqlInspect = function () {

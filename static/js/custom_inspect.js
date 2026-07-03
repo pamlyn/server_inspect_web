@@ -691,57 +691,100 @@ function loadCustomScripts() {
 
 function loadSavedScripts() {
     const savedScriptsList = document.getElementById('savedScriptsList');
+    if (!savedScriptsList) return;
     fetch('/api/custom_scripts')
         .then(response => response.json())
         .then(data => {
-            if (savedScriptsList) {
-                savedScriptsList.innerHTML = '';
-                if (data.scripts && data.scripts.length > 0) {
-                    data.scripts.forEach(script => {
-                        const scriptItem = document.createElement('div');
-                        scriptItem.className = 'p-2 border rounded-lg';
+            savedScriptsList.innerHTML = '';
+            if (data.scripts && data.scripts.length > 0) {
+                data.scripts.forEach(script => {
+                    // 用 DOM API 创建每个元素，避免 innerHTML 导致事件丢失
+                    const scriptItem = document.createElement('div');
+                    scriptItem.className = 'p-2 border rounded-lg';
+                    scriptItem.dataset.scriptId = script.id;
 
-                        // Generate execution type tags
-                        let executionTags = '';
-                        if (script.scheduled) {
-                            executionTags += '<span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs mr-1">定时</span>';
-                        }
-                        if (script.daily) {
-                            executionTags += '<span class="inline-block px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs mr-1">日常</span>';
-                        }
-                        if (script.realtime) {
-                            executionTags += '<span class="inline-block px-2 py-0.5 bg-purple-100 text-purple-600 rounded text-xs mr-1">实时</span>';
-                        }
-                        if (!executionTags) {
-                            executionTags = '<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs mr-1">无</span>';
-                        }
+                    // 左侧信息区
+                    const infoDiv = document.createElement('div');
 
-                        scriptItem.innerHTML = `
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <div class="font-medium text-sm">${script.name}</div>
-                                    <div class="text-xs text-gray-500 mb-1">${script.database}</div>
-                                    <div class="flex items-center">
-                                        <span class="text-xs text-gray-400 mr-2">执行：</span>
-                                        ${executionTags}
-                                    </div>
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button type="button" class="text-xs px-2 py-1 bg-primary text-white rounded hover:bg-opacity-90 transition-all" onclick="editScript('${script.id}')">编辑</button>
-                                    <button type="button" class="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-opacity-90 transition-all" onclick="deleteScript('${script.id}')">删除</button>
-                                </div>
-                            </div>
-                        `;
-                        savedScriptsList.appendChild(scriptItem);
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'font-medium text-sm';
+                    nameDiv.textContent = script.name;
+                    infoDiv.appendChild(nameDiv);
+
+                    const dbDiv = document.createElement('div');
+                    dbDiv.className = 'text-xs text-gray-500 mb-1';
+                    dbDiv.textContent = script.database;
+                    infoDiv.appendChild(dbDiv);
+
+                    // 执行标签
+                    const tagsDiv = document.createElement('div');
+                    tagsDiv.className = 'flex items-center';
+                    const labelSpan = document.createElement('span');
+                    labelSpan.className = 'text-xs text-gray-400 mr-2';
+                    labelSpan.textContent = '执行：';
+                    tagsDiv.appendChild(labelSpan);
+
+                    if (script.scheduled) tagsDiv.appendChild(createTag('定时', 'blue'));
+                    if (script.daily) tagsDiv.appendChild(createTag('日常', 'green'));
+                    if (script.realtime) tagsDiv.appendChild(createTag('实时', 'purple'));
+                    if (!script.scheduled && !script.daily && !script.realtime) {
+                        tagsDiv.appendChild(createTag('无', 'gray'));
+                    }
+                    infoDiv.appendChild(tagsDiv);
+
+                    // 右侧按钮区
+                    const btnDiv = document.createElement('div');
+                    btnDiv.className = 'flex space-x-2';
+
+                    const editBtn = document.createElement('button');
+                    editBtn.type = 'button';
+                    editBtn.className = 'text-xs px-2 py-1 bg-primary text-white rounded hover:bg-opacity-90 transition-all';
+                    editBtn.textContent = '编辑';
+                    editBtn.addEventListener('click', function () {
+                        window.editScript(script.id);
                     });
-                } else {
-                    savedScriptsList.innerHTML = '<p class="text-gray-500 text-sm">暂无已保存的脚本</p>';
-                }
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.type = 'button';
+                    deleteBtn.className = 'text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-opacity-90 transition-all';
+                    deleteBtn.textContent = '删除';
+                    deleteBtn.addEventListener('click', function () {
+                        window.deleteScript(script.id);
+                    });
+
+                    btnDiv.appendChild(editBtn);
+                    btnDiv.appendChild(deleteBtn);
+
+                    // 组装
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex justify-between items-center';
+                    wrapper.appendChild(infoDiv);
+                    wrapper.appendChild(btnDiv);
+
+                    scriptItem.appendChild(wrapper);
+                    savedScriptsList.appendChild(scriptItem);
+                });
+            } else {
+                savedScriptsList.innerHTML = '<p class="text-gray-500 text-sm">暂无已保存的脚本</p>';
             }
         })
         .catch(error => {
             console.error('加载脚本失败:', error);
         });
+}
+
+// 创建执行类型标签
+function createTag(text, color) {
+    const tag = document.createElement('span');
+    const colorMap = {
+        blue: 'bg-blue-100 text-blue-600',
+        green: 'bg-green-100 text-green-600',
+        purple: 'bg-purple-100 text-purple-600',
+        gray: 'bg-gray-100 text-gray-600'
+    };
+    tag.className = 'inline-block px-2 py-0.5 rounded text-xs mr-1 ' + (colorMap[color] || colorMap.gray);
+    tag.textContent = text;
+    return tag;
 }
 
 // ========== Edit script (global for onclick) ==========
@@ -777,26 +820,24 @@ window.editScript = function (scriptId) {
 
 // ========== Delete script (global for onclick) ==========
 
-window.deleteScript = async function (scriptId) {
-    const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
-    if (confirmed) {
-        fetch(`/api/custom_scripts/${scriptId}`, {
-            method: 'DELETE'
+window.deleteScript = function (scriptId) {
+    if (!confirm('确定要删除这个脚本吗？')) return;
+    fetch(`/api/custom_scripts/${scriptId}`, {
+        method: 'DELETE'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                showToast('脚本删除成功！', 'success');
+                loadSavedScripts();
+            } else {
+                showToast('脚本删除失败: ' + (data.error || '未知错误'), 'error');
+            }
         })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    showToast('脚本删除成功！', 'success');
-                    loadSavedScripts();
-                } else {
-                    showToast('脚本删除失败: ' + (data.error || '未知错误'), 'error');
-                }
-            })
-            .catch(error => {
-                console.error('删除脚本失败:', error);
-                showToast('脚本删除失败，请检查网络连接', 'error');
-            });
-    }
+        .catch(error => {
+            console.error('删除脚本失败:', error);
+            showToast('脚本删除失败，请检查网络连接', 'error');
+        });
 };
 
 // ========== Show test script result ==========

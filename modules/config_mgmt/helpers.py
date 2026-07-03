@@ -8,7 +8,7 @@ import os
 import datetime
 
 # 配置文件路径
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config.json')
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config', 'config.json')
 
 # ===================== 默认配置（从config.py导入） =====================
 from config import (

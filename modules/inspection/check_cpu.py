@@ -28,8 +28,8 @@ def check_cpu():
     HAS_PIDSTAT = bool(get_cmd_output("command -v pidstat"))
 
     # ===================== 优化3：核心硬件信息（仅执行1次） =====================
-    # 获取CPU核心数
-    cpu_count = get_cmd_output("nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo '1'") or "1"
+    # 获取CPU核心数（兼容Linux和macOS）
+    cpu_count = get_cmd_output("nproc 2>/dev/null || sysctl -n machdep.cpu.core_count 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo '1'") or "1"
     cpu_count_int = int(cpu_count)
     result.add_info(f"CPU核心数: {cpu_count}")
 
@@ -45,57 +45,78 @@ def check_cpu():
     # ===================== 优化5：耗时采样命令仅执行1次（核心提速） =====================
     if HAS_MPSTAT:
         result.add_info("CPU整体使用率(5次采样):")
-        # 原代码重复执行mpstat 1 5 4次 → 优化后仅执行1次，缓存所有结果
         mpstat_raw = get_cmd_output("mpstat 1 5")
-        mpstat_tail6 = get_cmd_output("echo '{}' | tail -6".format(mpstat_raw))
-        result.add_info(mpstat_tail6)
+        result.add_info(mpstat_raw)
 
-        # 计算CPU平均使用率（直接用缓存结果，不重新采样）
-        cpu_idle = get_cmd_output("echo '{}' | tail -1 | awk '{{print $NF}}'".format(mpstat_raw))
-        if cpu_idle:
-            if HAS_BC:
-                cpu_usage = get_cmd_output(f"echo '100 - {cpu_idle}' | bc")
-            else:
-                cpu_usage = get_cmd_output(f"echo '100 - {cpu_idle}' | awk '{{print int($1)}}'")
-        result.add_info(f"CPU平均使用率: {cpu_usage}%")
+        lines = mpstat_raw.strip().split('\n')
+        if lines:
+            last_line = lines[-1]
+            parts = last_line.split()
+            if len(parts) >= 11:
+                cpu_idle = parts[-1]
+                if cpu_idle:
+                    try:
+                        cpu_usage = str(round(100 - float(cpu_idle), 1))
+                    except ValueError:
+                        cpu_usage = "0"
+            result.add_info(f"CPU平均使用率: {cpu_usage}%")
 
-        # 多核CPU处理（仅执行1次mpstat -P ALL，缓存结果）
         if cpu_count_int > 1:
             result.add_info("各CPU核心使用率(5次采样):")
             mpstat_all_raw = get_cmd_output("mpstat -P ALL 1 5")
-            mpstat_all_tail = get_cmd_output(f"echo '{mpstat_all_raw}' | tail -n {cpu_count_int + 2}")
-            result.add_info(mpstat_all_tail)
+            result.add_info(mpstat_all_raw)
 
-            # 各核心平均使用率
-            result.add_info("各核心平均使用率:")
-            core_usage = get_cmd_output(f"echo '{mpstat_all_raw}' | tail -n {cpu_count} | awk '{{printf \"CPU%-2s: %.1f%%\\n\", $2, 100-$NF}}'")
-            result.add_info(core_usage)
-
-            # 最高单核使用率
-            max_core_usage = get_cmd_output(f"echo '{mpstat_all_raw}' | tail -n {cpu_count} | awk '{{print 100-$NF}}' | sort -rn | head -1") or "0"
-            result.add_info(f"最高单核使用率: {max_core_usage}%")
+            lines_all = mpstat_all_raw.strip().split('\n')
+            core_lines = [l for l in lines_all if l.strip() and not l.startswith('CPU') and not l.startswith('all')]
+            
+            if core_lines:
+                max_idle = 0
+                for line in core_lines:
+                    parts = line.split()
+                    if len(parts) >= 11:
+                        try:
+                            idle = float(parts[-1])
+                            if idle > max_idle:
+                                max_idle = idle
+                        except ValueError:
+                            pass
+                max_core_usage = str(round(100 - max_idle, 1))
+                result.add_info(f"最高单核使用率: {max_core_usage}%")
 
     else:
-        # 备用方案：top命令（仅执行1次）
-        cpu_usage = get_cmd_output("top -bn1 | grep -E 'Cpu|cpu' | head -1 | awk '{print $2}' | tr -d '%'") or "0"
-        result.add_info(f"CPU使用率: {cpu_usage}%")
+        # 备用方案：检测系统类型并使用对应命令
+        is_macos = bool(get_cmd_output("uname -s | grep -i Darwin"))
 
-        # 多核CPU：/proc/stat仅读取1次（缓存）
-        if cpu_count_int > 1:
-            proc_stat = get_cmd_output("grep '^cpu[0-9]' /proc/stat")
-            result.add_info("各CPU核心使用情况(从/proc/stat读取):")
-            result.add_info(proc_stat)
+        if is_macos:
+            result.add_info("检测到 macOS 系统，使用 macOS 专用命令")
+            top_output = get_cmd_output("top -l 1 -s 0 | grep 'CPU usage:'")
+            result.add_info(f"CPU使用情况: {top_output}")
 
-            # 最高单核使用率（用缓存的proc_stat）
-            max_core_usage = get_cmd_output(
-                "echo '{}' | while read line; do "
-                "USER=$(echo $line | awk '{{print $2}}'); NICE=$(echo $line | awk '{{print $3}}'); "
-                "SYSTEM=$(echo $line | awk '{{print $4}}'); IDLE=$(echo $line | awk '{{print $5}}'); "
-                "TOTAL=$((USER + NICE + SYSTEM + IDLE)); "
-                "if [ $TOTAL -gt 0 ]; then USAGE=$((100 * (USER + NICE + SYSTEM) / TOTAL)); echo $USAGE; fi; "
-                "done | sort -rn | head -1".format(proc_stat)
-            ) or "0"
-            result.add_info(f"最高单核使用率: {max_core_usage}%")
+            cpu_usage = get_cmd_output("echo '{}' | awk '{{print 100 - $7}}' | cut -d'%' -f1".format(top_output)) or "0"
+            result.add_info(f"CPU使用率: {cpu_usage}%")
+
+            max_core_usage = get_cmd_output("ps aux | sort -k3 -rn | head -2 | tail -1 | awk '{{print $3}}'") or "0"
+            result.add_info(f"最高进程CPU使用率: {max_core_usage}%")
+        else:
+            cpu_usage = get_cmd_output("top -bn1 | grep -E 'Cpu|cpu' | head -1 | awk '{print $2}' | tr -d '%'") or "0"
+            result.add_info(f"CPU使用率: {cpu_usage}%")
+
+            # 多核CPU：/proc/stat仅读取1次（缓存）
+            if cpu_count_int > 1:
+                proc_stat = get_cmd_output("grep '^cpu[0-9]' /proc/stat")
+                result.add_info("各CPU核心使用情况(从/proc/stat读取):")
+                result.add_info(proc_stat)
+
+                # 最高单核使用率（用缓存的proc_stat）
+                max_core_usage = get_cmd_output(
+                    "echo '{}' | while read line; do "
+                    "USER=$(echo $line | awk '{{print $2}}'); NICE=$(echo $line | awk '{{print $3}}'); "
+                    "SYSTEM=$(echo $line | awk '{{print $4}}'); IDLE=$(echo $line | awk '{{print $5}}'); "
+                    "TOTAL=$((USER + NICE + SYSTEM + IDLE)); "
+                    "if [ $TOTAL -gt 0 ]; then USAGE=$((100 * (USER + NICE + SYSTEM) / TOTAL)); echo $USAGE; fi; "
+                    "done | sort -rn | head -1".format(proc_stat)
+                ) or "0"
+                result.add_info(f"最高单核使用率: {max_core_usage}%")
 
     # ===================== 优化6：统一数值处理（无冗余判断） =====================
     cpu_usage_int = safe_int(cpu_usage)

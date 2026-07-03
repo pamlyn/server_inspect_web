@@ -11,7 +11,7 @@ from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
 # 脚本文件路径
-SCRIPTS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'custom_scripts.json')
+SCRIPTS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config', 'custom_scripts.json')
 
 # 脚本存储
 custom_scripts = []
