@@ -122,8 +122,8 @@ generate_default_config() {
   },
   "dailyInspection": {
     "enabled": true,
-    "hour": 9,
-    "minute": 25,
+    "hour": 7,
+    "minute": 28,
     "only_error_notification": false
   },
   "realTimeMonitoring": {
