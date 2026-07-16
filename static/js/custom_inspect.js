@@ -98,7 +98,7 @@ function loadDatabaseOptions() {
         .then(data => {
             const dbConfig = data.databaseConfig || {};
             databaseOptions = Object.keys(dbConfig);
-            
+
             const databaseSelect = document.getElementById('customScriptDatabase');
             const sourceDbSelect = document.getElementById('customScriptSourceDb');
             const targetDbSelect = document.getElementById('customScriptTargetDb');
@@ -238,6 +238,7 @@ function renderVariables() {
         if (variable.type === 'date') {
             let selectedPreset = '';
             let hiddenClass = '';
+            let lastNDaysValue = variable.last_n_days || 7;
             if (defaultValue === today) {
                 selectedPreset = 'today';
                 hiddenClass = 'hidden';
@@ -247,7 +248,13 @@ function renderVariables() {
             } else if (defaultValue === monthFirst) {
                 selectedPreset = 'monthFirst';
                 hiddenClass = 'hidden';
+            } else if (variable.date_range_type === 'last_n_days' ||
+                variable.date_range_type === 'last_n_to_yesterday' ||
+                variable.date_range_type === 'last_n_to_today') {
+                selectedPreset = 'lastNDays';
+                hiddenClass = 'hidden';
             }
+            const lastNDaysDivClass = selectedPreset === 'lastNDays' ? '' : 'hidden';
 
             defaultValueInputHtml = `
                 <div class="space-y-1">
@@ -255,10 +262,15 @@ function renderVariables() {
                         <option value="" ${selectedPreset === '' ? 'selected' : ''}>选择预设...</option>
                         <option value="today" ${selectedPreset === 'today' ? 'selected' : ''}>今天 (${today})</option>
                         <option value="yesterday" ${selectedPreset === 'yesterday' ? 'selected' : ''}>昨天 (${yesterday})</option>
+                        <option value="lastNDays" ${selectedPreset === 'lastNDays' ? 'selected' : ''}>最近N天</option>
                         <option value="monthFirst" ${selectedPreset === 'monthFirst' ? 'selected' : ''}>当前月第一天 (${monthFirst})</option>
                         <option value="custom">自定义日期</option>
                     </select>
                     <input type="date" class="w-full px-2 py-1 text-sm border rounded ${hiddenClass}" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">
+                    <div id="lastNDaysDiv_${index}" class="${lastNDaysDivClass}">
+                        <input type="number" min="1" max="365" value="${lastNDaysValue}" class="w-20 px-2 py-1 text-sm border rounded" placeholder="天数" onchange="window.handleVariableLastNDaysChange(${index}, this.value)">
+                        <span class="text-xs text-gray-500 ml-1">天</span>
+                    </div>
                 </div>
             `;
         } else if (variable.type === 'time') {
@@ -379,9 +391,22 @@ window.handleVariableTypeChange = function (index) {
 
 window.handleVariableDatePresetChange = function (index, preset) {
     const input = document.querySelector(`[data-index="${index}"][data-field="default_value"]`);
+    const lastNDaysDiv = document.getElementById(`lastNDaysDiv_${index}`);
+
+    if (lastNDaysDiv) {
+        lastNDaysDiv.classList.add('hidden');
+    }
 
     if (preset === 'custom') {
         if (input) input.classList.remove('hidden');
+        delete currentVariables[index].date_range_type;
+        delete currentVariables[index].last_n_days;
+    } else if (preset === 'lastNDays') {
+        if (input) input.classList.add('hidden');
+        currentVariables[index].date_range_type = 'last_n_days';
+        currentVariables[index].last_n_days = currentVariables[index].last_n_days || 7;
+        currentVariables[index].default_value = '';
+        if (lastNDaysDiv) lastNDaysDiv.classList.remove('hidden');
     } else if (preset) {
         let value;
         if (preset === 'today') {
@@ -397,7 +422,13 @@ window.handleVariableDatePresetChange = function (index, preset) {
             input.classList.add('hidden');
         }
         currentVariables[index].default_value = value;
+        delete currentVariables[index].date_range_type;
+        delete currentVariables[index].last_n_days;
     }
+};
+
+window.handleVariableLastNDaysChange = function (index, value) {
+    currentVariables[index].last_n_days = parseInt(value) || 7;
 };
 
 window.handleVariableTimePresetChange = function (index, preset) {
@@ -453,11 +484,21 @@ function renderParamsInputs(variables) {
             const today = window.getTodayDate();
             const yesterday = window.getYesterdayDate();
             const monthFirst = window.getMonthFirstDate();
-            const defaultValue = variable.default_value || today;
+            const lastNDays = variable.last_n_days || 7;
 
+            let defaultValue = variable.default_value || today;
             let selectedPreset = 'custom';
             let hiddenClass = '';
-            if (defaultValue === today) {
+
+            if (variable.date_range_type === 'last_n_days' ||
+                variable.date_range_type === 'last_n_to_yesterday' ||
+                variable.date_range_type === 'last_n_to_today') {
+                const d = new Date();
+                d.setDate(d.getDate() - lastNDays + 1);
+                defaultValue = d.toISOString().split('T')[0];
+                selectedPreset = 'lastNDays';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === today) {
                 selectedPreset = 'today';
                 hiddenClass = 'hidden';
             } else if (defaultValue === yesterday) {
@@ -467,16 +508,22 @@ function renderParamsInputs(variables) {
                 selectedPreset = 'monthFirst';
                 hiddenClass = 'hidden';
             }
+            const lastNDaysDivClass = selectedPreset === 'lastNDays' ? '' : 'hidden';
 
             inputHtml = `
                 <div class="space-y-2">
                     <select class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="preset_${variable.name}" onchange="window.handleDatePresetChange('${variable.name}')">
                         <option value="today" ${selectedPreset === 'today' ? 'selected' : ''}>今天 (${today})</option>
                         <option value="yesterday" ${selectedPreset === 'yesterday' ? 'selected' : ''}>昨天 (${yesterday})</option>
+                        <option value="lastNDays" ${selectedPreset === 'lastNDays' ? 'selected' : ''}>最近N天</option>
                         <option value="monthFirst" ${selectedPreset === 'monthFirst' ? 'selected' : ''}>当前月第一天 (${monthFirst})</option>
                         <option value="custom" ${selectedPreset === 'custom' ? 'selected' : ''}>自定义日期</option>
                     </select>
                     <input type="date" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all ${hiddenClass}" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${defaultValue}">
+                    <div id="lastNDaysDiv_param_${variable.name}" class="${lastNDaysDivClass}">
+                        <input type="number" min="1" max="365" value="${lastNDays}" class="w-20 px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="lastNDays_${variable.name}" onchange="window.handleParamLastNDaysChange('${variable.name}', this.value)">
+                        <span class="text-xs text-gray-500 ml-1">天</span>
+                    </div>
                 </div>
             `;
         } else if (variable.type === 'time') {
@@ -547,9 +594,23 @@ function renderParamsInputs(variables) {
 window.handleDatePresetChange = function (varName) {
     const presetSelect = document.getElementById(`preset_${varName}`);
     const dateInput = document.getElementById(`param_${varName}`);
+    const lastNDaysDiv = document.getElementById(`lastNDaysDiv_param_${varName}`);
+
+    if (lastNDaysDiv) {
+        lastNDaysDiv.classList.add('hidden');
+    }
 
     if (presetSelect.value === 'custom') {
         dateInput.classList.remove('hidden');
+    } else if (presetSelect.value === 'lastNDays') {
+        dateInput.classList.add('hidden');
+        const lastNDaysInput = document.getElementById(`lastNDays_${varName}`);
+        const days = parseInt(lastNDaysInput?.value) || 7;
+        const d = new Date();
+        d.setDate(d.getDate() - days + 1);
+        dateInput.value = d.toISOString().split('T')[0];
+        if (lastNDaysDiv) lastNDaysDiv.classList.remove('hidden');
+        updateSqlContent();
     } else {
         dateInput.classList.add('hidden');
         let value;
@@ -562,6 +623,13 @@ window.handleDatePresetChange = function (varName) {
         }
         dateInput.value = value;
         updateSqlContent();
+    }
+};
+
+window.handleParamLastNDaysChange = function (varName, value) {
+    const presetSelect = document.getElementById(`preset_${varName}`);
+    if (presetSelect && presetSelect.value === 'lastNDays') {
+        window.handleDatePresetChange(varName);
     }
 };
 
@@ -742,9 +810,9 @@ function loadSavedScripts() {
         .then(data => {
             savedScriptsList.innerHTML = '';
             if (data.scripts && data.scripts.length > 0) {
-                data.scripts.forEach(function(script) {
+                data.scripts.forEach(function (script) {
                     const currentScriptId = script.id;
-                    
+
                     const scriptItem = document.createElement('div');
                     scriptItem.className = 'p-2 border rounded-lg';
                     scriptItem.dataset.scriptId = currentScriptId;
@@ -783,7 +851,7 @@ function loadSavedScripts() {
                     editBtn.type = 'button';
                     editBtn.className = 'text-xs px-2 py-1 bg-primary text-white rounded hover:bg-opacity-90 transition-all';
                     editBtn.textContent = '编辑';
-                    editBtn.addEventListener('click', function() {
+                    editBtn.addEventListener('click', function () {
                         window.editScript(currentScriptId);
                     });
 
@@ -791,30 +859,30 @@ function loadSavedScripts() {
                     deleteBtn.type = 'button';
                     deleteBtn.className = 'text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-opacity-90 transition-all';
                     deleteBtn.textContent = '删除';
-                    deleteBtn.addEventListener('click', function() {
-                        if (confirm('确定要删除这个脚本吗？')) {
-                            fetch('/api/custom_scripts/' + currentScriptId, {
+                    deleteBtn.addEventListener('click', async function () {
+                        const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
+                        if (!confirmed) return;
+                        fetch('/api/custom_scripts/' + currentScriptId, {
                                 method: 'DELETE',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 }
                             })
-                            .then(function(response) {
-                                return response.json();
-                            })
-                            .then(function(result) {
-                                if (result.message) {
-                                    showToast('脚本删除成功！', 'success');
-                                    loadSavedScripts();
-                                } else {
-                                    showToast('脚本删除失败: ' + (result.error || '未知错误'), 'error');
-                                }
-                            })
-                            .catch(function(error) {
-                                console.error('删除脚本失败:', error);
-                                showToast('脚本删除失败，请检查网络连接', 'error');
-                            });
-                        }
+                                .then(function (response) {
+                                    return response.json();
+                                })
+                                .then(function (result) {
+                                    if (result.message) {
+                                        showToast('脚本删除成功！', 'success');
+                                        loadSavedScripts();
+                                    } else {
+                                        showToast('脚本删除失败: ' + (result.error || '未知错误'), 'error');
+                                    }
+                                })
+                                .catch(function (error) {
+                                    console.error('删除脚本失败:', error);
+                                    showToast('脚本删除失败，请检查网络连接', 'error');
+                                });
                     });
 
                     btnDiv.appendChild(editBtn);
@@ -905,8 +973,9 @@ window.editScript = function (scriptId) {
 
 // ========== Delete script (global for onclick) ==========
 
-window.deleteScript = function (scriptId) {
-    if (!confirm('确定要删除这个脚本吗？')) return;
+window.deleteScript = async function (scriptId) {
+    const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
+    if (!confirmed) return;
     fetch(`/api/custom_scripts/${scriptId}`, {
         method: 'DELETE'
     })
@@ -1231,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const singleDbConfig = document.getElementById('singleDbConfig');
             const crossDbConfig = document.getElementById('crossDbConfig');
             const customScriptContent = document.getElementById('customScriptContent');
-            
+
             if (mode === 'single_db') {
                 singleDbConfig.classList.remove('hidden');
                 crossDbConfig.classList.add('hidden');
@@ -1331,8 +1400,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const today = new Date().toISOString().split('T')[0];
             const todayStart = today + ' 00:00:00';
             currentVariables.forEach(v => {
-                if (v.type === 'date' && !v.default_value) {
-                    params[v.name] = today;
+                if (v.type === 'date') {
+                    if (v.date_range_type === 'last_n_days' ||
+                        v.date_range_type === 'last_n_to_yesterday' ||
+                        v.date_range_type === 'last_n_to_today') {
+                        const days = v.last_n_days || 7;
+                        const d = new Date();
+                        // 最近N天：从 N 天前到今天，起始日期为今天减 (N-1) 天
+                        d.setDate(d.getDate() - days + 1);
+                        params[v.name] = d.toISOString().split('T')[0];
+                    } else if (!v.default_value) {
+                        params[v.name] = today;
+                    } else {
+                        params[v.name] = v.default_value;
+                    }
                 } else if (v.type === 'time' && !v.default_value) {
                     params[v.name] = todayStart;
                 } else {

@@ -144,6 +144,8 @@ function loadConfig() {
             const dateOptions = dateConfig.options || {};
             document.getElementById('dateYesterday').checked = dateOptions.yesterday || false;
             document.getElementById('dateToday').checked = dateOptions.today || false;
+            document.getElementById('dateLastNToYesterday').checked = dateOptions.last_n_to_yesterday || false;
+            document.getElementById('dateLastNToToday').checked = dateOptions.last_n_to_today || false;
             document.getElementById('dateCurrentMonthToYesterday').checked = dateOptions.current_month_to_yesterday || false;
             document.getElementById('dateCurrentMonthToToday').checked = dateOptions.current_month_to_today || false;
             document.getElementById('dateCustom').checked = dateOptions.custom || false;
@@ -156,10 +158,31 @@ function loadConfig() {
                 customDateRange.classList.add('hidden');
             }
 
+            // Show/hide lastN config
+            const lastNConfig = document.getElementById('lastNConfig');
+            if (document.getElementById('dateLastNToYesterday').checked || document.getElementById('dateLastNToToday').checked) {
+                lastNConfig.classList.remove('hidden');
+            } else {
+                lastNConfig.classList.add('hidden');
+            }
+
             // Set custom date range values
             const customRange = dateConfig.custom_date_range || {};
             document.getElementById('customStartDate').value = customRange.start_date || '';
             document.getElementById('customEndDate').value = customRange.end_date || '';
+
+            // Set lastN days value
+            document.getElementById('lastNDays').value = dateConfig.last_n_days || 7;
+
+            // Log database config
+            const logDbConfig = data.logDatabase || {};
+            document.getElementById('logDbEnabled').value = logDbConfig.enabled ? 'true' : 'false';
+            document.getElementById('logDbType').value = logDbConfig.type || 'postgresql';
+            document.getElementById('logDbHost').value = logDbConfig.host || '';
+            document.getElementById('logDbPort').value = logDbConfig.port || '';
+            document.getElementById('logDbUser').value = logDbConfig.user || '';
+            document.getElementById('logDbPassword').value = logDbConfig.password || '';
+            document.getElementById('logDbName').value = logDbConfig.database || '';
         })
         .catch(error => {
             console.error('加载配置失败:', error);
@@ -329,14 +352,26 @@ function setupConfigFormSubmit() {
                     options: {
                         yesterday: document.getElementById('dateYesterday').checked,
                         today: document.getElementById('dateToday').checked,
+                        last_n_to_yesterday: document.getElementById('dateLastNToYesterday').checked,
+                        last_n_to_today: document.getElementById('dateLastNToToday').checked,
                         current_month_to_yesterday: document.getElementById('dateCurrentMonthToYesterday').checked,
                         current_month_to_today: document.getElementById('dateCurrentMonthToToday').checked,
                         custom: document.getElementById('dateCustom').checked
                     },
+                    last_n_days: parseInt(document.getElementById('lastNDays').value) || 7,
                     custom_date_range: {
                         start_date: document.getElementById('customStartDate').value,
                         end_date: document.getElementById('customEndDate').value
                     }
+                },
+                logDatabase: {
+                    enabled: document.getElementById('logDbEnabled').value === 'true',
+                    type: document.getElementById('logDbType').value,
+                    host: document.getElementById('logDbHost').value,
+                    port: parseInt(document.getElementById('logDbPort').value) || 5432,
+                    user: document.getElementById('logDbUser').value,
+                    password: document.getElementById('logDbPassword').value,
+                    database: document.getElementById('logDbName').value
                 }
             };
 
@@ -377,26 +412,26 @@ function setupCancelConfigBtn() {
 function renderDatabaseConfigs(databaseConfig) {
     const container = document.getElementById('databaseConfigsContainer');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
     const dbIds = Object.keys(databaseConfig);
     if (dbIds.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-sm">暂无数据库配置，点击"新增数据库配置"开始添加</p>';
         return;
     }
-    
+
     dbIds.forEach(dbId => {
         const dbConfig = databaseConfig[dbId];
         const isPreset = ['mes', 'hanging'].includes(dbId);
-        
+
         const dbDiv = document.createElement('div');
         dbDiv.className = 'border border-gray-200 rounded-lg p-4';
         dbDiv.dataset.dbId = dbId;
-        
+
         const headerDiv = document.createElement('div');
         headerDiv.className = 'flex items-center justify-between mb-3';
-        
+
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
         nameInput.className = 'font-medium text-sm border-none bg-transparent focus:outline-none focus:ring-0 w-auto';
@@ -406,34 +441,45 @@ function renderDatabaseConfigs(databaseConfig) {
         if (isPreset) {
             nameInput.classList.add('text-primary', 'font-bold');
         }
-        
+
+        if (!isPreset) {
+            nameInput.addEventListener('input', function () {
+                const newName = this.value.trim();
+                if (newName) {
+                    dbDiv.dataset.dbId = newName;
+                } else {
+                    dbDiv.dataset.dbId = dbId;
+                }
+            });
+        }
+
         const btnGroup = document.createElement('div');
         btnGroup.className = 'flex items-center space-x-2';
-        
+
         const testBtn = document.createElement('button');
         testBtn.type = 'button';
         testBtn.className = 'text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all';
         testBtn.innerHTML = '<i class="fa fa-check mr-1"></i>测试连接';
-        testBtn.onclick = function() { testDatabaseConnection(dbId); };
-        
+        testBtn.onclick = function () { testDatabaseConnection(dbDiv.dataset.dbId); };
+
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-all';
         deleteBtn.innerHTML = '<i class="fa fa-trash mr-1"></i>删除';
-        deleteBtn.onclick = function() { removeDatabaseConfig(dbId); };
+        deleteBtn.onclick = function () { removeDatabaseConfig(dbDiv.dataset.dbId); };
         if (isPreset) {
             deleteBtn.disabled = true;
             deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
         }
-        
+
         btnGroup.appendChild(testBtn);
         btnGroup.appendChild(deleteBtn);
         headerDiv.appendChild(nameInput);
         headerDiv.appendChild(btnGroup);
-        
+
         const fieldsDiv = document.createElement('div');
         fieldsDiv.className = 'grid grid-cols-2 md:grid-cols-3 gap-4';
-        
+
         const typeSelect = document.createElement('select');
         typeSelect.className = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all db-config-input';
         typeSelect.style.setProperty('--tw-ring-color', 'var(--primary-color)');
@@ -442,25 +488,25 @@ function renderDatabaseConfigs(databaseConfig) {
             <option value="mysql" ${dbConfig.type === 'mysql' ? 'selected' : ''}>MySQL</option>
         `;
         typeSelect.dataset.field = 'type';
-        
+
         const hostInput = createDbInput('host', dbConfig.host || '', '主机');
         const portInput = createDbInput('port', dbConfig.port || '', '端口', 'number');
         const userInput = createDbInput('user', dbConfig.user || '', '用户名');
         const passwordInput = createDbInput('password', dbConfig.password || '', '密码', 'password');
         const databaseInput = createDbInput('database', dbConfig.database || '', '数据库名');
-        
+
         fieldsDiv.appendChild(createField('数据库类型', typeSelect));
         fieldsDiv.appendChild(createField('主机', hostInput));
         fieldsDiv.appendChild(createField('端口', portInput));
         fieldsDiv.appendChild(createField('用户名', userInput));
         fieldsDiv.appendChild(createField('密码', passwordInput));
         fieldsDiv.appendChild(createField('数据库名', databaseInput));
-        
+
         dbDiv.appendChild(headerDiv);
         dbDiv.appendChild(fieldsDiv);
         container.appendChild(dbDiv);
     });
-    
+
     setupAddDatabaseConfigBtn();
 }
 
@@ -492,38 +538,40 @@ function createField(label, input) {
 function collectDatabaseConfigs() {
     const configs = {};
     const dbDivs = document.querySelectorAll('#databaseConfigsContainer > div[data-db-id]');
-    
+
     dbDivs.forEach(dbDiv => {
-        const dbId = dbDiv.dataset.dbId;
         const inputs = dbDiv.querySelectorAll('.db-config-input, input[data-field]');
-        
+
+        let dbId = dbDiv.dataset.dbId;
         const config = {};
         inputs.forEach(input => {
             const field = input.dataset.field;
             if (field === 'port') {
                 config[field] = parseInt(input.value) || (config.type === 'postgresql' ? 5432 : 3306);
-            } else if (field !== 'id') {
+            } else if (field === 'id') {
+                dbId = input.value.trim() || dbId;
+            } else {
                 config[field] = input.value;
             }
         });
-        
+
         configs[dbId] = config;
     });
-    
+
     return configs;
 }
 
 function setupAddDatabaseConfigBtn() {
     const btn = document.getElementById('addDatabaseConfigBtn');
     if (btn) {
-        btn.onclick = function() { addDatabaseConfig(); };
+        btn.onclick = function () { addDatabaseConfig(); };
     }
 }
 
 function addDatabaseConfig() {
     const container = document.getElementById('databaseConfigsContainer');
     if (!container) return;
-    
+
     let newId = 'db_new_1';
     const existingIds = Array.from(container.querySelectorAll('[data-db-id]')).map(el => el.dataset.dbId);
     let counter = 1;
@@ -531,44 +579,53 @@ function addDatabaseConfig() {
         counter++;
         newId = 'db_new_' + counter;
     }
-    
+
     const dbDiv = document.createElement('div');
     dbDiv.className = 'border border-gray-200 rounded-lg p-4';
     dbDiv.dataset.dbId = newId;
-    
+
     const headerDiv = document.createElement('div');
     headerDiv.className = 'flex items-center justify-between mb-3';
-    
+
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.className = 'font-medium text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2';
     nameInput.value = newId;
     nameInput.dataset.field = 'id';
     nameInput.placeholder = '请输入数据库标识';
-    
+
+    nameInput.addEventListener('input', function () {
+        const newName = this.value.trim();
+        if (newName) {
+            dbDiv.dataset.dbId = newName;
+        } else {
+            dbDiv.dataset.dbId = newId;
+        }
+    });
+
     const btnGroup = document.createElement('div');
     btnGroup.className = 'flex items-center space-x-2';
-    
+
     const testBtn = document.createElement('button');
     testBtn.type = 'button';
     testBtn.className = 'text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all';
     testBtn.innerHTML = '<i class="fa fa-check mr-1"></i>测试连接';
-    testBtn.onclick = function() { testDatabaseConnection(newId); };
-    
+    testBtn.onclick = function () { testDatabaseConnection(dbDiv.dataset.dbId); };
+
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-all';
     deleteBtn.innerHTML = '<i class="fa fa-trash mr-1"></i>删除';
-    deleteBtn.onclick = function() { removeDatabaseConfig(newId); };
-    
+    deleteBtn.onclick = function () { removeDatabaseConfig(dbDiv.dataset.dbId); };
+
     btnGroup.appendChild(testBtn);
     btnGroup.appendChild(deleteBtn);
     headerDiv.appendChild(nameInput);
     headerDiv.appendChild(btnGroup);
-    
+
     const fieldsDiv = document.createElement('div');
     fieldsDiv.className = 'grid grid-cols-2 md:grid-cols-3 gap-4';
-    
+
     const typeSelect = document.createElement('select');
     typeSelect.className = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all db-config-input';
     typeSelect.style.setProperty('--tw-ring-color', 'var(--primary-color)');
@@ -577,45 +634,62 @@ function addDatabaseConfig() {
         <option value="mysql">MySQL</option>
     `;
     typeSelect.dataset.field = 'type';
-    
+
     const hostInput = createDbInput('host', '', 'localhost');
     const portInput = createDbInput('port', '5432', '5432', 'number');
     const userInput = createDbInput('user', 'postgres', '用户名');
     const passwordInput = createDbInput('password', '', '密码', 'password');
     const databaseInput = createDbInput('database', '', '数据库名');
-    
+
     fieldsDiv.appendChild(createField('数据库类型', typeSelect));
     fieldsDiv.appendChild(createField('主机', hostInput));
     fieldsDiv.appendChild(createField('端口', portInput));
     fieldsDiv.appendChild(createField('用户名', userInput));
     fieldsDiv.appendChild(createField('密码', passwordInput));
     fieldsDiv.appendChild(createField('数据库名', databaseInput));
-    
+
     dbDiv.appendChild(headerDiv);
     dbDiv.appendChild(fieldsDiv);
     container.appendChild(dbDiv);
-    
+
     nameInput.focus();
 }
 
-function removeDatabaseConfig(dbId) {
+async function removeDatabaseConfig(dbId) {
     const dbDiv = document.querySelector(`#databaseConfigsContainer > div[data-db-id="${dbId}"]`);
-    if (dbDiv) {
-        const isPreset = ['mes', 'hanging'].includes(dbId);
-        if (isPreset) {
-            showToast('系统预设数据库（mes, hanging）不能删除', 'warning');
-            return;
-        }
-        if (confirm('确定要删除这个数据库配置吗？')) {
-            dbDiv.remove();
-        }
+    if (!dbDiv) return;
+
+    const isPreset = ['mes', 'hanging'].includes(dbId);
+    if (isPreset) {
+        showToast('系统预设数据库（mes, hanging）不能删除', 'warning');
+        return;
     }
+
+    const confirmed = await showConfirm('确定要删除这个数据库配置吗？', '确认删除');
+    if (!confirmed) return;
+
+    fetch('/api/config/database/' + dbId, {
+        method: 'DELETE'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                showToast('数据库配置删除成功！', 'success');
+                dbDiv.remove();
+            } else {
+                showToast('数据库配置删除失败: ' + (data.error || '未知错误'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('删除数据库配置失败:', error);
+            showToast('数据库配置删除失败，请检查网络连接', 'error');
+        });
 }
 
 function testDatabaseConnection(dbId) {
     const dbDiv = document.querySelector(`#databaseConfigsContainer > div[data-db-id="${dbId}"]`);
     if (!dbDiv) return;
-    
+
     const config = {};
     dbDiv.querySelectorAll('.db-config-input, input[data-field]').forEach(input => {
         const field = input.dataset.field;
@@ -625,29 +699,106 @@ function testDatabaseConnection(dbId) {
             config[field] = input.value;
         }
     });
-    
+
     fetch('/api/config/test_database', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showToast('数据库连接测试成功！', 'success');
-        } else {
-            showToast('数据库连接测试失败: ' + (data.error || '未知错误'), 'error');
-        }
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('数据库连接测试成功！', 'success');
+            } else {
+                showToast('数据库连接测试失败: ' + (data.error || '未知错误'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('测试数据库连接失败:', error);
+            showToast('数据库连接测试失败，请检查网络连接', 'error');
+        });
+}
+
+// ========== Test Log Database Connection ==========
+
+function testLogDatabaseConnection() {
+    const btn = document.getElementById('testLogDbConnection');
+    const resultSpan = document.getElementById('logDbTestResult');
+
+    const config = {
+        enabled: document.getElementById('logDbEnabled').value === 'true',
+        type: document.getElementById('logDbType').value,
+        host: document.getElementById('logDbHost').value,
+        port: parseInt(document.getElementById('logDbPort').value) || 5432,
+        user: document.getElementById('logDbUser').value,
+        password: document.getElementById('logDbPassword').value,
+        database: document.getElementById('logDbName').value
+    };
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i>测试中...';
+    resultSpan.textContent = '';
+
+    fetch('/api/config/test_log_database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
     })
-    .catch(error => {
-        console.error('测试数据库连接失败:', error);
-        showToast('数据库连接测试失败，请检查网络连接', 'error');
-    });
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-check-circle mr-1"></i>测试连接并创建表';
+            if (data.success) {
+                resultSpan.textContent = data.message;
+                resultSpan.style.color = '#10b981';
+                showToast('日志数据库连接测试成功，表已创建！', 'success');
+            } else {
+                resultSpan.textContent = data.error;
+                resultSpan.style.color = '#ef4444';
+                showToast('日志数据库连接测试失败: ' + (data.error || '未知错误'), 'error');
+            }
+        })
+        .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-check-circle mr-1"></i>测试连接并创建表';
+            resultSpan.textContent = '测试失败，请检查网络连接';
+            resultSpan.style.color = '#ef4444';
+            console.error('测试日志数据库连接失败:', error);
+            showToast('日志数据库连接测试失败，请检查网络连接', 'error');
+        });
 }
 
 // ========== Init on DOMContentLoaded ==========
 
+function setupDateConfigToggle() {
+    const lastNConfig = document.getElementById('lastNConfig');
+    const customDateRange = document.getElementById('customDateRange');
+
+    const updateLastNVisibility = function () {
+        if (document.getElementById('dateLastNToYesterday').checked || document.getElementById('dateLastNToToday').checked) {
+            lastNConfig.classList.remove('hidden');
+        } else {
+            lastNConfig.classList.add('hidden');
+        }
+    };
+
+    const updateCustomDateVisibility = function () {
+        if (document.getElementById('dateCustom').checked) {
+            customDateRange.classList.remove('hidden');
+        } else {
+            customDateRange.classList.add('hidden');
+        }
+    };
+
+    document.getElementById('dateLastNToYesterday')?.addEventListener('change', updateLastNVisibility);
+    document.getElementById('dateLastNToToday')?.addEventListener('change', updateLastNVisibility);
+    document.getElementById('dateCustom')?.addEventListener('change', updateCustomDateVisibility);
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     setupConfigFormSubmit();
     setupCancelConfigBtn();
+    setupDateConfigToggle();
+
+    document.getElementById('testLogDbConnection')?.addEventListener('click', testLogDatabaseConnection);
 });

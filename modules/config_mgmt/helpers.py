@@ -56,7 +56,16 @@ _config_state = {
     'realTimeMonitoring': REAL_TIME_MONITORING,
     'inspectionDateConfig': INSPECTION_DATE_CONFIG,
     'databaseConfig': DATABASE_CONFIG,
-    'arthasServers': []
+    'arthasServers': [],
+    'logDatabase': {
+        'enabled': False,
+        'type': 'postgresql',
+        'host': '',
+        'port': 5432,
+        'user': '',
+        'password': '',
+        'database': ''
+    }
 }
 
 # 通知冷却期记录

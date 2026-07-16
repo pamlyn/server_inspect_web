@@ -85,6 +85,65 @@ def test_database():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@config_mgmt_bp.route('/test_log_database', methods=['POST'])
+@login_required
+def test_log_database():
+    """测试日志数据库连接并创建表"""
+    try:
+        data = request.json
+        db_type = data.get('type')
+        host = data.get('host')
+        port = data.get('port')
+        user = data.get('user')
+        password = data.get('password')
+        database = data.get('database')
+        
+        config = {
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password,
+            'database': database
+        }
+        
+        from modules.log_storage.helpers import ensure_table_exists
+        success, message = ensure_table_exists(db_type, config)
+        
+        if success:
+            return jsonify({'success': True, 'message': '日志数据库连接测试成功，表已创建'})
+        else:
+            return jsonify({'success': False, 'error': message}), 500
+    except Exception as e:
+        print(f"测试日志数据库连接失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@config_mgmt_bp.route('/database/<db_id>', methods=['DELETE'])
+@login_required
+def delete_database_config(db_id):
+    """删除数据库配置"""
+    if db_id in ['mes', 'hanging']:
+        return jsonify({'error': '系统预设数据库（mes, hanging）不能删除'}), 400
+
+    try:
+        config_data = get_all_config()
+        if db_id not in config_data.get('databaseConfig', {}):
+            return jsonify({'error': '数据库配置不存在'}), 404
+
+        del config_data['databaseConfig'][db_id]
+        update_config(config_data)
+        save_config_to_file(config_data)
+
+        return jsonify({'message': '数据库配置删除成功'})
+    except Exception as e:
+        print(f"删除数据库配置失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @config_mgmt_bp.route('/reload', methods=['POST'])
 @login_required
 def reload_config():

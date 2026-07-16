@@ -166,16 +166,14 @@ function hideAllContent() {
 
 // ========== DOMContentLoaded Setup ==========
 
-// Replace native alert/confirm with custom toast/confirm
+// Replace native alert with custom toast.
+// NOTE: window.confirm is intentionally NOT overridden. showConfirm() is async
+// (Promise-based) and cannot return a value synchronously, so overriding
+// window.confirm would silently always return false. Use `await showConfirm(...)`
+// in async handlers instead.
 document.addEventListener('DOMContentLoaded', function () {
     window.alert = function (message) {
         showToast(message, 'info');
-    };
-
-    window.confirm = function (message) {
-        let result = false;
-        showConfirm(message).then(res => result = res);
-        return result;
     };
 });
 

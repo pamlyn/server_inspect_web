@@ -15,6 +15,14 @@
                 <span class="ml-2 text-sm text-gray-700">今日</span>
             </label>
             <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateLastNToYesterday" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">最近N天到昨日</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" id="dateLastNToToday" class="w-4 h-4 rounded border-gray-300">
+                <span class="ml-2 text-sm text-gray-700">最近N天到今日</span>
+            </label>
+            <label class="flex items-center p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" id="dateCurrentMonthToYesterday" class="w-4 h-4 rounded border-gray-300">
                 <span class="ml-2 text-sm text-gray-700">当前月到昨天</span>
             </label>
@@ -26,6 +34,15 @@
                 <input type="checkbox" id="dateCustom" class="w-4 h-4 rounded border-gray-300">
                 <span class="ml-2 text-sm text-gray-700">自定义日期范围</span>
             </label>
+        </div>
+        <div id="lastNConfig" class="hidden">
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">最近天数</label>
+                <input type="number" id="lastNDays" min="1" max="365" value="7"
+                    class="w-24 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style="--tw-ring-color: var(--primary-color);">
+                <span class="text-xs text-gray-500 ml-2">天</span>
+            </div>
         </div>
         <div id="customDateRange" class="hidden">
             <div class="grid grid-cols-2 gap-4">

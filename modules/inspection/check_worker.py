@@ -5,25 +5,18 @@ from modules.inspection.models import InspectionResult
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
-def check_worker_output():
-    """工人产量与报工明细稽核"""
-    result = InspectionResult()
-    result.add_info("========== 开始工人产量与报工明细稽核 ==========")
-    
-    # 获取日期配置
-    date_config = get_config('inspectionDateConfig')
+def get_date_ranges(date_config):
+    """根据日期配置计算日期范围列表"""
     date_options = date_config.get('options', {})
     custom_range = date_config.get('custom_date_range', {})
+    last_n_days = date_config.get('last_n_days', 7)
     
-    # 计算不同日期范围
     today = datetime.datetime.now()
     yesterday = today - datetime.timedelta(days=1)
     current_month_start = today.replace(day=1)
     
-    # 定义日期范围列表
     date_ranges = []
     
-    # 根据配置添加日期范围
     if date_options.get('yesterday', False):
         start_date = yesterday.strftime('%Y-%m-%d')
         end_date = yesterday.strftime('%Y-%m-%d')
@@ -33,6 +26,16 @@ def check_worker_output():
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))
+    
+    if date_options.get('last_n_to_yesterday', False):
+        start_date = (yesterday - datetime.timedelta(days=last_n_days - 1)).strftime('%Y-%m-%d')
+        end_date = yesterday.strftime('%Y-%m-%d')
+        date_ranges.append((start_date, end_date, f"最近{last_n_days}天到昨日"))
+    
+    if date_options.get('last_n_to_today', False):
+        start_date = (today - datetime.timedelta(days=last_n_days - 1)).strftime('%Y-%m-%d')
+        end_date = today.strftime('%Y-%m-%d')
+        date_ranges.append((start_date, end_date, f"最近{last_n_days}天到今日"))
     
     if date_options.get('current_month_to_yesterday', False):
         start_date = current_month_start.strftime('%Y-%m-%d')
@@ -48,16 +51,28 @@ def check_worker_output():
         start_date = custom_range.get('start_date', '')
         end_date = custom_range.get('end_date', '')
         if start_date and end_date:
-            # 验证开始日期和结束日期是否在同一个月
-            start_month = start_date[:7]  # YYYY-MM
-            end_month = end_date[:7]  # YYYY-MM
+            start_month = start_date[:7]
+            end_month = end_date[:7]
             if start_month == end_month:
                 date_ranges.append((start_date, end_date, "自定义日期范围"))
             else:
-                result.add_warning("自定义日期范围的开始日期和结束日期不在同一个月，跳过")
+                return date_ranges, "自定义日期范围的开始日期和结束日期不在同一个月，跳过"
     
-    # 如果没有配置日期范围，默认使用今日
+    return date_ranges, None
+
+def check_worker_output():
+    """工人产量与报工明细稽核"""
+    result = InspectionResult()
+    result.add_info("========== 开始工人产量与报工明细稽核 ==========")
+    
+    date_config = get_config('inspectionDateConfig')
+    date_ranges, warning_msg = get_date_ranges(date_config)
+    
+    if warning_msg:
+        result.add_warning(warning_msg)
+    
     if not date_ranges:
+        today = datetime.datetime.now()
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))
@@ -228,54 +243,14 @@ def check_worker_output_sfd():
     result = InspectionResult()
     result.add_info("========== 开始工人产量与报工明细数据稽核(sfd) ==========")
     
-    # 获取日期配置
     date_config = get_config('inspectionDateConfig')
-    date_options = date_config.get('options', {})
-    custom_range = date_config.get('custom_date_range', {})
+    date_ranges, warning_msg = get_date_ranges(date_config)
     
-    # 计算不同日期范围
-    today = datetime.datetime.now()
-    yesterday = today - datetime.timedelta(days=1)
-    current_month_start = today.replace(day=1)
+    if warning_msg:
+        result.add_warning(warning_msg)
     
-    # 定义日期范围列表
-    date_ranges = []
-    
-    # 根据配置添加日期范围
-    if date_options.get('yesterday', False):
-        start_date = yesterday.strftime('%Y-%m-%d')
-        end_date = yesterday.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "昨日"))
-    
-    if date_options.get('today', False):
-        start_date = today.strftime('%Y-%m-%d')
-        end_date = today.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "今日"))
-    
-    if date_options.get('current_month_to_yesterday', False):
-        start_date = current_month_start.strftime('%Y-%m-%d')
-        end_date = yesterday.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "当前月到昨天"))
-    
-    if date_options.get('current_month_to_today', False):
-        start_date = current_month_start.strftime('%Y-%m-%d')
-        end_date = today.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "当前月到今天"))
-    
-    if date_options.get('custom', False):
-        start_date = custom_range.get('start_date', '')
-        end_date = custom_range.get('end_date', '')
-        if start_date and end_date:
-            # 验证开始日期和结束日期是否在同一个月
-            start_month = start_date[:7]  # YYYY-MM
-            end_month = end_date[:7]  # YYYY-MM
-            if start_month == end_month:
-                date_ranges.append((start_date, end_date, "自定义日期范围"))
-            else:
-                result.add_warning("自定义日期范围的开始日期和结束日期不在同一个月，跳过")
-    
-    # 如果没有配置日期范围，默认使用今日
     if not date_ranges:
+        today = datetime.datetime.now()
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))
@@ -462,54 +437,14 @@ def check_worker_output_without_color_size():
     result = InspectionResult()
     result.add_info("========== 开始工人产量与报工明细稽核（不包含颜色尺码） ==========")
     
-    # 获取日期配置
     date_config = get_config('inspectionDateConfig')
-    date_options = date_config.get('options', {})
-    custom_range = date_config.get('custom_date_range', {})
+    date_ranges, warning_msg = get_date_ranges(date_config)
     
-    # 计算不同日期范围
-    today = datetime.datetime.now()
-    yesterday = today - datetime.timedelta(days=1)
-    current_month_start = today.replace(day=1)
+    if warning_msg:
+        result.add_warning(warning_msg)
     
-    # 定义日期范围列表
-    date_ranges = []
-    
-    # 根据配置添加日期范围
-    if date_options.get('yesterday', False):
-        start_date = yesterday.strftime('%Y-%m-%d')
-        end_date = yesterday.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "昨日"))
-    
-    if date_options.get('today', False):
-        start_date = today.strftime('%Y-%m-%d')
-        end_date = today.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "今日"))
-    
-    if date_options.get('current_month_to_yesterday', False):
-        start_date = current_month_start.strftime('%Y-%m-%d')
-        end_date = yesterday.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "当前月到昨天"))
-    
-    if date_options.get('current_month_to_today', False):
-        start_date = current_month_start.strftime('%Y-%m-%d')
-        end_date = today.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "当前月到今天"))
-    
-    if date_options.get('custom', False):
-        start_date = custom_range.get('start_date', '')
-        end_date = custom_range.get('end_date', '')
-        if start_date and end_date:
-            # 验证开始日期和结束日期是否在同一个月
-            start_month = start_date[:7]  # YYYY-MM
-            end_month = end_date[:7]  # YYYY-MM
-            if start_month == end_month:
-                date_ranges.append((start_date, end_date, "自定义日期范围"))
-            else:
-                result.add_warning("自定义日期范围的开始日期和结束日期不在同一个月，跳过")
-    
-    # 如果没有配置日期范围，默认使用今日
     if not date_ranges:
+        today = datetime.datetime.now()
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))
@@ -684,54 +619,14 @@ def check_mes_hanging():
     result = InspectionResult()
     result.add_info("========== 开始MES报工明细与吊挂报工明细稽核 ==========")
     
-    # 获取日期配置
     date_config = get_config('inspectionDateConfig')
-    date_options = date_config.get('options', {})
-    custom_range = date_config.get('custom_date_range', {})
+    date_ranges, warning_msg = get_date_ranges(date_config)
     
-    # 计算不同日期范围
-    today = datetime.datetime.now()
-    yesterday = today - datetime.timedelta(days=1)
-    current_month_start = today.replace(day=1)
+    if warning_msg:
+        result.add_warning(warning_msg)
     
-    # 定义日期范围列表
-    date_ranges = []
-    
-    # 根据配置添加日期范围
-    if date_options.get('yesterday', False):
-        start_date = yesterday.strftime('%Y-%m-%d')
-        end_date = yesterday.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "昨日"))
-    
-    if date_options.get('today', False):
-        start_date = today.strftime('%Y-%m-%d')
-        end_date = today.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "今日"))
-    
-    if date_options.get('current_month_to_yesterday', False):
-        start_date = current_month_start.strftime('%Y-%m-%d')
-        end_date = yesterday.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "当前月到昨天"))
-    
-    if date_options.get('current_month_to_today', False):
-        start_date = current_month_start.strftime('%Y-%m-%d')
-        end_date = today.strftime('%Y-%m-%d')
-        date_ranges.append((start_date, end_date, "当前月到今天"))
-    
-    if date_options.get('custom', False):
-        start_date = custom_range.get('start_date', '')
-        end_date = custom_range.get('end_date', '')
-        if start_date and end_date:
-            # 验证开始日期和结束日期是否在同一个月
-            start_month = start_date[:7]  # YYYY-MM
-            end_month = end_date[:7]  # YYYY-MM
-            if start_month == end_month:
-                date_ranges.append((start_date, end_date, "自定义日期范围"))
-            else:
-                result.add_warning("自定义日期范围的开始日期和结束日期不在同一个月，跳过")
-    
-    # 如果没有配置日期范围，默认使用今日
     if not date_ranges:
+        today = datetime.datetime.now()
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))

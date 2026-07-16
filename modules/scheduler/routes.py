@@ -11,6 +11,7 @@ from modules.auth.helpers import login_required
 from modules.config_mgmt.helpers import get_config, notification_cooldowns
 from modules.inspection.helpers import get_inspection_functions
 from modules.custom_scripts.helpers import run_custom_scripts
+from modules.log_storage.helpers import record_inspection_log, derive_status
 from dingtalk import dingtalk_notifier
 
 scheduler_bp = Blueprint('scheduler', __name__, url_prefix='/api/scheduler')
@@ -93,11 +94,36 @@ def run_daily_now():
         return jsonify({'error': str(e)}), 500
 
 
+def save_inspection_log_to_db(results, inspection_type, *, target='full', error=None, start_time=None):
+    """保存巡检日志到数据库（定时/日常/实时巡检，含成功与失败）。"""
+    try:
+        now = datetime.datetime.now()
+        if error:
+            status = 'error'
+            summary = f"巡检失败: {inspection_type}"
+        else:
+            status = derive_status(results)
+            summary = f"巡检完成: {inspection_type}"
+        record_inspection_log(
+            inspection_type='system', trigger_source=inspection_type,
+            target=target, operator=None, status=status,
+            start_time=start_time or now, end_time=now,
+            summary=summary,
+            record_count=len(results) if isinstance(results, dict) else 0,
+            result=results, error=error,
+        )
+    except Exception as e:
+        print(f"[{datetime.datetime.now()}] 保存巡检日志出错: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def run_scheduled_inspection():
     """执行定时巡检"""
     print(f"[{datetime.datetime.now()}] 开始执行定时巡检...")
     SCHEDULED_INSPECTION_ITEMS = get_config('scheduledInspectionItems')
     DINGTALK_CONFIG = get_config('dingtalk')
+    start_time = datetime.datetime.now()
 
     try:
         results = {}
@@ -108,6 +134,8 @@ def run_scheduled_inspection():
 
         custom_results = run_custom_scripts('scheduled')
         results.update(custom_results)
+
+        save_inspection_log_to_db(results, 'scheduled', start_time=start_time)
 
         has_alert = False
         alert_results = {}
@@ -135,6 +163,7 @@ def run_scheduled_inspection():
         print(f"[{datetime.datetime.now()}] 定时巡检出错: {e}")
         import traceback
         traceback.print_exc()
+        save_inspection_log_to_db(None, 'scheduled', target='full', error=str(e), start_time=start_time)
 
 
 def run_daily_inspection():
@@ -142,6 +171,7 @@ def run_daily_inspection():
     print(f"[{datetime.datetime.now()}] 开始执行日常巡检...")
     DAILY_INSPECTION_ITEMS = get_config('dailyInspectionItems')
     DINGTALK_CONFIG = get_config('dingtalk')
+    start_time = datetime.datetime.now()
 
     try:
         results = {}
@@ -153,6 +183,8 @@ def run_daily_inspection():
         custom_results = run_custom_scripts('daily')
         results.update(custom_results)
 
+        save_inspection_log_to_db(results, 'daily', start_time=start_time)
+
         print(f"[{datetime.datetime.now()}] 日常巡检完成，发送通知...")
         if DINGTALK_CONFIG.get('enabled', False):
             dingtalk_notifier.send_inspection_report(results, "daily")
@@ -162,6 +194,7 @@ def run_daily_inspection():
         print(f"[{datetime.datetime.now()}] 日常巡检出错: {e}")
         import traceback
         traceback.print_exc()
+        save_inspection_log_to_db(None, 'daily', target='full', error=str(e), start_time=start_time)
 
 
 def real_time_monitor():
@@ -170,6 +203,7 @@ def real_time_monitor():
     print(f"[{datetime.datetime.now()}] 实时监控线程启动")
 
     while real_time_monitor_running:
+        start_time = datetime.datetime.now()
         try:
             REAL_TIME_MONITORING = get_config('realTimeMonitoring')
             if not REAL_TIME_MONITORING.get('enabled', False):
@@ -185,10 +219,6 @@ def real_time_monitor():
             dingtalk_enabled = notification_config.get('dingtalk', False)
             cooldown_period = notification_config.get('cooldown_period', 300)
 
-            if not notification_enabled:
-                time.sleep(interval)
-                continue
-
             results = {}
             for item, enabled in items.items():
                 if enabled and item in get_inspection_functions():
@@ -197,6 +227,8 @@ def real_time_monitor():
 
             custom_results = run_custom_scripts('realtime')
             results.update(custom_results)
+
+            save_inspection_log_to_db(results, 'real_time', start_time=start_time)
 
             if not notification_enabled:
                 time.sleep(interval)
@@ -229,6 +261,7 @@ def real_time_monitor():
             print(f"[{datetime.datetime.now()}] 实时监控线程出错: {e}")
             import traceback
             traceback.print_exc()
+            save_inspection_log_to_db(None, 'real_time', target='full', error=str(e), start_time=start_time)
             time.sleep(10)
 
     print(f"[{datetime.datetime.now()}] 实时监控线程停止")
