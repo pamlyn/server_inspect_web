@@ -110,6 +110,22 @@
     "worker_output_sfd": false,
     "mes_hanging": false
   },
+  "fullInspectionItems": {
+    "system_info": false,
+    "cpu": false,
+    "memory": false,
+    "swap": false,
+    "disk": false,
+    "disk_io": false,
+    "processes": false,
+    "slow_sql": false,
+    "database": false,
+    "network": false,
+    "worker_output_with_color_size": false,
+    "worker_output_without_color_size": false,
+    "worker_output_sfd": false,
+    "mes_hanging": false
+  },
   "dingtalk": {
     "enabled": true,
     "webhooks": [
@@ -141,14 +157,26 @@
     "options": {
       "yesterday": true,
       "today": false,
+      "last_n_to_yesterday": false,
+      "last_n_to_today": false,
       "current_month_to_yesterday": false,
       "current_month_to_today": false,
       "custom": false
     },
+    "last_n_days": 7,
     "custom_date_range": {
       "start_date": "",
       "end_date": ""
     }
+  },
+  "logDatabase": {
+    "enabled": false,
+    "type": "postgresql",
+    "host": "",
+    "port": 5432,
+    "user": "",
+    "password": "",
+    "database": ""
   },
   "arthasServers": []
 }
