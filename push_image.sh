@@ -5,7 +5,7 @@ HARBOR_PROJECT="server_inspect"
 HARBOR_USER="jack"
 HARBOR_PASSWORD="Jack_2023"
 IMAGE_NAME="server_inspect_web"
-IMAGE_TAG="latest"
+IMAGE_TAG="1.2.0"
 FULL_IMAGE_NAME="${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "===================================="
