@@ -51,6 +51,55 @@ window.getMonthFirstStartTime = function () {
     return window.getMonthFirstDate() + ' 00:00:00';
 };
 
+// 计算年月/周期变量的值，与后端 resolve_period_value 逻辑保持一致
+// periodType: current_month / current_year / last_month / last_year
+// periodFormat: yyyy / yyyy-MM / yyyy-M / yyyy_MM / yyyy_M
+window.computePeriodValue = function (periodType, periodFormat) {
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+
+    if (periodType === 'last_year') {
+        year = year - 1;
+    } else if (periodType === 'last_month') {
+        if (month === 1) {
+            year = year - 1;
+            month = 12;
+        } else {
+            month = month - 1;
+        }
+    }
+
+    const fmt = periodFormat || 'yyyy-MM';
+    if (fmt === 'yyyy') {
+        return `${year}`;
+    } else if (fmt === 'yyyy-MM') {
+        return `${year}-${String(month).padStart(2, '0')}`;
+    } else if (fmt === 'yyyy-M') {
+        return `${year}-${month}`;
+    } else if (fmt === 'yyyy_MM') {
+        return `${year}_${String(month).padStart(2, '0')}`;
+    } else if (fmt === 'yyyy_M') {
+        return `${year}_${month}`;
+    }
+    return `${year}-${String(month).padStart(2, '0')}`;
+};
+
+// 年月/周期变量的下拉选项（配置与执行界面共用）
+window.PERIOD_TYPE_OPTIONS = [
+    { value: 'current_month', label: '当前月' },
+    { value: 'current_year', label: '当前年' },
+    { value: 'last_month', label: '上个月' },
+    { value: 'last_year', label: '去年' }
+];
+window.PERIOD_FORMAT_OPTIONS = [
+    { value: 'yyyy', label: 'yyyy' },
+    { value: 'yyyy-MM', label: 'yyyy-MM' },
+    { value: 'yyyy-M', label: 'yyyy-M' },
+    { value: 'yyyy_MM', label: 'yyyy_MM' },
+    { value: 'yyyy_M', label: 'yyyy_M' }
+];
+
 // ========== showCustomInspect — overwrite the app.js placeholder ==========
 
 window.showCustomInspect = function () {
@@ -307,6 +356,23 @@ function renderVariables() {
                     <input type="text" class="w-full px-2 py-1 text-sm border rounded ${hiddenClass}" placeholder="默认值 (YYYY-MM-DD HH:mm:ss)" value="${defaultValue}" data-index="${index}" data-field="default_value">
                 </div>
             `;
+        } else if (variable.type === 'period') {
+            const periodType = variable.period_type || 'current_month';
+            const periodFormat = variable.period_format || 'yyyy_MM';
+            const periodPreview = window.computePeriodValue(periodType, periodFormat);
+            const typeOpts = window.PERIOD_TYPE_OPTIONS.map(o =>
+                `<option value="${o.value}" ${periodType === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+            const fmtOpts = window.PERIOD_FORMAT_OPTIONS.map(o =>
+                `<option value="${o.value}" ${periodFormat === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+            defaultValueInputHtml = `
+                <div class="space-y-1">
+                    <div class="grid grid-cols-2 gap-1">
+                        <select class="w-full px-2 py-1 text-sm border rounded" data-index="${index}" data-field="period_type" onchange="window.handleVariablePeriodChange(${index})">${typeOpts}</select>
+                        <select class="w-full px-2 py-1 text-sm border rounded" data-index="${index}" data-field="period_format" onchange="window.handleVariablePeriodChange(${index})">${fmtOpts}</select>
+                    </div>
+                    <span class="text-xs text-gray-500" id="periodPreview_${index}">解析值: ${periodPreview}</span>
+                </div>
+            `;
         } else if (variable.type === 'number') {
             defaultValueInputHtml = `<input type="number" class="w-full px-2 py-1 text-sm border rounded" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">`;
         } else {
@@ -323,6 +389,7 @@ function renderVariables() {
                         <option value="date" ${variable.type === 'date' ? 'selected' : ''}>日期</option>
                         <option value="time" ${variable.type === 'time' ? 'selected' : ''}>时间</option>
                         <option value="number" ${variable.type === 'number' ? 'selected' : ''}>数字</option>
+                        <option value="period" ${variable.type === 'period' ? 'selected' : ''}>年月</option>
                     </select>
                 </div>
                 <div id="defaultValueDiv_${index}">
@@ -382,10 +449,23 @@ window.handleVariableTypeChange = function (index) {
             currentVariables[index].default_value = window.getTodayStartTime();
         } else if (newType === 'number') {
             currentVariables[index].default_value = '';
+        } else if (newType === 'period') {
+            currentVariables[index].default_value = '';
+            if (!currentVariables[index].period_type) currentVariables[index].period_type = 'current_month';
+            if (!currentVariables[index].period_format) currentVariables[index].period_format = 'yyyy_MM';
         } else {
             currentVariables[index].default_value = '';
         }
         renderVariables();
+    }
+};
+
+window.handleVariablePeriodChange = function (index) {
+    const typeSel = document.querySelector(`[data-index="${index}"][data-field="period_type"]`);
+    const fmtSel = document.querySelector(`[data-index="${index}"][data-field="period_format"]`);
+    const preview = document.getElementById(`periodPreview_${index}`);
+    if (typeSel && fmtSel && preview) {
+        preview.textContent = '解析值: ' + window.computePeriodValue(typeSel.value, fmtSel.value);
     }
 };
 
@@ -566,6 +646,23 @@ function renderParamsInputs(variables) {
                     <input type="text" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all ${hiddenClass}" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${defaultValue}" placeholder="格式: YYYY-MM-DD HH:mm:ss">
                 </div>
             `;
+        } else if (variable.type === 'period') {
+            const periodType = variable.period_type || 'current_month';
+            const periodFormat = variable.period_format || 'yyyy_MM';
+            const periodPreview = window.computePeriodValue(periodType, periodFormat);
+            const typeOpts = window.PERIOD_TYPE_OPTIONS.map(o =>
+                `<option value="${o.value}" ${periodType === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+            const fmtOpts = window.PERIOD_FORMAT_OPTIONS.map(o =>
+                `<option value="${o.value}" ${periodFormat === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+            inputHtml = `
+                <div class="space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <select class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="periodType_${variable.name}" onchange="window.handleParamPeriodChange('${variable.name}')">${typeOpts}</select>
+                        <select class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="periodFormat_${variable.name}" onchange="window.handleParamPeriodChange('${variable.name}')">${fmtOpts}</select>
+                    </div>
+                    <span class="text-xs text-gray-500" id="periodPreview_param_${variable.name}">解析值: ${periodPreview}</span>
+                </div>
+            `;
         } else if (variable.type === 'number') {
             inputHtml = `<input type="number" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${variable.default_value || ''}" placeholder="请输入数字">`;
         } else {
@@ -633,6 +730,16 @@ window.handleParamLastNDaysChange = function (varName, value) {
     }
 };
 
+window.handleParamPeriodChange = function (varName) {
+    const typeSel = document.getElementById(`periodType_${varName}`);
+    const fmtSel = document.getElementById(`periodFormat_${varName}`);
+    const preview = document.getElementById(`periodPreview_param_${varName}`);
+    if (typeSel && fmtSel && preview) {
+        preview.textContent = '解析值: ' + window.computePeriodValue(typeSel.value, fmtSel.value);
+    }
+    updateSqlContent();
+};
+
 window.handleTimePresetChange = function (varName) {
     const presetSelect = document.getElementById(`preset_${varName}`);
     const timeInput = document.getElementById(`param_${varName}`);
@@ -665,6 +772,14 @@ function getParamsValues(variables) {
     if (!variables) return params;
 
     variables.forEach((variable) => {
+        if (variable.type === 'period') {
+            const typeSel = document.getElementById(`periodType_${variable.name}`);
+            const fmtSel = document.getElementById(`periodFormat_${variable.name}`);
+            const pt = typeSel ? typeSel.value : (variable.period_type || 'current_month');
+            const pf = fmtSel ? fmtSel.value : (variable.period_format || 'yyyy_MM');
+            params[variable.name] = window.computePeriodValue(pt, pf);
+            return;
+        }
         const input = document.getElementById(`param_${variable.name}`);
         if (input) {
             params[variable.name] = input.value;
@@ -863,26 +978,26 @@ function loadSavedScripts() {
                         const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
                         if (!confirmed) return;
                         fetch('/api/custom_scripts/' + currentScriptId, {
-                                method: 'DELETE',
-                                headers: {
-                                    'Content-Type': 'application/json'
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                            .then(function (response) {
+                                return response.json();
+                            })
+                            .then(function (result) {
+                                if (result.message) {
+                                    showToast('脚本删除成功！', 'success');
+                                    loadSavedScripts();
+                                } else {
+                                    showToast('脚本删除失败: ' + (result.error || '未知错误'), 'error');
                                 }
                             })
-                                .then(function (response) {
-                                    return response.json();
-                                })
-                                .then(function (result) {
-                                    if (result.message) {
-                                        showToast('脚本删除成功！', 'success');
-                                        loadSavedScripts();
-                                    } else {
-                                        showToast('脚本删除失败: ' + (result.error || '未知错误'), 'error');
-                                    }
-                                })
-                                .catch(function (error) {
-                                    console.error('删除脚本失败:', error);
-                                    showToast('脚本删除失败，请检查网络连接', 'error');
-                                });
+                            .catch(function (error) {
+                                console.error('删除脚本失败:', error);
+                                showToast('脚本删除失败，请检查网络连接', 'error');
+                            });
                     });
 
                     btnDiv.appendChild(editBtn);
@@ -1400,7 +1515,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const today = new Date().toISOString().split('T')[0];
             const todayStart = today + ' 00:00:00';
             currentVariables.forEach(v => {
-                if (v.type === 'date') {
+                if (v.type === 'period') {
+                    params[v.name] = window.computePeriodValue(
+                        v.period_type || 'current_month',
+                        v.period_format || 'yyyy_MM');
+                } else if (v.type === 'date') {
                     if (v.date_range_type === 'last_n_days' ||
                         v.date_range_type === 'last_n_to_yesterday' ||
                         v.date_range_type === 'last_n_to_today') {

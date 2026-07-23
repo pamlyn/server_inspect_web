@@ -52,9 +52,50 @@ def format_sql_value(var_type, var_value):
 
     if var_type == 'number':
         return str(var_value)
+    elif var_type == 'period':
+        # 年月/周期变量主要用于表名等标识符（如 produce_mes_reporting_work_cache_2026_7），
+        # 不做引号包装，原样插值；WHERE 等场景由用户在 SQL 中自行加引号。
+        return str(var_value)
     else:
         escaped_value = str(var_value).replace("'", "''")
         return f"'{escaped_value}'"
+
+
+def resolve_period_value(period_type, period_format='yyyy-MM'):
+    """根据周期类型和格式计算年月值。
+
+    period_type: current_month / current_year / last_month / last_year
+    period_format: yyyy / yyyy-MM / yyyy-M / yyyy_MM / yyyy_M
+    返回示例：2026 / 2026-07 / 2026-7 / 2026_07 / 2026_7
+    """
+    today = datetime.datetime.now()
+
+    if period_type == 'last_year':
+        target = today.replace(year=today.year - 1, day=1)
+    elif period_type == 'last_month':
+        if today.month == 1:
+            target = today.replace(year=today.year - 1, month=12, day=1)
+        else:
+            target = today.replace(month=today.month - 1, day=1)
+    else:
+        # current_month / current_year / 未知类型均按当前月处理
+        target = today
+
+    year = target.year
+    month = target.month
+
+    if period_format == 'yyyy':
+        return f"{year}"
+    elif period_format == 'yyyy-MM':
+        return f"{year}-{month:02d}"
+    elif period_format == 'yyyy-M':
+        return f"{year}-{month}"
+    elif period_format == 'yyyy_MM':
+        return f"{year}_{month:02d}"
+    elif period_format == 'yyyy_M':
+        return f"{year}_{month}"
+    else:
+        return f"{year}-{month:02d}"
 
 
 def check_row_against_rules(row, columns, rules):
@@ -165,7 +206,11 @@ def run_custom_scripts(script_type):
                 var_type = var.get('type', 'text')
                 var_value = var.get('default_value', '')
 
-                if var_type == 'date' and not var_value:
+                if var_type == 'period':
+                    var_value = resolve_period_value(
+                        var.get('period_type'),
+                        var.get('period_format', 'yyyy-MM'))
+                elif var_type == 'date' and not var_value:
                     var_value = today
                 elif var_type == 'time' and not var_value:
                     var_value = today_start

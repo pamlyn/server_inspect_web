@@ -7,7 +7,7 @@ import datetime
 import time
 
 from modules.auth.helpers import login_required
-from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value
+from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
@@ -131,10 +131,18 @@ def get_variable_value(var, params):
     最近N天：从 N 天前到今天，起始日期 = 今天 - (N - 1) 天。
     兼容旧配置 date_range_type 取值（last_n_to_yesterday / last_n_to_today）
     统一按“最近N天（含今天）”语义计算。
+    年月(period)：按当前日期动态解析（当前月/当前年/上个月/去年），优先使用前端传值。
     """
     var_name = var.get('name', '')
+    var_type = var.get('type', 'text')
     date_range_type = var.get('date_range_type')
     last_n_days = var.get('last_n_days', 7)
+
+    if var_type == 'period':
+        computed = resolve_period_value(
+            var.get('period_type'),
+            var.get('period_format', 'yyyy-MM'))
+        return params.get(var_name) or computed
 
     if date_range_type in ('last_n_days', 'last_n_to_yesterday', 'last_n_to_today'):
         today = datetime.datetime.now()

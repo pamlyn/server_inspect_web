@@ -358,7 +358,7 @@ function setupConfigFormSubmit() {
                         current_month_to_today: document.getElementById('dateCurrentMonthToToday').checked,
                         custom: document.getElementById('dateCustom').checked
                     },
-                    last_n_days: parseInt(document.getElementById('lastNDays').value) || 7,
+                    last_n_days: Math.min(parseInt(document.getElementById('lastNDays').value) || 7, 28),
                     custom_date_range: {
                         start_date: document.getElementById('customStartDate').value,
                         end_date: document.getElementById('customEndDate').value

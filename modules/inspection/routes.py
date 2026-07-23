@@ -11,6 +11,7 @@ import time
 from modules.auth.helpers import login_required
 from modules.inspection.helpers import get_inspection_functions, run_full_inspection, execute_sql
 from modules.inspection.models import InspectionResult
+from modules.inspection.check_worker import get_cache_table_months, build_cache_union_subquery
 from modules.config_mgmt.helpers import get_config, notification_cooldowns
 from modules.log_storage.helpers import record_inspection_log, derive_status
 from dingtalk import dingtalk_notifier
@@ -228,8 +229,6 @@ def inspect_mes_hanging():
     target = f"{start_date}~{end_date}" if start_date and end_date else ''
 
     try:
-        cache_table = data.get('cache_table', '')
-
         if not start_date or not end_date:
             return jsonify({'error': '开始日期和结束日期不能为空'}), 400
 
@@ -241,16 +240,21 @@ def inspect_mes_hanging():
 
         start_dt_obj = datetime.datetime.strptime(start_date, '%Y-%m-%d')
         end_dt_obj = datetime.datetime.strptime(end_date, '%Y-%m-%d')
-        if start_dt_obj.month != end_dt_obj.month or start_dt_obj.year != end_dt_obj.year:
-            return jsonify({'error': '开始日期和结束日期必须在同一个月'}), 400
+        if start_dt_obj > end_dt_obj:
+            return jsonify({'error': '开始日期不能晚于结束日期'}), 400
 
         start_datetime = f"{start_date} 00:00:00"
         end_datetime = f"{end_date} 23:59:59"
 
-        if not cache_table:
-            year = start_date.split('-')[0]
-            month = int(start_date.split('-')[1])
-            cache_table = f"produce_mes_reporting_work_cache_{year}_{month}"
+        schema = 'jack_mes'
+        # 枚举日期范围覆盖的所有月份（跨月时最多2张表），构建 UNION ALL 子查询
+        cache_months = get_cache_table_months(start_date, end_date)
+        mes_union = build_cache_union_subquery(
+            schema, cache_months, '"total"',
+            f"WHERE reporting_work_date BETWEEN '{start_datetime}' AND '{end_datetime}' AND type = 1"
+        )
+        mes_tables_desc = ', '.join(
+            f"{schema}.produce_mes_reporting_work_cache_{y}_{m}" for y, m in cache_months)
 
         DATABASE_CONFIG = get_config('databaseConfig')
 
@@ -279,17 +283,14 @@ def inspect_mes_hanging():
                 count1 = float(row1[0]) if row1 else 0
                 sum1 = float(row1[1]) if row1 else 0
 
-        # PostgreSQL（MES）数据库查询
+        # PostgreSQL（MES）数据库查询（跨月时对多张分表UNION后再聚合）
         mes_config = DATABASE_CONFIG.get('mes')
         if not mes_config:
             return jsonify({'error': 'MES数据库配置不存在'}), 400
 
-        schema = 'jack_mes'
-        full_table_name = f"{schema}.{cache_table}"
         sql2 = f"""
         SELECT COUNT(*), COALESCE(SUM(total), 0)
-        FROM {full_table_name}
-        WHERE reporting_work_date BETWEEN '{start_datetime}' AND '{end_datetime}' AND type = 1
+        FROM {mes_union}
         """
         columns2, rows2 = execute_sql(mes_config['type'], mes_config, sql2)
         if columns2 is None:
@@ -310,7 +311,7 @@ def inspect_mes_hanging():
         result = {
             'start_date': start_date, 'end_date': end_date,
             'hanging': {'count': count1, 'sum': sum1},
-            'mes': {'count': count2, 'sum': sum2, 'table': full_table_name},
+            'mes': {'count': count2, 'sum': sum2, 'table': mes_tables_desc},
             'is_consistent': is_consistent,
             'diff': {'count': count1 - count2, 'sum': sum1 - sum2}
         }
@@ -356,9 +357,13 @@ def export_mes_hanging():
 
         start_datetime = f"{start_date} 00:00:00"
         end_datetime = f"{end_date} 23:59:59"
-        year = start_date.split('-')[0]
-        month = int(start_date.split('-')[1])
-        cache_table = f"produce_mes_reporting_work_cache_{year}_{month}"
+        schema = 'jack_mes'
+        # 枚举日期范围覆盖的所有月份（跨月时最多2张表），构建 UNION ALL 子查询
+        cache_months = get_cache_table_months(start_date, end_date)
+        mes_union = build_cache_union_subquery(
+            schema, cache_months, '"total"',
+            f"WHERE reporting_work_date BETWEEN '{start_datetime}' AND '{end_datetime}' AND type = 1"
+        )
 
         DATABASE_CONFIG = get_config('databaseConfig')
 
@@ -379,12 +384,9 @@ def export_mes_hanging():
         if not mes_config:
             return jsonify({'error': 'MES数据库配置不存在'}), 400
 
-        schema = 'jack_mes'
-        full_table_name = f"{schema}.{cache_table}"
         sql2 = f"""
         SELECT COUNT(*) AS mes_count, COALESCE(SUM(total), 0) AS mes_sum
-        FROM {full_table_name}
-        WHERE reporting_work_date BETWEEN '{start_date}' AND '{end_date}' AND type = 1
+        FROM {mes_union}
         """
         columns2, rows2 = execute_sql(mes_config['type'], mes_config, sql2)
         if columns2 is None:

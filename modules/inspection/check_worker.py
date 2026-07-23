@@ -9,7 +9,8 @@ def get_date_ranges(date_config):
     """根据日期配置计算日期范围列表"""
     date_options = date_config.get('options', {})
     custom_range = date_config.get('custom_date_range', {})
-    last_n_days = date_config.get('last_n_days', 7)
+    # 最近N天上限28天：保证跨月时最多查询两个分表（同维度去重）
+    last_n_days = min(int(date_config.get('last_n_days', 7) or 7), 28)
     
     today = datetime.datetime.now()
     yesterday = today - datetime.timedelta(days=1)
@@ -60,6 +61,42 @@ def get_date_ranges(date_config):
     
     return date_ranges, None
 
+
+def get_cache_table_months(start_date, end_date):
+    """枚举 [start_date, end_date] 覆盖的所有 (year, month)。
+
+    缓存表按月分表（produce_mes_reporting_work_cache_{year}_{month}），
+    日期范围可能跨月/跨年，需逐张表查询后按维度去重。
+    结合最近N天上限28天，最多返回2个月份。
+    """
+    start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+    end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+
+    months = []
+    current = start.replace(day=1)
+    while current <= end:
+        months.append((str(current.year), int(current.month)))
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return months
+
+
+def build_cache_union_subquery(schema, months, select_columns, where_clause):
+    """构建多月缓存表的 UNION ALL 子查询。
+
+    select_columns: 子查询中各表 SELECT 的列片段（不含 FROM/WHERE）。
+    where_clause: 各子表统一附加的 WHERE 条件（从原 detail_summary 下沉）。
+    返回可直接用作 CTE/子查询的 SQL 片段：(... UNION ALL ...) AS cache_union
+    """
+    parts = []
+    for year, month in months:
+        table = f"{schema}.produce_mes_reporting_work_cache_{year}_{month}"
+        parts.append(f"SELECT {select_columns} FROM {table} {where_clause}")
+    union_sql = "\n        UNION ALL\n        ".join(parts)
+    return f"({union_sql}) AS cache_union"
+
 def check_worker_output():
     """工人产量与报工明细稽核"""
     result = InspectionResult()
@@ -90,20 +127,38 @@ def check_worker_output():
     # 对每个日期范围执行稽核
     for start_date, end_date, range_name in date_ranges:
         result.add_info(f"\n稽核日期范围: {range_name} ({start_date} 至 {end_date})")
-        
+
         # 计算时间范围
         start_datetime = f"{start_date} 00:00:00"
         end_datetime = f"{end_date} 23:59:59"
-        
-        # 构建缓存表名（使用开始日期的年份和月份）
-        year = start_date.split('-')[0]
-        month = int(start_date.split('-')[1])
-        cache_table = f"produce_mes_reporting_work_cache_{year}_{month}"
-        
+
+        # 枚举日期范围覆盖的所有月份（跨月时最多2张表），构建 UNION ALL 子查询
+        cache_months = get_cache_table_months(start_date, end_date)
+        cache_union = build_cache_union_subquery(
+            schema, cache_months,
+            select_columns='''"total",
+                "produce_order_code",
+                "work_shop_id",
+                "process_version_id",
+                "section_id",
+                "line_id",
+                "user_line_id",
+                "produce_process_name",
+                "staff_id",
+                "station_no",
+                "reporting_date",
+                "craft_seq",
+                "tenant_code",
+                "product_code",
+                "color_name",
+                "size_name"''',
+            where_clause=f"WHERE \"reporting_work_date\" BETWEEN '{start_datetime}' AND '{end_datetime}'"
+        )
+
         # 稽核脚本：比较明细汇总与报表数据是否一致（包含颜色尺码）
         sql = f"""
-        WITH 
-        -- 明细汇总结果（来自缓存表）
+        WITH
+        -- 明细汇总结果（来自缓存表，跨月时UNION多张分表后按维度去重）
         detail_summary AS (
             SELECT
                 SUM("total") AS total_qty,
@@ -122,8 +177,7 @@ def check_worker_output():
                 "product_code"         AS product_code,
                 "color_name"            AS color_name,
                 "size_name"            AS size_name
-            FROM {schema}.{cache_table}
-            WHERE "reporting_work_date" BETWEEN '{start_datetime}' AND '{end_datetime}'
+            FROM {cache_union}
             GROUP BY
                 "tenant_code",
                 "produce_order_code",
@@ -161,7 +215,7 @@ def check_worker_output():
                 "color_name"            AS color_name,
                 "size_name"            AS size_name
             FROM {schema}.report_mes_user_process_output_cache
-            WHERE report_date BETWEEN '{start_date}' AND '{end_date}'
+            WHERE report_date BETWEEN '{start_date}' AND '{end_date}' and is_deleted = 0
         )
         -- 完全外连接比对
         SELECT
@@ -190,21 +244,21 @@ def check_worker_output():
             END AS check_status
         FROM detail_summary d
         FULL OUTER JOIN report_data r
-            ON d.produce_order_code = r.produce_order_code
-            AND d.work_shop_id = r.work_shop_id
-            AND d.process_version_id = r.process_version_id
-            AND d.section_id = r.produce_section_id
-            AND d.line_id = r.line_id
-            AND d.user_line_id = r.user_line_id
-            AND d.produce_process_name = r.produce_process_name
-            AND d.staff_id = r.staff_id
-            AND d.station_no = r.station_no
-            AND d.reporting_date = r.report_date
-            AND d.craft_seq = r.craft_seq
-            AND d.tenant_code = r.tenant_code
-            AND d.product_code = r.product_code
-            AND d.color_name = r.color_name
-            AND d.size_name = r.size_name
+            ON COALESCE(d.produce_order_code, '__NULL_STR__') = COALESCE(r.produce_order_code, '__NULL_STR__')
+            AND COALESCE(d.work_shop_id, -9999) = COALESCE(r.work_shop_id, -9999)
+            AND COALESCE(d.process_version_id, -9999) = COALESCE(r.process_version_id, -9999)
+            AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
+            AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
+            AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
+            AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
+            AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
+            AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
+            AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
+            AND COALESCE(d.craft_seq, '__NULL_STR__') = COALESCE(r.craft_seq, '__NULL_STR__')
+            AND COALESCE(d.tenant_code, '__NULL_STR__') = COALESCE(r.tenant_code, '__NULL_STR__')
+            AND COALESCE(d.product_code, '__NULL_STR__') = COALESCE(r.product_code, '__NULL_STR__')
+            AND COALESCE(d.color_name, '__NULL_STR__') = COALESCE(r.color_name, '__NULL_STR__')
+            AND COALESCE(d.size_name, '__NULL_STR__') = COALESCE(r.size_name, '__NULL_STR__')
         WHERE d.total_qty IS DISTINCT FROM r.number
         ORDER BY check_status, produce_order_code
         """
@@ -268,22 +322,40 @@ def check_worker_output_sfd():
     # 对每个日期范围执行稽核
     for start_date, end_date, range_name in date_ranges:
         result.add_info(f"\n稽核日期范围: {range_name} ({start_date} 至 {end_date})")
-        
+
         # 计算时间范围
         start_datetime = f"{start_date} 00:00:00"
         end_datetime = f"{end_date} 23:59:59"
-        
-        # 构建缓存表名（使用开始日期的年份和月份）
-        year = start_date.split('-')[0]
-        month = int(start_date.split('-')[1])
-        cache_table = f"produce_mes_reporting_work_cache_{year}_{month}"
-        
+
+        # 枚举日期范围覆盖的所有月份（跨月时最多2张表），构建 UNION ALL 子查询
+        cache_months = get_cache_table_months(start_date, end_date)
+        cache_union = build_cache_union_subquery(
+            schema, cache_months,
+            select_columns='''"total",
+        "produce_order_code",
+        "work_shop_id",
+        "process_version_id",
+        "section_id",
+        "line_id",
+        "user_line_id",
+        "produce_process_name",
+        "staff_id",
+        "station_no",
+        "reporting_date",
+        "craft_seq",
+        "tenant_code",
+        "product_code",
+        "color_name",
+        "size_name"''',
+            where_clause=f"WHERE \"reporting_work_date\" BETWEEN '{start_datetime}' AND '{end_datetime}'"
+        )
+
         # 稽核脚本：比较明细汇总与报表数据是否一致（包含颜色尺码）
         sql = f"""
 -- 稽核脚本：比较明细汇总与工人产量报表数据是否一致
-WITH 
+WITH
 detail_summary AS (
-    SELECT 
+    SELECT
         SUM("total") AS total_qty,
         "produce_order_code"   AS produce_order_code,
         "work_shop_id"         AS work_shop_id,
@@ -300,9 +372,8 @@ detail_summary AS (
         "product_code"         AS product_code,
         "color_name"           AS color_name,
         "size_name"            AS size_name
-     FROM {schema}.{cache_table} 
-     WHERE "reporting_work_date" BETWEEN '{start_datetime}' AND '{end_datetime}' 
-    GROUP BY 
+     FROM {cache_union}
+    GROUP BY
         "tenant_code", 
         "produce_order_code",
         "produce_process_name",
@@ -339,7 +410,7 @@ report_data AS (
         color_name,
         size_name
     FROM {schema}.sfd_repo_mes_sfd_user_process_output_report
-    WHERE report_date between '{start_date}' and '{end_date}'
+    WHERE report_date between '{start_date}' and '{end_date}' and is_deleted = 0
     GROUP BY 
         produce_order_code,
         work_shop_id,
@@ -384,21 +455,21 @@ SELECT
     END AS check_status
 FROM detail_summary d
 FULL OUTER JOIN report_data r
-    ON d.produce_order_code = r.produce_order_code
-    AND d.work_shop_id = r.work_shop_id
-    AND d.process_version_id = r.process_version_id
-    AND d.section_id = r.produce_section_id
-    AND d.line_id = r.line_id
-    AND d.user_line_id = r.user_line_id
-    AND d.produce_process_name = r.produce_process_name
-    AND d.staff_id = r.staff_id
-    AND d.station_no = r.station_no
-    AND d.reporting_date = r.report_date
-    AND d.craft_seq = r.craft_seq
-    AND d.tenant_code = r.tenant_code
-    AND d.product_code = r.product_code
-    AND d.color_name = r.color_name
-    AND d.size_name = r.size_name
+    ON COALESCE(d.produce_order_code, '__NULL_STR__') = COALESCE(r.produce_order_code, '__NULL_STR__')
+    AND COALESCE(d.work_shop_id, -9999) = COALESCE(r.work_shop_id, -9999)
+    AND COALESCE(d.process_version_id, -9999) = COALESCE(r.process_version_id, -9999)
+    AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
+    AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
+    AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
+    AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
+    AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
+    AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
+    AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
+    AND COALESCE(d.craft_seq, '__NULL_STR__') = COALESCE(r.craft_seq, '__NULL_STR__')
+    AND COALESCE(d.tenant_code, '__NULL_STR__') = COALESCE(r.tenant_code, '__NULL_STR__')
+    AND COALESCE(d.product_code, '__NULL_STR__') = COALESCE(r.product_code, '__NULL_STR__')
+    AND COALESCE(d.color_name, '__NULL_STR__') = COALESCE(r.color_name, '__NULL_STR__')
+    AND COALESCE(d.size_name, '__NULL_STR__') = COALESCE(r.size_name, '__NULL_STR__')
 WHERE d.total_qty IS DISTINCT FROM r.number   -- 只过滤有差异的记录（包括某一方缺失）
 ORDER BY check_status, produce_order_code;
         """
@@ -462,20 +533,36 @@ def check_worker_output_without_color_size():
     # 对每个日期范围执行稽核
     for start_date, end_date, range_name in date_ranges:
         result.add_info(f"\n稽核日期范围: {range_name} ({start_date} 至 {end_date})")
-        
+
         # 计算时间范围
         start_datetime = f"{start_date} 00:00:00"
         end_datetime = f"{end_date} 23:59:59"
-        
-        # 构建缓存表名（使用开始日期的年份和月份）
-        year = start_date.split('-')[0]
-        month = int(start_date.split('-')[1])
-        cache_table = f"produce_mes_reporting_work_cache_{year}_{month}"
-        
+
+        # 枚举日期范围覆盖的所有月份（跨月时最多2张表），构建 UNION ALL 子查询
+        cache_months = get_cache_table_months(start_date, end_date)
+        cache_union = build_cache_union_subquery(
+            schema, cache_months,
+            select_columns='''"total",
+                "produce_order_code",
+                "work_shop_id",
+                "process_version_id",
+                "section_id",
+                "line_id",
+                "user_line_id",
+                "produce_process_name",
+                "staff_id",
+                "station_no",
+                "reporting_date",
+                "craft_seq",
+                "tenant_code",
+                "product_code"''',
+            where_clause=f"WHERE \"reporting_work_date\" BETWEEN '{start_datetime}' AND '{end_datetime}'"
+        )
+
         # 稽核脚本：比较明细汇总与报表数据是否一致（不包含颜色尺码）
         sql = f"""
-        WITH 
-        -- 明细汇总结果（来自缓存表）
+        WITH
+        -- 明细汇总结果（来自缓存表，跨月时UNION多张分表后按维度去重）
         detail_summary AS (
             SELECT
                 SUM("total") AS total_qty,
@@ -492,8 +579,7 @@ def check_worker_output_without_color_size():
                 "craft_seq"            AS craft_seq,
                 "tenant_code"          AS tenant_code,
                 "product_code"         AS product_code
-            FROM {schema}.{cache_table}
-            WHERE "reporting_work_date" BETWEEN '{start_datetime}' AND '{end_datetime}'
+            FROM {cache_union}
             GROUP BY
                 "tenant_code",
                 "produce_order_code",
@@ -527,7 +613,7 @@ def check_worker_output_without_color_size():
                 tenant_code,
                 product_code
             FROM {schema}.report_mes_user_process_output_cache
-            WHERE report_date BETWEEN '{start_date}' AND '{end_date}'
+            WHERE report_date BETWEEN '{start_date}' AND '{end_date}' and is_deleted = 0
             GROUP BY
                 produce_order_code,
                 work_shop_id,
@@ -568,19 +654,19 @@ def check_worker_output_without_color_size():
             END AS check_status
         FROM detail_summary d
         FULL OUTER JOIN report_data r
-            ON d.produce_order_code = r.produce_order_code
-            AND d.work_shop_id = r.work_shop_id
-            AND d.process_version_id = r.process_version_id
-            AND d.section_id = r.produce_section_id
-            AND d.line_id = r.line_id
-            AND d.user_line_id = r.user_line_id
-            AND d.produce_process_name = r.produce_process_name
-            AND d.staff_id = r.staff_id
-            AND d.station_no = r.station_no
-            AND d.reporting_date = r.report_date
-            AND d.craft_seq = r.craft_seq
-            AND d.tenant_code = r.tenant_code
-            AND d.product_code = r.product_code
+            ON COALESCE(d.produce_order_code, '__NULL_STR__') = COALESCE(r.produce_order_code, '__NULL_STR__')
+            AND COALESCE(d.work_shop_id, -9999) = COALESCE(r.work_shop_id, -9999)
+            AND COALESCE(d.process_version_id, -9999) = COALESCE(r.process_version_id, -9999)
+            AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
+            AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
+            AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
+            AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
+            AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
+            AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
+            AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
+            AND COALESCE(d.craft_seq, '__NULL_STR__') = COALESCE(r.craft_seq, '__NULL_STR__')
+            AND COALESCE(d.tenant_code, '__NULL_STR__') = COALESCE(r.tenant_code, '__NULL_STR__')
+            AND COALESCE(d.product_code, '__NULL_STR__') = COALESCE(r.product_code, '__NULL_STR__')
         WHERE d.total_qty IS DISTINCT FROM r.number
         ORDER BY check_status, produce_order_code
         """
@@ -655,13 +741,15 @@ def check_mes_hanging():
         # 计算时间范围
         start_datetime = f"{start_date} 00:00:00"
         end_datetime = f"{end_date} 23:59:59"
-        
-        # 生成缓存表名（使用开始日期的年份和月份）
-        year = start_date.split('-')[0]
-        month = int(start_date.split('-')[1])
-        cache_table = f"produce_mes_reporting_work_cache_{year}_{month}"
-        full_table_name = f"{schema}.{cache_table}"
-        
+
+        # 枚举日期范围覆盖的所有月份（跨月时最多2张表），构建 UNION ALL 子查询
+        cache_months = get_cache_table_months(start_date, end_date)
+        cache_union = build_cache_union_subquery(
+            schema, cache_months,
+            select_columns='"total"',
+            where_clause=f"WHERE reporting_work_date BETWEEN '{start_datetime}' AND '{end_datetime}' AND type = 1"
+        )
+
         # 从吊挂数据库查询
         sql1 = f"""
         SELECT COUNT(*), COALESCE(SUM(garments), 0)
@@ -686,12 +774,10 @@ def check_mes_hanging():
                 count1 = float(row1[0]) if row1 else 0
                 sum1 = float(row1[1]) if row1 else 0
         
-        # 从MES数据库查询
+        # 从MES数据库查询（跨月时对多张分表UNION后再聚合）
         sql2 = f"""
         SELECT COUNT(*), COALESCE(SUM(total), 0)
-        FROM {full_table_name}
-        WHERE reporting_work_date BETWEEN '{start_datetime}' AND '{end_datetime}'
-        AND type = 1
+        FROM {cache_union}
         """
         
         columns2, rows2 = execute_sql(mes_config['type'], mes_config, sql2)
