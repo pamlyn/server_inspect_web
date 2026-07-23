@@ -316,3 +316,180 @@ def derive_status(results):
     if has_warning:
         return 'warning'
     return 'success'
+
+
+# ===================== 日志查询/删除接口 =====================
+
+# 列表查询所需字段（不含 result，列表轻量化）
+_LIST_COLUMNS = [
+    'id', 'inspection_id', 'inspection_type', 'trigger_source', 'target',
+    'operator', 'status', 'record_count', 'start_time', 'end_time',
+    'duration', 'summary', 'created_at',
+]
+
+
+def _connect_dict(db_type, db_config):
+    """建立返回 dict 行的连接：PG 用 RealDictCursor，MySQL 用 DictCursor。"""
+    import psycopg2
+    import psycopg2.extras
+    import pymysql
+
+    if db_type == 'postgresql':
+        conn = psycopg2.connect(
+            host=db_config['host'], port=db_config['port'],
+            user=db_config['user'], password=db_config['password'],
+            database=db_config['database'],
+            options='-c password_encryption=md5'
+        )
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    elif db_type == 'mysql':
+        conn = pymysql.connect(
+            host=db_config['host'], port=db_config['port'],
+            user=db_config['user'], password=db_config['password'],
+            database=db_config['database'],
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = conn.cursor()
+    else:
+        raise ValueError("不支持的数据库类型")
+    return conn, cursor
+
+
+def _row_to_plain_dict(row):
+    """把 PG RealDictRow / MySQL dict 转成普通 dict，并确保可 JSON 序列化。"""
+    if row is None:
+        return None
+    d = dict(row) if not isinstance(row, dict) else dict(row)
+    return d
+
+
+def query_inspection_logs(db_type, db_config, filters=None, page=1, page_size=20):
+    """分页查询巡检日志列表。
+
+    :param filters: dict, 支持字段:
+        inspection_type, trigger_source, status, operator, target(模糊),
+        keyword(summary/target 模糊), start_time, end_time
+    :return: (logs: list[dict], total: int)
+    """
+    filters = filters or {}
+    conn = None
+    cursor = None
+    try:
+        conn, cursor = _connect_dict(db_type, db_config)
+
+        where_parts = []
+        params = []
+
+        def _like(v):
+            return f'%{v}%'
+
+        for field in ('inspection_type', 'trigger_source', 'status', 'operator'):
+            val = filters.get(field)
+            if val:
+                where_parts.append(f'{field} = %s')
+                params.append(val)
+
+        if filters.get('target'):
+            where_parts.append('target LIKE %s')
+            params.append(_like(filters['target']))
+
+        if filters.get('keyword'):
+            where_parts.append('(summary LIKE %s OR target LIKE %s)')
+            params.extend([_like(filters['keyword']), _like(filters['keyword'])])
+
+        if filters.get('start_time'):
+            where_parts.append('start_time >= %s')
+            params.append(filters['start_time'])
+        if filters.get('end_time'):
+            where_parts.append('start_time <= %s')
+            params.append(filters['end_time'])
+
+        where_clause = (' WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
+
+        # 计算总数
+        cursor.execute(f'SELECT COUNT(*) AS cnt FROM inspection_logs{where_clause}', params)
+        count_row = cursor.fetchone()
+        total = 0
+        if count_row is not None:
+            # PG RealDictRow 支持 .get；MySQL dict 也支持；tuple 走索引
+            if hasattr(count_row, 'get'):
+                total = count_row.get('cnt') or count_row.get(0) or 0
+            else:
+                total = count_row[0]
+        total = int(total) if total is not None else 0
+
+        # 分页查询列表（不含 result，避免列表过大）
+        offset = max(0, (page - 1) * page_size)
+        col_list = ', '.join(_LIST_COLUMNS)
+        order_field = 'created_at' if db_type == 'mysql' else 'created_at'
+        sql = (
+            f'SELECT {col_list} FROM inspection_logs{where_clause} '
+            f'ORDER BY {order_field} DESC LIMIT %s OFFSET %s'
+        )
+        cursor.execute(sql, params + [page_size, offset])
+        rows = cursor.fetchall()
+
+        logs = []
+        for row in rows:
+            logs.append(_row_to_plain_dict(row))
+        return logs, total
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def get_inspection_log_detail(db_type, db_config, log_id):
+    """查询单条日志详情（含 result、error）。"""
+    conn = None
+    cursor = None
+    try:
+        conn, cursor = _connect_dict(db_type, db_config)
+        cursor.execute('SELECT * FROM inspection_logs WHERE id = %s', (log_id,))
+        row = cursor.fetchone()
+        return _row_to_plain_dict(row)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def delete_inspection_logs(db_type, db_config, before_date=None, keep_days=None):
+    """删除日志：按 before_date（早于该日期）或 keep_days（保留最近 N 天）。
+
+    :return: 删除行数
+    """
+    conn = None
+    cursor = None
+    try:
+        conn, cursor = _connect_dict(db_type, db_config)
+        params = []
+        if before_date:
+            where = 'WHERE created_at < %s'
+            params.append(before_date)
+        elif keep_days:
+            import datetime as _dt
+            threshold = _dt.datetime.now() - _dt.timedelta(days=int(keep_days))
+            where = 'WHERE created_at < %s'
+            params.append(threshold)
+        else:
+            where = ''
+        sql = f'DELETE FROM inspection_logs {where}'
+        cursor.execute(sql, params)
+        deleted = cursor.rowcount
+        conn.commit()
+        return deleted
+    except Exception:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

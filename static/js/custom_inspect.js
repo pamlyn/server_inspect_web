@@ -11,6 +11,7 @@
 
 let currentSelectedScriptName = '';
 let currentRules = [];
+let currentCrossDbConfig = { compare_type: 'full_outer', dimension_columns: [], compare_columns: [] };
 let customScriptColumns = [];
 let customScriptRows = [];
 let allCustomScripts = [];
@@ -134,11 +135,32 @@ function clearScriptForm() {
     crossDbConfig.classList.add('hidden');
     customScriptContent.parentElement.classList.remove('hidden');
 
+    // 重置跨库配置区块的显隐（单库时隐藏规则+跨库配置，跨库时相反）
+    toggleCrossDbSections('single_db');
+
     currentVariables = [];
     renderVariables();
 
     currentRules = [];
     renderRulesConfig();
+
+    currentCrossDbConfig = { compare_type: 'full_outer', dimension_columns: [], compare_columns: [] };
+    renderCrossDbConfig();
+}
+
+// ========== 跨库配置区块显隐切换 ==========
+
+function toggleCrossDbSections(mode) {
+    // 跨库配置区块（custom_script.html 中的 #crossDbCompareConfig）
+    const crossDbCompareConfig = document.getElementById('crossDbCompareConfig');
+    // 规则配置区块（仅单库适用）
+    const ruleConfigWrap = document.getElementById('ruleConfigWrap');
+    if (crossDbCompareConfig) {
+        crossDbCompareConfig.classList.toggle('hidden', mode !== 'cross_db');
+    }
+    if (ruleConfigWrap) {
+        ruleConfigWrap.classList.toggle('hidden', mode === 'cross_db');
+    }
 }
 
 function loadDatabaseOptions() {
@@ -1071,6 +1093,7 @@ window.editScript = function (scriptId) {
                     crossDbConfig.classList.remove('hidden');
                     customScriptContent.parentElement.classList.add('hidden');
                 }
+                toggleCrossDbSections(mode);
 
                 // Load variables
                 currentVariables = data.script.variables || [];
@@ -1079,6 +1102,11 @@ window.editScript = function (scriptId) {
                 // Load rules
                 currentRules = data.script.rules || [];
                 renderRulesConfig();
+
+                // Load cross-db config
+                currentCrossDbConfig = data.script.cross_db_config ||
+                    { compare_type: 'full_outer', dimension_columns: [], compare_columns: [] };
+                renderCrossDbConfig();
             }
         })
         .catch(error => {
@@ -1111,7 +1139,7 @@ window.deleteScript = async function (scriptId) {
 
 // ========== Show test script result ==========
 
-function showTestScriptResult(result, rules) {
+function showTestScriptResult(result, rules, mode) {
     const resultDiv = document.getElementById('testScriptResult');
     const headerEl = document.getElementById('testScriptResultHeader');
     const bodyEl = document.getElementById('testScriptResultBody');
@@ -1120,22 +1148,41 @@ function showTestScriptResult(result, rules) {
     headerEl.innerHTML = '';
     bodyEl.innerHTML = '';
 
-    if (!result || !result.columns || !result.rows || result.rows.length === 0) {
+    const isCrossDb = mode === 'cross_db' || (result && result.summary !== undefined);
+
+    // 跨库对比：展示 summary 统计
+    if (isCrossDb && result && result.summary) {
+        const s = result.summary;
+        const consistent = s.consistent || 0;
+        const inconsistent = s.inconsistent || 0;
+        const onlySource = s.only_source || 0;
+        const onlyTarget = s.only_target || 0;
+        countEl.innerHTML = `<span class="font-medium">共 ${s.total || 0} 条</span> ·
+            <span class="text-green-600">一致 ${consistent}</span> ·
+            <span class="text-red-600">不一致 ${inconsistent}</span> ·
+            <span class="text-orange-600">仅源库 ${onlySource}</span> ·
+            <span class="text-orange-600">仅目标库 ${onlyTarget}</span>`;
+    } else if (!result || !result.columns || !result.rows || result.rows.length === 0) {
         bodyEl.innerHTML = '<tr><td colspan="100" class="px-4 py-8 text-center text-sm text-gray-500">查询结果为空</td></tr>';
         countEl.textContent = '共 0 条记录';
         resultDiv.classList.remove('hidden');
         return;
+    } else {
+        countEl.textContent = `共 ${result.rows.length} 条记录`;
     }
 
     const columns = result.columns;
-    const rows = result.rows;
+    const rows = result.rows || [];
+
+    // 跨库模式下「状态」列已包含在 columns 中，按其值着色
+    const statusColIndex = isCrossDb ? columns.indexOf('状态') : -1;
 
     // Render header
     let headerHtml = '<tr>';
     columns.forEach(col => {
         headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col}</th>`;
     });
-    if (rules && rules.length > 0) {
+    if (!isCrossDb && rules && rules.length > 0) {
         headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
     }
     headerHtml += '</tr>';
@@ -1144,10 +1191,19 @@ function showTestScriptResult(result, rules) {
     // Render body
     let bodyHtml = '';
     rows.forEach((row, index) => {
-        const status = rules && rules.length > 0 ? evaluateRecordStatus(row, columns, rules) : '';
-        const statusClass = status === '异常' ? 'bg-red-50' : status === '正常' ? 'bg-green-50' : '';
+        let rowStatus = '';
+        let rowBgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
 
-        bodyHtml += `<tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${statusClass} hover:bg-gray-100 transition-colors">`;
+        if (isCrossDb && statusColIndex >= 0) {
+            const rawStatus = Array.isArray(row) ? row[statusColIndex] : row['状态'];
+            rowStatus = String(rawStatus || '');
+            rowBgClass = crossDbStatusBg(rowStatus);
+        } else if (!isCrossDb && rules && rules.length > 0) {
+            rowStatus = evaluateRecordStatus(row, columns, rules);
+            rowBgClass = rowStatus === '异常' ? 'bg-red-50' : rowStatus === '正常' ? 'bg-green-50' : rowBgClass;
+        }
+
+        bodyHtml += `<tr class="${rowBgClass} hover:bg-gray-100 transition-colors">`;
         columns.forEach((col, colIndex) => {
             let cellValue = '';
             if (Array.isArray(row)) {
@@ -1155,53 +1211,99 @@ function showTestScriptResult(result, rules) {
             } else {
                 cellValue = row[col] !== null && row[col] !== undefined ? row[col] : '';
             }
-            bodyHtml += `<td class="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">${cellValue}</td>`;
+            // 跨库模式下「状态」列渲染为徽章
+            if (isCrossDb && col === '状态') {
+                bodyHtml += `<td class="px-4 py-3 text-sm whitespace-nowrap">${crossDbStatusBadge(cellValue)}</td>`;
+            } else {
+                bodyHtml += `<td class="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">${cellValue}</td>`;
+            }
         });
-        if (rules && rules.length > 0) {
-            const statusBadgeClass = status === '异常'
+        if (!isCrossDb && rules && rules.length > 0) {
+            const statusBadgeClass = rowStatus === '异常'
                 ? 'bg-red-100 text-red-600'
-                : status === '正常'
+                : rowStatus === '正常'
                     ? 'bg-green-100 text-green-600'
                     : 'bg-gray-100 text-gray-600';
             bodyHtml += `<td class="px-4 py-3 text-sm whitespace-nowrap">
-                <span class="px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass}">${status}</span>
+                <span class="px-2 py-1 rounded-full text-xs font-medium ${statusBadgeClass}">${rowStatus}</span>
             </td>`;
         }
         bodyHtml += '</tr>';
     });
     bodyEl.innerHTML = bodyHtml;
 
-    countEl.textContent = `共 ${rows.length} 条记录`;
     resultDiv.classList.remove('hidden');
+}
+
+// ========== Cross-db status styling helpers ==========
+
+function crossDbStatusBg(status) {
+    if (status === '不一致') return 'bg-red-50';
+    if (status === '仅源库存在' || status === '仅目标库存在') return 'bg-orange-50';
+    if (status === '一致') return 'bg-green-50';
+    return '';
+}
+
+function crossDbStatusBadge(status) {
+    let cls = 'bg-gray-100 text-gray-600';
+    if (status === '不一致') cls = 'bg-red-100 text-red-600';
+    else if (status === '仅源库存在' || status === '仅目标库存在') cls = 'bg-orange-100 text-orange-600';
+    else if (status === '一致') cls = 'bg-green-100 text-green-600';
+    return `<span class="px-2 py-1 rounded-full text-xs font-medium ${cls}">${status}</span>`;
 }
 
 // ========== Render custom script result ==========
 
-function renderCustomScriptResult(columns, rows) {
+function renderCustomScriptResult(columns, rows, mode, summary, isConsistent) {
     const headerEl = document.getElementById('customScriptResultHeader');
     const bodyEl = document.getElementById('customScriptResultBody');
 
     const currentScript = allCustomScripts.find(s => s.id === selectedScriptId);
     const rules = currentScript ? currentScript.rules : [];
+    const isCrossDb = mode === 'cross_db' || (summary !== undefined);
+    const statusColIndex = isCrossDb ? columns.indexOf('状态') : -1;
+
+    // 跨库模式展示一致性结论
+    const resultHeader = document.getElementById('customScriptResult')?.querySelector('h3');
+    if (isCrossDb && resultHeader && summary) {
+        const s = summary;
+        const conclusion = isConsistent
+            ? `<span class="text-green-600"><i class="fa fa-check-circle mr-1"></i>跨库对比一致</span>`
+            : `<span class="text-red-600"><i class="fa fa-exclamation-circle mr-1"></i>跨库对比存在差异</span>`;
+        resultHeader.innerHTML = `稽核结果 · ${conclusion}
+            <span class="text-xs font-normal text-gray-500 ml-2">
+            一致 ${s.consistent || 0} / 不一致 ${s.inconsistent || 0} / 仅源库 ${s.only_source || 0} / 仅目标库 ${s.only_target || 0}</span>`;
+    }
 
     // Render header
     let headerHtml = '<tr>';
     columns.forEach(col => {
         headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col}</th>`;
     });
-    headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
+    if (!isCrossDb) {
+        headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
+    }
     headerHtml += '</tr>';
     headerEl.innerHTML = headerHtml;
 
     // Render body
     let bodyHtml = '';
     if (rows.length === 0) {
-        bodyHtml = `<tr><td colspan="${columns.length + 1}" class="px-4 py-4 text-center text-sm text-gray-500">暂无数据</td></tr>`;
+        bodyHtml = `<tr><td colspan="${columns.length + (isCrossDb ? 0 : 1)}" class="px-4 py-4 text-center text-sm text-gray-500">暂无数据</td></tr>`;
     } else {
         rows.forEach(row => {
-            const status = evaluateRecordStatus(row, columns, rules);
-            const statusClass = status === '正常' ? 'bg-green-50' : 'bg-red-50';
-            const statusTextClass = status === '正常' ? 'text-green-700' : 'text-red-700';
+            let status = '';
+            let statusClass = 'hover:bg-gray-50';
+            let statusTextClass = 'text-gray-700';
+
+            if (isCrossDb && statusColIndex >= 0) {
+                status = String((Array.isArray(row) ? row[statusColIndex] : row['状态']) || '');
+                statusClass = crossDbStatusBg(status);
+            } else {
+                status = evaluateRecordStatus(row, columns, rules);
+                statusClass = status === '正常' ? 'bg-green-50' : 'bg-red-50';
+                statusTextClass = status === '正常' ? 'text-green-700' : 'text-red-700';
+            }
 
             bodyHtml += `<tr class="hover:bg-gray-50 ${statusClass}">`;
             columns.forEach((col, colIndex) => {
@@ -1218,9 +1320,15 @@ function renderCustomScriptResult(columns, rows) {
                         value = value.toString();
                     }
                 }
-                bodyHtml += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">${value}</td>`;
+                if (isCrossDb && col === '状态') {
+                    bodyHtml += `<td class="px-4 py-2 text-sm whitespace-nowrap">${crossDbStatusBadge(value)}</td>`;
+                } else {
+                    bodyHtml += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">${value}</td>`;
+                }
             });
-            bodyHtml += `<td class="px-4 py-2 text-sm ${statusTextClass} whitespace-nowrap font-medium">${status}</td>`;
+            if (!isCrossDb) {
+                bodyHtml += `<td class="px-4 py-2 text-sm ${statusTextClass} whitespace-nowrap font-medium">${status}</td>`;
+            }
             bodyHtml += '</tr>';
         });
     }
@@ -1396,6 +1504,123 @@ window.removeRule = function (index) {
     }
 };
 
+// ========== Cross-db compare config rendering (for script editing form) ==========
+
+function renderCrossDbConfig() {
+    const container = document.getElementById('crossDbCompareFields');
+    if (!container) return;
+
+    const cfg = currentCrossDbConfig || {};
+    if (!cfg.compare_type) cfg.compare_type = 'full_outer';
+    if (!Array.isArray(cfg.dimension_columns)) cfg.dimension_columns = [];
+    if (!Array.isArray(cfg.compare_columns)) cfg.compare_columns = [];
+
+    container.innerHTML = `
+        <div class="mb-3">
+            <label class="block text-xs text-gray-500 mb-1">对比类型</label>
+            <select id="crossDbCompareType" class="w-full px-2 py-1 text-sm border rounded">
+                <option value="full_outer" ${cfg.compare_type === 'full_outer' ? 'selected' : ''}>全外连接（不一致 + 仅单库数据）</option>
+                <option value="diff_only" ${cfg.compare_type === 'diff_only' ? 'selected' : ''}>仅不一致数据</option>
+                <option value="missing_only" ${cfg.compare_type === 'missing_only' ? 'selected' : ''}>仅单库缺失数据</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="block text-xs text-gray-500 mb-1">维度列（多列用逗号分隔，两库 SQL 都需 SELECT 这些列）</label>
+            <input type="text" id="crossDbDimensionColumns" placeholder="例如：produce_order_code, work_procedure_code"
+                value="${(cfg.dimension_columns || []).join(', ')}"
+                class="w-full px-2 py-1 text-sm border rounded">
+            <p class="text-xs text-gray-400 mt-1">用于两库数据对齐，相同维度的数据会逐行比较</p>
+        </div>
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs text-gray-500">对比列（需比较是否一致的数值列，可配置容差）</label>
+                <button type="button" id="addCompareColumnBtn"
+                    class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-all">
+                    <i class="fa fa-plus mr-1"></i>添加对比列
+                </button>
+            </div>
+            <div id="compareColumnsList" class="space-y-2"></div>
+            <p class="text-xs text-gray-400 mt-1">容差：两库数值差值在容差内视为一致（避免浮点误差），如填 0.01 则相差 0.01 以内算一致</p>
+        </div>
+    `;
+
+    // 渲染对比列
+    const listEl = document.getElementById('compareColumnsList');
+    listEl.innerHTML = '';
+    if (cfg.compare_columns.length === 0) {
+        listEl.innerHTML = '<p class="text-xs text-gray-500">暂无对比列，仅对比维度是否存在（用于查找单库缺失数据）</p>';
+    } else {
+        cfg.compare_columns.forEach((col, index) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center space-x-2';
+            row.innerHTML = `
+                <input type="text" placeholder="列名，例如：total_count" value="${col.name || ''}"
+                    data-index="${index}" data-field="name"
+                    class="flex-1 px-2 py-1 text-sm border rounded crossdb-compare-input">
+                <input type="number" step="any" placeholder="容差" value="${col.tolerance !== undefined ? col.tolerance : 0}"
+                    data-index="${index}" data-field="tolerance"
+                    class="w-24 px-2 py-1 text-sm border rounded crossdb-compare-input">
+                <button type="button" class="p-1 text-red-500 hover:bg-red-50 rounded" onclick="window.removeCompareColumn(${index})"><i class="fa fa-trash"></i></button>
+            `;
+            listEl.appendChild(row);
+        });
+    }
+
+    // 绑定事件
+    const compareTypeEl = document.getElementById('crossDbCompareType');
+    if (compareTypeEl) {
+        compareTypeEl.addEventListener('change', function () {
+            currentCrossDbConfig.compare_type = this.value;
+        });
+    }
+    const dimEl = document.getElementById('crossDbDimensionColumns');
+    if (dimEl) {
+        dimEl.addEventListener('change', function () {
+            currentCrossDbConfig.dimension_columns = this.value
+                .split(',').map(s => s.trim()).filter(Boolean);
+        });
+    }
+    const addBtn = document.getElementById('addCompareColumnBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            currentCrossDbConfig.compare_columns.push({ name: '', tolerance: 0 });
+            renderCrossDbConfig();
+        });
+    }
+    listEl.querySelectorAll('.crossdb-compare-input').forEach(input => {
+        input.addEventListener('change', function () {
+            const index = parseInt(this.dataset.index);
+            const field = this.dataset.field;
+            if (currentCrossDbConfig.compare_columns[index]) {
+                if (field === 'tolerance') {
+                    currentCrossDbConfig.compare_columns[index].tolerance = parseFloat(this.value) || 0;
+                } else {
+                    currentCrossDbConfig.compare_columns[index][field] = this.value.trim();
+                }
+            }
+        });
+    });
+}
+
+window.removeCompareColumn = function (index) {
+    if (currentCrossDbConfig.compare_columns[index]) {
+        currentCrossDbConfig.compare_columns.splice(index, 1);
+        renderCrossDbConfig();
+    }
+};
+
+function collectCrossDbConfig() {
+    // 确保从 DOM 收集最新值（input change 已同步到 currentCrossDbConfig，这里做一次清洗）
+    const cfg = currentCrossDbConfig || {};
+    cfg.compare_type = cfg.compare_type || 'full_outer';
+    if (typeof cfg.dimension_columns === 'string') {
+        cfg.dimension_columns = cfg.dimension_columns.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    cfg.dimension_columns = (cfg.dimension_columns || []).filter(Boolean);
+    cfg.compare_columns = (cfg.compare_columns || []).filter(c => c && c.name);
+    return cfg;
+}
+
 // ========== DOMContentLoaded Setup ==========
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -1425,6 +1650,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 crossDbConfig.classList.remove('hidden');
                 customScriptContent.parentElement.classList.add('hidden');
             }
+            toggleCrossDbSections(mode);
         });
     }
 
@@ -1468,6 +1694,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 requestData.target_sql = document.getElementById('customScriptTargetSql').value;
                 if (!requestData.source_sql || !requestData.target_sql) {
                     showToast('请输入源数据库和目标数据库SQL', 'warning');
+                    return;
+                }
+                requestData.cross_db_config = collectCrossDbConfig();
+                if (!requestData.cross_db_config.dimension_columns.length) {
+                    showToast('跨库对比需配置至少一个维度列', 'warning');
                     return;
                 }
             }
@@ -1567,6 +1798,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 requestData.target_db = targetDb;
                 requestData.source_sql = sourceSql;
                 requestData.target_sql = targetSql;
+                requestData.cross_db_config = collectCrossDbConfig();
+                if (!requestData.cross_db_config.dimension_columns.length) {
+                    showToast('跨库对比需配置至少一个维度列', 'warning');
+                    return;
+                }
             }
 
             fetch('/api/test_custom_script', {
@@ -1577,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        showTestScriptResult(data.result, rules);
+                        showTestScriptResult(data.result, rules, mode);
                     } else {
                         showToast('脚本测试失败: ' + (data.error || '未知错误'), 'error');
                     }
@@ -1711,7 +1947,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         customScriptColumns = data.columns;
                         customScriptRows = data.rows;
 
-                        renderCustomScriptResult(data.columns, data.rows);
+                        const mode = currentScript?.mode || 'single_db';
+                        renderCustomScriptResult(data.columns, data.rows, mode, data.summary, data.is_consistent);
 
                         document.getElementById('exportCustomScriptBtn').classList.remove('hidden');
                         document.getElementById('customScriptResult').classList.remove('hidden');

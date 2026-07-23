@@ -97,7 +97,7 @@
             </div>
         </div>
         <!-- 规则配置 -->
-        <div>
+        <div id="ruleConfigWrap">
             <div class="flex items-center justify-between mb-2">
                 <label class="block text-xs font-medium text-gray-600">规则配置</label>
                 <button type="button" id="addRuleBtnConfig"
@@ -110,6 +110,16 @@
             <div id="rulesListConfig" class="space-y-2">
                 <!-- 规则列表将通过JavaScript动态生成 -->
             </div>
+        </div>
+        <!-- 跨库对比配置（仅跨库模式显示） -->
+        <div id="crossDbCompareConfig" class="hidden border-t border-gray-100 pt-4">
+            <div class="flex items-center mb-3">
+                <i class="fa fa-exchange mr-2" style="color: var(--primary-color);"></i>
+                <label class="block text-xs font-medium text-gray-600">跨库对比配置</label>
+            </div>
+            <p class="text-xs text-gray-400 mb-3">
+                配置两库数据的对齐维度与对比列：相同维度的数据逐行比较，找出不一致或仅单库存在的数据</p>
+            <div id="crossDbCompareFields"></div>
         </div>
         <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">脚本内容</label>

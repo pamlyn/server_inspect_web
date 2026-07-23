@@ -1,0 +1,181 @@
+<div id="logContent" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
+                style="background: var(--primary-light);">
+                <i class="fa fa-history text-sm" style="color: var(--primary-color);"></i>
+            </div>
+            巡检日志
+        </h2>
+
+        <!-- 查询条件 -->
+        <div class="space-y-3 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">巡检类型</label>
+                    <select id="logFilterType"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="">全部</option>
+                        <option value="system">系统巡检</option>
+                        <option value="sql">SQL稽查</option>
+                        <option value="mes_hanging">MES吊挂稽核</option>
+                        <option value="custom_script">自定义稽核</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">触发来源</label>
+                    <select id="logFilterSource"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="">全部</option>
+                        <option value="manual">手动</option>
+                        <option value="scheduled">定时巡检</option>
+                        <option value="daily">日常巡检</option>
+                        <option value="real_time">实时监控</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">状态</label>
+                    <select id="logFilterStatus"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="">全部</option>
+                        <option value="success">正常</option>
+                        <option value="warning">告警</option>
+                        <option value="critical">严重</option>
+                        <option value="error">失败</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">操作人</label>
+                    <input type="text" id="logFilterOperator" placeholder="操作人"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="md:col-span-1">
+                    <label class="block text-xs text-gray-500 mb-1">关键词（对象/摘要）</label>
+                    <input type="text" id="logFilterKeyword" placeholder="输入关键词搜索对象或摘要"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">开始时间</label>
+                    <input type="datetime-local" id="logFilterStart"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">结束时间</label>
+                    <input type="datetime-local" id="logFilterEnd"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button id="logSearchBtn"
+                    class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium">
+                    <i class="fa fa-search mr-2"></i>查询
+                </button>
+                <button id="logResetBtn"
+                    class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-all text-sm font-medium">
+                    <i class="fa fa-undo mr-2"></i>重置
+                </button>
+                <button id="logClearBtn"
+                    class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-all text-sm font-medium ml-auto">
+                    <i class="fa fa-trash mr-2"></i>清理日志
+                </button>
+            </div>
+        </div>
+
+        <!-- 日志列表 -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">时间</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">来源</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">对象/摘要</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作人</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">记录数</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">耗时</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="logTableBody" class="bg-white divide-y divide-gray-200">
+                    <!-- 日志行将通过JavaScript动态生成 -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        <div id="logPagination" class="mt-4 flex items-center justify-between">
+            <span id="logPageInfo" class="text-xs text-gray-500"></span>
+            <div class="flex items-center space-x-2">
+                <button id="logPrevBtn" class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50" disabled>上一页</button>
+                <span id="logPageNum" class="text-sm text-gray-600">1</span>
+                <button id="logNextBtn" class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50" disabled>下一页</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志详情抽屉 -->
+<div id="logDetailDrawer" class="hidden fixed inset-0 z-50 flex justify-end">
+    <div id="logDetailOverlay" class="absolute inset-0 bg-black/40"></div>
+    <div class="relative w-full max-w-2xl bg-white shadow-2xl h-full overflow-y-auto flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                <i class="fa fa-file-text-o mr-2" style="color: var(--primary-color);"></i>
+                <span id="logDetailTitle">日志详情</span>
+            </h3>
+            <button id="logDetailCloseBtn" class="text-gray-400 hover:text-gray-600 text-xl">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+        <div id="logDetailContent" class="px-6 py-4 space-y-4">
+            <!-- 解析后的内容将通过JavaScript动态生成 -->
+        </div>
+    </div>
+</div>
+
+<!-- 清理日志弹窗 -->
+<div id="logClearModal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <h3 class="text-lg font-semibold text-gray-800">清理巡检日志</h3>
+        </div>
+        <div class="px-6 py-5 space-y-3">
+            <p class="text-sm text-gray-600">选择清理方式：</p>
+            <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="radio" name="logClearMode" value="keep_days" checked class="mr-3">
+                <div>
+                    <span class="text-sm font-medium text-gray-700">保留最近 N 天</span>
+                    <div class="mt-1">
+                        <input type="number" id="logClearKeepDays" value="30" min="1" max="3650"
+                            class="w-24 px-2 py-1 text-sm border border-gray-200 rounded">
+                        <span class="text-xs text-gray-500 ml-1">天</span>
+                    </div>
+                </div>
+            </label>
+            <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="radio" name="logClearMode" value="before_date" class="mr-3">
+                <div>
+                    <span class="text-sm font-medium text-gray-700">删除早于指定日期</span>
+                    <div class="mt-1">
+                        <input type="date" id="logClearBeforeDate"
+                            class="px-2 py-1 text-sm border border-gray-200 rounded">
+                    </div>
+                </div>
+            </label>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+            <button id="logClearCancelBtn" class="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">取消</button>
+            <button id="logClearConfirmBtn" class="px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg text-sm font-medium">确认清理</button>
+        </div>
+    </div>
+</div>

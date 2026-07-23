@@ -153,6 +153,7 @@ function hideAllContent() {
     const inspectionContent = document.getElementById('inspectionContent');
     const sqlInspectContent = document.getElementById('sqlInspectContent');
     const customInspectContent = document.getElementById('customInspectContent');
+    const logContent = document.getElementById('logContent');
     const arthasContent = document.getElementById('arthasContent');
 
     if (loading) loading.classList.add('hidden');
@@ -161,6 +162,7 @@ function hideAllContent() {
     if (inspectionContent) inspectionContent.classList.add('hidden');
     if (sqlInspectContent) sqlInspectContent.classList.add('hidden');
     if (customInspectContent) customInspectContent.classList.add('hidden');
+    if (logContent) logContent.classList.add('hidden');
     if (arthasContent) arthasContent.classList.add('hidden');
 }
 
@@ -271,6 +273,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.showSqlInspect();
             } else if (type === 'custom_inspect') {
                 window.showCustomInspect();
+            } else if (type === 'logs') {
+                window.showLogs();
             } else if (type === 'arthas') {
                 window.showArthas();
             } else {
@@ -342,6 +346,14 @@ window.showArthas = function () {
     hideAllContent();
     const arthasContent = document.getElementById('arthasContent');
     if (arthasContent) arthasContent.classList.remove('hidden');
+};
+
+window.showLogs = function () {
+    hideAllContent();
+    const results = document.getElementById('results');
+    const logContent = document.getElementById('logContent');
+    if (results) results.classList.remove('hidden');
+    if (logContent) logContent.classList.remove('hidden');
 };
 
 window.setActiveButton = setActiveButton;

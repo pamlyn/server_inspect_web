@@ -9,6 +9,9 @@ import datetime
 from modules.inspection.models import InspectionResult
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
+from modules.custom_scripts.cross_db import (
+    compare_cross_db, cross_db_summary_text, cross_db_config_to_text,
+)
 
 # 脚本文件路径
 SCRIPTS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config', 'custom_scripts.json')
@@ -171,8 +174,53 @@ def check_row_against_rules(row, columns, rules):
         return False, []
 
 
+def _resolve_variables_for_scheduled(variables):
+    """定时任务场景下解析变量值：返回 {变量名: 格式化后SQL值} 字典。
+
+    - period: 按当前日期动态解析
+    - date: 默认今天
+    - time: 默认今天开始时间
+    - 其余: 用 default_value
+    """
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
+    today_start = datetime.datetime.now().strftime('%Y-%m-%d 00:00:00')
+    resolved = {}
+
+    for var in variables:
+        var_name = var.get('name', '')
+        var_type = var.get('type', 'text')
+        var_value = var.get('default_value', '')
+
+        if var_type == 'period':
+            var_value = resolve_period_value(
+                var.get('period_type'),
+                var.get('period_format', 'yyyy-MM'))
+        elif var_type == 'date' and not var_value:
+            var_value = today
+        elif var_type == 'time' and not var_value:
+            var_value = today_start
+
+        resolved[var_name] = format_sql_value(var_type, var_value)
+    return resolved
+
+
+def _apply_variables(sql_content, variables):
+    """把变量占位符 #{name} 替换为解析后的值，返回替换后的 SQL。"""
+    if not sql_content:
+        return sql_content
+    resolved = _resolve_variables_for_scheduled(variables)
+    for var_name, formatted_value in resolved.items():
+        sql_content = sql_content.replace(f'#{{{var_name}}}', formatted_value)
+    return sql_content
+
+
 def run_custom_scripts(script_type):
-    """执行自定义脚本"""
+    """执行自定义脚本（定时/日常/实时触发）。
+
+    支持 single_db 与 cross_db 两种模式：
+    - single_db: 执行单库 SQL，按 rules 判定异常行
+    - cross_db:  执行两库 SQL，按维度对齐对比，不一致/缺失计入告警
+    """
     global custom_scripts
     results = {}
     DATABASE_CONFIG = get_config('databaseConfig')
@@ -186,76 +234,143 @@ def run_custom_scripts(script_type):
             elif script_type == 'realtime' and not script.get('realtime', False):
                 continue
 
-            database = script.get('database')
-            db_config = None
-            if database == 'mes':
-                db_config = DATABASE_CONFIG.get('mes')
-            elif database == 'hanging':
-                db_config = DATABASE_CONFIG.get('hanging')
+            mode = script.get('mode', 'single_db')
+            if mode == 'cross_db':
+                result_dict = _run_cross_db_script_scheduled(script, DATABASE_CONFIG)
+            else:
+                result_dict = _run_single_db_script_scheduled(script, DATABASE_CONFIG)
 
-            if not db_config:
-                continue
-
-            content = script.get('content')
-            variables = script.get('variables', [])
-            today = datetime.datetime.now().strftime('%Y-%m-%d')
-            today_start = datetime.datetime.now().strftime('%Y-%m-%d 00:00:00')
-
-            for var in variables:
-                var_name = var.get('name', '')
-                var_type = var.get('type', 'text')
-                var_value = var.get('default_value', '')
-
-                if var_type == 'period':
-                    var_value = resolve_period_value(
-                        var.get('period_type'),
-                        var.get('period_format', 'yyyy-MM'))
-                elif var_type == 'date' and not var_value:
-                    var_value = today
-                elif var_type == 'time' and not var_value:
-                    var_value = today_start
-
-                formatted_value = format_sql_value(var_type, var_value)
-                content = content.replace(f'#{{{var_name}}}', formatted_value)
-
-            columns, rows = execute_sql(db_config['type'], db_config, content)
-
-            if columns is not None:
-                script_result = InspectionResult()
-                script_result.add_info(f"执行自定义脚本: {script.get('name')}")
-                script_result.add_info(f"查询结果: {len(rows)} 条记录")
-
-                rules = script.get('rules', [])
-                if rules:
-                    abnormal_rows = []
-                    abnormal_reasons_set = set()
-
-                    for row in rows:
-                        is_abnormal, reasons = check_row_against_rules(row, columns, rules)
-                        if is_abnormal:
-                            abnormal_rows.append(row)
-                            abnormal_reasons_set.update(reasons)
-
-                    if abnormal_rows:
-                        script_result.add_warning(f"自定义脚本 {script.get('name')} 发现 {len(abnormal_rows)} 条异常记录（共 {len(rows)} 条记录）")
-                        for reason in abnormal_reasons_set:
-                            script_result.add_warning(f"异常原因: {reason}")
-                    else:
-                        script_result.add_normal(f"自定义脚本 {script.get('name')} 未发现异常（共 {len(rows)} 条记录）")
-                else:
-                    if len(rows) > 0:
-                        script_result.add_warning(f"自定义脚本 {script.get('name')} 发现 {len(rows)} 条记录")
-                    else:
-                        script_result.add_normal(f"自定义脚本 {script.get('name')} 未发现异常")
-
-                script_result.set_end_time()
-                result_dict = script_result.to_dict()
-                result_dict['script_name'] = script.get('name')
+            if result_dict is not None:
                 results[f'custom_script_{script.get("id")}'] = result_dict
         except Exception as e:
             print(f"执行自定义脚本 {script.get('name')} 出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     return results
+
+
+def _run_single_db_script_scheduled(script, database_config):
+    """定时场景执行单库脚本，返回 to_dict 结果（失败返回 None）。"""
+    database = script.get('database')
+    db_config = None
+    if database == 'mes':
+        db_config = database_config.get('mes')
+    elif database == 'hanging':
+        db_config = database_config.get('hanging')
+
+    if not db_config:
+        return None
+
+    content = _apply_variables(script.get('content'), script.get('variables', []))
+    columns, rows = execute_sql(db_config['type'], db_config, content)
+
+    if columns is None:
+        script_result = InspectionResult()
+        script_result.add_info(f"执行自定义脚本: {script.get('name')}")
+        script_result.add_warning(f"自定义脚本 {script.get('name')} 执行失败: {rows}")
+        script_result.set_end_time()
+        result_dict = script_result.to_dict()
+        result_dict['script_name'] = script.get('name')
+        result_dict['script_mode'] = 'single_db'
+        return result_dict
+
+    script_result = InspectionResult()
+    script_result.add_info(f"执行自定义脚本: {script.get('name')}")
+    script_result.add_info(f"查询结果: {len(rows)} 条记录")
+
+    rules = script.get('rules', [])
+    if rules:
+        abnormal_rows = []
+        abnormal_reasons_set = set()
+
+        for row in rows:
+            is_abnormal, reasons = check_row_against_rules(row, columns, rules)
+            if is_abnormal:
+                abnormal_rows.append(row)
+                abnormal_reasons_set.update(reasons)
+
+        if abnormal_rows:
+            script_result.add_warning(f"自定义脚本 {script.get('name')} 发现 {len(abnormal_rows)} 条异常记录（共 {len(rows)} 条记录）")
+            for reason in abnormal_reasons_set:
+                script_result.add_warning(f"异常原因: {reason}")
+        else:
+            script_result.add_normal(f"自定义脚本 {script.get('name')} 未发现异常（共 {len(rows)} 条记录）")
+    else:
+        if len(rows) > 0:
+            script_result.add_warning(f"自定义脚本 {script.get('name')} 发现 {len(rows)} 条记录")
+        else:
+            script_result.add_normal(f"自定义脚本 {script.get('name')} 未发现异常")
+
+    script_result.set_end_time()
+    result_dict = script_result.to_dict()
+    result_dict['script_name'] = script.get('name')
+    result_dict['script_mode'] = 'single_db'
+    return result_dict
+
+
+def _run_cross_db_script_scheduled(script, database_config):
+    """定时场景执行跨库对比脚本，返回 to_dict 结果（含跨库 summary，失败返回 None）。
+
+    不一致/仅单库数据计入 warnings，用于触发钉钉告警。
+    """
+    source_db = script.get('source_db')
+    target_db = script.get('target_db')
+    source_db_config = database_config.get(source_db)
+    target_db_config = database_config.get(target_db)
+
+    script_result = InspectionResult()
+    script_result.add_info(f"执行自定义脚本: {script.get('name')}（跨库对比）")
+
+    if not source_db_config or not target_db_config:
+        script_result.add_warning(f"自定义脚本 {script.get('name')} 数据库配置不存在，跳过")
+        script_result.set_end_time()
+        result_dict = script_result.to_dict()
+        result_dict['script_name'] = script.get('name')
+        result_dict['script_mode'] = 'cross_db'
+        return result_dict
+
+    variables = script.get('variables', [])
+    source_sql = _apply_variables(script.get('source_sql', ''), variables)
+    target_sql = _apply_variables(script.get('target_sql', ''), variables)
+
+    source_columns, source_rows = execute_sql(source_db_config['type'], source_db_config, source_sql)
+    if source_columns is None:
+        script_result.add_warning(f"自定义脚本 {script.get('name')} 源数据库查询失败: {source_rows}")
+        script_result.set_end_time()
+        result_dict = script_result.to_dict()
+        result_dict['script_name'] = script.get('name')
+        result_dict['script_mode'] = 'cross_db'
+        return result_dict
+
+    target_columns, target_rows = execute_sql(target_db_config['type'], target_db_config, target_sql)
+    if target_columns is None:
+        script_result.add_warning(f"自定义脚本 {script.get('name')} 目标数据库查询失败: {target_rows}")
+        script_result.set_end_time()
+        result_dict = script_result.to_dict()
+        result_dict['script_name'] = script.get('name')
+        result_dict['script_mode'] = 'cross_db'
+        return result_dict
+
+    cross_db_config = script.get('cross_db_config', {}) or {}
+    compare_result = compare_cross_db(source_columns, source_rows, target_columns, target_rows, cross_db_config)
+    summary = compare_result.get('summary', {})
+
+    script_result.add_info(f"跨库配置: {cross_db_config_to_text(cross_db_config)}")
+    script_result.add_info(f"对比结果: {cross_db_summary_text(summary)}")
+
+    if compare_result.get('is_consistent'):
+        script_result.add_normal(f"自定义脚本 {script.get('name')} 跨库对比一致（{cross_db_summary_text(summary)}）")
+    else:
+        script_result.add_warning(f"自定义脚本 {script.get('name')} 跨库对比发现差异（{cross_db_summary_text(summary)}）")
+
+    script_result.set_end_time()
+    result_dict = script_result.to_dict()
+    result_dict['script_name'] = script.get('name')
+    result_dict['script_mode'] = 'cross_db'
+    result_dict['cross_db_summary'] = summary
+    result_dict['is_consistent'] = compare_result.get('is_consistent')
+    return result_dict
 
 
 # 启动时加载脚本

@@ -34,6 +34,9 @@ app.register_blueprint(custom_scripts_bp)
 from modules.arthas.routes import arthas_bp
 app.register_blueprint(arthas_bp)
 
+from modules.log_storage.routes import log_bp
+app.register_blueprint(log_bp)
+
 # 注册test_custom_script路由（需要独立路径 /api/test_custom_script）
 from modules.auth.helpers import login_required
 from modules.custom_scripts.helpers import format_sql_value, resolve_period_value
@@ -86,6 +89,7 @@ def test_custom_script():
             target_db = data.get('target_db')
             source_sql = data.get('source_sql', '')
             target_sql = data.get('target_sql', '')
+            cross_db_config = data.get('cross_db_config', {}) or {}
 
             if not source_sql or not target_sql:
                 return jsonify({'success': False, 'error': '源数据库和目标数据库SQL不能为空'}), 400
@@ -117,22 +121,16 @@ def test_custom_script():
             if target_columns is None:
                 return jsonify({'success': False, 'error': f'目标数据库查询失败: {target_rows}'}), 500
 
-            result_columns = ['数据源'] + source_columns
-            result_rows = []
+            # 跨库对比：按维度列对齐，对比指定列
+            from modules.custom_scripts.cross_db import compare_cross_db
+            compare_result = compare_cross_db(source_columns, source_rows, target_columns, target_rows, cross_db_config)
 
-            for row in source_rows:
-                if isinstance(row, dict):
-                    result_rows.append(['源数据库'] + [row.get(col, '') for col in source_columns])
-                else:
-                    result_rows.append(['源数据库'] + list(row))
-
-            for row in target_rows:
-                if isinstance(row, dict):
-                    result_rows.append(['目标数据库'] + [row.get(col, '') for col in target_columns])
-                else:
-                    result_rows.append(['目标数据库'] + list(row))
-
-            return jsonify({'success': True, 'result': {'columns': result_columns, 'rows': result_rows}})
+            return jsonify({'success': True, 'result': {
+                'columns': compare_result.get('columns'),
+                'rows': compare_result.get('rows'),
+                'summary': compare_result.get('summary'),
+                'is_consistent': compare_result.get('is_consistent'),
+            }})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

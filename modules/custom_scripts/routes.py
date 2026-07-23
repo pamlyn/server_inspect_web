@@ -8,6 +8,7 @@ import time
 
 from modules.auth.helpers import login_required
 from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value
+from modules.custom_scripts.cross_db import compare_cross_db, cross_db_summary_text, cross_db_config_to_text
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
@@ -29,6 +30,7 @@ def custom_scripts_api():
         mode = data.get('mode', 'single_db')
         variables = data.get('variables', [])
         rules = data.get('rules', [])
+        cross_db_config = data.get('cross_db_config', {})
 
         if not name:
             return jsonify({'error': '脚本名称不能为空'}), 400
@@ -54,11 +56,13 @@ def custom_scripts_api():
                 script.pop('target_db', None)
                 script.pop('source_sql', None)
                 script.pop('target_sql', None)
+                script.pop('cross_db_config', None)
             else:
                 script['source_db'] = data.get('source_db')
                 script['target_db'] = data.get('target_db')
                 script['source_sql'] = data.get('source_sql')
                 script['target_sql'] = data.get('target_sql')
+                script['cross_db_config'] = cross_db_config
                 script.pop('database', None)
                 script.pop('content', None)
         else:
@@ -84,6 +88,7 @@ def custom_scripts_api():
                 new_script['target_db'] = data.get('target_db')
                 new_script['source_sql'] = data.get('source_sql')
                 new_script['target_sql'] = data.get('target_sql')
+                new_script['cross_db_config'] = cross_db_config
                 if not new_script['source_sql'] or not new_script['target_sql']:
                     return jsonify({'error': '源数据库和目标数据库SQL不能为空'}), 400
 
@@ -232,25 +237,33 @@ def execute_custom_script(script_id):
                 _log_custom_script(start_time, start_ts, operator, script_name, mode, 0, None, f'目标数据库查询失败: {target_rows}')
                 return jsonify({'error': f'目标数据库查询失败: {target_rows}'}), 500
 
-            result_columns = ['数据源'] + source_columns
-            result_rows = []
+            cross_db_config = script.get('cross_db_config', {}) or {}
+            compare_result = compare_cross_db(source_columns, source_rows, target_columns, target_rows, cross_db_config)
+            summary = compare_result.get('summary', {})
+            is_consistent = compare_result.get('is_consistent', True)
 
-            for row in source_rows:
-                if isinstance(row, dict):
-                    result_rows.append(['源数据库'] + [row.get(col, '') for col in source_columns])
-                else:
-                    result_rows.append(['源数据库'] + list(row))
-
-            for row in target_rows:
-                if isinstance(row, dict):
-                    result_rows.append(['目标数据库'] + [row.get(col, '') for col in target_columns])
-                else:
-                    result_rows.append(['目标数据库'] + list(row))
-
-            record_count = len(result_rows)
+            record_count = len(compare_result.get('rows', []))
+            result_for_log = {
+                'columns': compare_result.get('columns'),
+                'rows': compare_result.get('rows'),
+                'summary': summary,
+                'is_consistent': is_consistent,
+                'cross_db_config': cross_db_config,
+                'source_db': source_db,
+                'target_db': target_db,
+                'script_name': script_name,
+                'mode': 'cross_db',
+            }
+            status = 'success' if is_consistent else 'warning'
             _log_custom_script(start_time, start_ts, operator, script_name, mode, record_count,
-                               {'columns': result_columns, 'rows': result_rows}, None)
-            return jsonify({'columns': result_columns, 'rows': result_rows})
+                               result_for_log, None, summary=summary, status=status,
+                               extra_summary=cross_db_summary_text(summary))
+            return jsonify({
+                'columns': compare_result.get('columns'),
+                'rows': compare_result.get('rows'),
+                'summary': summary,
+                'is_consistent': is_consistent,
+            })
     except Exception as e:
         print(f"执行脚本失败: {e}")
         import traceback
@@ -259,23 +272,38 @@ def execute_custom_script(script_id):
         return jsonify({'error': str(e)}), 500
 
 
-def _log_custom_script(start_time, start_ts, operator, script_name, mode, record_count, result, error):
-    """记录自定义脚本执行日志（成功/失败统一入口）。"""
+def _log_custom_script(start_time, start_ts, operator, script_name, mode, record_count, result, error,
+                       summary=None, status=None, extra_summary=''):
+    """记录自定义脚本执行日志（成功/失败统一入口）。
+
+    :param summary: 可选，跨库对比的 summary dict（用于日志 result）
+    :param status:  可选，覆盖默认状态（如跨库对比不一致时为 warning）
+    :param extra_summary: 可选，附加到摘要文本的补充说明（如跨库对比中文统计）
+    """
     from modules.log_storage.helpers import record_inspection_log
     end_time = datetime.datetime.now()
-    status = 'error' if error else 'success'
+    if status is None:
+        status = 'error' if error else 'success'
     mode_label = '跨库对比' if mode == 'cross_db' else '单库'
     if error:
-        summary = f"自定义脚本失败[{mode_label}]: {script_name}"
+        summary_text = f"自定义脚本失败[{mode_label}]: {script_name}"
     else:
-        summary = f"自定义脚本完成[{mode_label}]: {script_name}，{record_count} 条记录"
+        base = f"自定义脚本完成[{mode_label}]: {script_name}，{record_count} 条记录"
+        summary_text = f"{base}（{extra_summary}）" if extra_summary else base
+
+    # 跨库对比把 summary 统计并入 result，便于日志页解析
+    log_result = result
+    if summary and isinstance(log_result, dict):
+        log_result = dict(log_result)
+        log_result['summary'] = summary
+
     record_inspection_log(
         inspection_type='custom_script', trigger_source='manual',
         target=script_name, operator=operator, status=status,
         start_time=start_time, end_time=end_time,
         duration=f"{time.time() - start_ts:.3f}s",
-        summary=summary, record_count=record_count,
-        result=result, error=error,
+        summary=summary_text, record_count=record_count,
+        result=log_result, error=error,
     )
 
 
