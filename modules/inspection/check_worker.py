@@ -97,33 +97,58 @@ def build_cache_union_subquery(schema, months, select_columns, where_clause):
     union_sql = "\n        UNION ALL\n        ".join(parts)
     return f"({union_sql}) AS cache_union"
 
+
+def _count_check_status(columns, rows):
+    """统计差异记录中各 check_status 的数量。
+
+    按列名定位 check_status 列（兼容 PG 返回 list、MySQL 返回 dict），
+    避免列顺序变化导致硬编码索引错位。返回 (报表多余, 明细多余, 数量不一致)。
+    """
+    status_idx = columns.index('check_status') if columns and 'check_status' in columns else -1
+
+    def _status_of(row):
+        if isinstance(row, dict):
+            return row.get('check_status')
+        if status_idx >= 0 and status_idx < len(row):
+            return row[status_idx]
+        return None
+
+    report_extra = sum(1 for row in rows if _status_of(row) == '报表多余记录')
+    detail_extra = sum(1 for row in rows if _status_of(row) == '明细多余记录')
+    quantity_mismatch = sum(1 for row in rows if _status_of(row) == '数量不一致')
+    return report_extra, detail_extra, quantity_mismatch
+
 def check_worker_output():
-    """工人产量与报工明细稽核"""
+    """工人产量与报工明细稽核
+
+    对比维度不含工序名称(produce_process_name)：同一订单/工人/工序版本/工位/日期
+    下合并不同工序名称的记录后再比对。
+    """
     result = InspectionResult()
     result.add_info("========== 开始工人产量与报工明细稽核 ==========")
-    
+
     date_config = get_config('inspectionDateConfig')
     date_ranges, warning_msg = get_date_ranges(date_config)
-    
+
     if warning_msg:
         result.add_warning(warning_msg)
-    
+
     if not date_ranges:
         today = datetime.datetime.now()
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))
-    
+
     # 从MES数据库查询
     mes_config = get_config('databaseConfig').get('mes')
     if not mes_config:
         result.add_warning("MES数据库配置不存在")
         result.set_end_time()
         return result
-    
+
     # 构建带schema的表名
     schema = 'jack_mes'
-    
+
     # 对每个日期范围执行稽核
     for start_date, end_date, range_name in date_ranges:
         result.add_info(f"\n稽核日期范围: {range_name} ({start_date} 至 {end_date})")
@@ -143,7 +168,6 @@ def check_worker_output():
                 "section_id",
                 "line_id",
                 "user_line_id",
-                "produce_process_name",
                 "staff_id",
                 "station_no",
                 "reporting_date",
@@ -155,7 +179,7 @@ def check_worker_output():
             where_clause=f"WHERE \"reporting_work_date\" BETWEEN '{start_datetime}' AND '{end_datetime}'"
         )
 
-        # 稽核脚本：比较明细汇总与报表数据是否一致（包含颜色尺码）
+        # 稽核脚本：比较明细汇总与报表数据是否一致（包含颜色尺码，对比维度不含工序名称）
         sql = f"""
         WITH
         -- 明细汇总结果（来自缓存表，跨月时UNION多张分表后按维度去重）
@@ -168,7 +192,6 @@ def check_worker_output():
                 "section_id"           AS section_id,
                 "line_id"              AS line_id,
                 "user_line_id"         AS user_line_id,
-                "produce_process_name" AS produce_process_name,
                 "staff_id"             AS staff_id,
                 "station_no"           AS station_no,
                 "reporting_date"       AS reporting_date,
@@ -181,7 +204,6 @@ def check_worker_output():
             GROUP BY
                 "tenant_code",
                 "produce_order_code",
-                "produce_process_name",
                 "work_shop_id",
                 "line_id",
                 "user_line_id",
@@ -205,7 +227,6 @@ def check_worker_output():
                 produce_section_id,
                 line_id,
                 user_line_id,
-                produce_process_name,
                 staff_id,
                 station_no,
                 report_date,
@@ -225,7 +246,6 @@ def check_worker_output():
             COALESCE(d.section_id, r.produce_section_id) AS section_id,
             COALESCE(d.line_id, r.line_id) AS line_id,
             COALESCE(d.user_line_id, r.user_line_id) AS user_line_id,
-            COALESCE(d.produce_process_name, r.produce_process_name) AS produce_process_name,
             COALESCE(d.staff_id, r.staff_id) AS staff_id,
             COALESCE(d.station_no, r.station_no) AS station_no,
             COALESCE(d.reporting_date, r.report_date) AS reporting_date,
@@ -250,7 +270,6 @@ def check_worker_output():
             AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
             AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
             AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
-            AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
             AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
             AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
             AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
@@ -262,7 +281,7 @@ def check_worker_output():
         WHERE d.total_qty IS DISTINCT FROM r.number
         ORDER BY check_status, produce_order_code
         """
-        
+
         columns, rows = execute_sql(mes_config['type'], mes_config, sql)
         if columns is None:
             result.add_warning(f"MES数据库查询失败: {rows}")
@@ -271,7 +290,7 @@ def check_worker_output():
             result.add_info("明细多余记录: 0 条")
             result.add_info("数量不一致: 0 条")
             continue
-        
+
         if not rows:
             result.add_normal("明细汇总与报表数据完全一致，无差异记录")
             # 即使没有差异记录，也添加统计信息
@@ -280,15 +299,12 @@ def check_worker_output():
             result.add_info("数量不一致: 0 条")
         else:
             result.add_critical(f"共查询到 {len(rows)} 条差异记录")
-            # 统计不同类型的差异
-            report_extra = sum(1 for row in rows if (isinstance(row, dict) and row.get('check_status') == '报表多余记录') or (not isinstance(row, dict) and len(row) > 17 and row[17] == '报表多余记录'))
-            detail_extra = sum(1 for row in rows if (isinstance(row, dict) and row.get('check_status') == '明细多余记录') or (not isinstance(row, dict) and len(row) > 17 and row[17] == '明细多余记录'))
-            quantity_mismatch = sum(1 for row in rows if (isinstance(row, dict) and row.get('check_status') == '数量不一致') or (not isinstance(row, dict) and len(row) > 17 and row[17] == '数量不一致'))
-            
+            # 统计不同类型的差异（按列名定位 check_status，避免列顺序变化导致索引错位）
+            report_extra, detail_extra, quantity_mismatch = _count_check_status(columns, rows)
             result.add_info(f"报表多余记录: {report_extra} 条")
             result.add_info(f"明细多余记录: {detail_extra} 条")
             result.add_info(f"数量不一致: {quantity_mismatch} 条")
-    
+
     result.set_end_time()
     return result
 
@@ -504,32 +520,35 @@ ORDER BY check_status, produce_order_code;
     return result
 
 def check_worker_output_without_color_size():
-    """工人产量与报工明细稽核（不包含颜色尺码）"""
+    """工人产量与报工明细稽核（不包含颜色尺码）
+
+    对比维度不含工序名称(produce_process_name)。
+    """
     result = InspectionResult()
     result.add_info("========== 开始工人产量与报工明细稽核（不包含颜色尺码） ==========")
-    
+
     date_config = get_config('inspectionDateConfig')
     date_ranges, warning_msg = get_date_ranges(date_config)
-    
+
     if warning_msg:
         result.add_warning(warning_msg)
-    
+
     if not date_ranges:
         today = datetime.datetime.now()
         start_date = today.strftime('%Y-%m-%d')
         end_date = today.strftime('%Y-%m-%d')
         date_ranges.append((start_date, end_date, "今日"))
-    
+
     # 从MES数据库查询
     mes_config = get_config('databaseConfig').get('mes')
     if not mes_config:
         result.add_warning("MES数据库配置不存在")
         result.set_end_time()
         return result
-    
+
     # 构建带schema的表名
     schema = 'jack_mes'
-    
+
     # 对每个日期范围执行稽核
     for start_date, end_date, range_name in date_ranges:
         result.add_info(f"\n稽核日期范围: {range_name} ({start_date} 至 {end_date})")
@@ -549,7 +568,6 @@ def check_worker_output_without_color_size():
                 "section_id",
                 "line_id",
                 "user_line_id",
-                "produce_process_name",
                 "staff_id",
                 "station_no",
                 "reporting_date",
@@ -559,7 +577,7 @@ def check_worker_output_without_color_size():
             where_clause=f"WHERE \"reporting_work_date\" BETWEEN '{start_datetime}' AND '{end_datetime}'"
         )
 
-        # 稽核脚本：比较明细汇总与报表数据是否一致（不包含颜色尺码）
+        # 稽核脚本：比较明细汇总与报表数据是否一致（不包含颜色尺码，对比维度不含工序名称）
         sql = f"""
         WITH
         -- 明细汇总结果（来自缓存表，跨月时UNION多张分表后按维度去重）
@@ -572,7 +590,6 @@ def check_worker_output_without_color_size():
                 "section_id"           AS section_id,
                 "line_id"              AS line_id,
                 "user_line_id"         AS user_line_id,
-                "produce_process_name" AS produce_process_name,
                 "staff_id"             AS staff_id,
                 "station_no"           AS station_no,
                 "reporting_date"       AS reporting_date,
@@ -583,7 +600,6 @@ def check_worker_output_without_color_size():
             GROUP BY
                 "tenant_code",
                 "produce_order_code",
-                "produce_process_name",
                 "work_shop_id",
                 "line_id",
                 "user_line_id",
@@ -605,7 +621,6 @@ def check_worker_output_without_color_size():
                 produce_section_id,
                 line_id,
                 user_line_id,
-                produce_process_name,
                 staff_id,
                 station_no,
                 report_date,
@@ -621,7 +636,6 @@ def check_worker_output_without_color_size():
                 produce_section_id,
                 line_id,
                 user_line_id,
-                produce_process_name,
                 staff_id,
                 station_no,
                 report_date,
@@ -637,7 +651,6 @@ def check_worker_output_without_color_size():
             COALESCE(d.section_id, r.produce_section_id) AS section_id,
             COALESCE(d.line_id, r.line_id) AS line_id,
             COALESCE(d.user_line_id, r.user_line_id) AS user_line_id,
-            COALESCE(d.produce_process_name, r.produce_process_name) AS produce_process_name,
             COALESCE(d.staff_id, r.staff_id) AS staff_id,
             COALESCE(d.station_no, r.station_no) AS station_no,
             COALESCE(d.reporting_date, r.report_date) AS reporting_date,
@@ -660,7 +673,6 @@ def check_worker_output_without_color_size():
             AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
             AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
             AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
-            AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
             AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
             AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
             AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
@@ -670,7 +682,7 @@ def check_worker_output_without_color_size():
         WHERE d.total_qty IS DISTINCT FROM r.number
         ORDER BY check_status, produce_order_code
         """
-        
+
         columns, rows = execute_sql(mes_config['type'], mes_config, sql)
         if columns is None:
             result.add_warning(f"MES数据库查询失败: {rows}")
@@ -679,7 +691,7 @@ def check_worker_output_without_color_size():
             result.add_info("明细多余记录: 0 条")
             result.add_info("数量不一致: 0 条")
             continue
-        
+
         if not rows:
             result.add_normal("明细汇总与报表数据完全一致，无差异记录")
             # 即使没有差异记录，也添加统计信息
@@ -688,15 +700,12 @@ def check_worker_output_without_color_size():
             result.add_info("数量不一致: 0 条")
         else:
             result.add_critical(f"共查询到 {len(rows)} 条差异记录")
-            # 统计不同类型的差异
-            report_extra = sum(1 for row in rows if (isinstance(row, dict) and row.get('check_status') == '报表多余记录') or (not isinstance(row, dict) and len(row) > 15 and row[15] == '报表多余记录'))
-            detail_extra = sum(1 for row in rows if (isinstance(row, dict) and row.get('check_status') == '明细多余记录') or (not isinstance(row, dict) and len(row) > 15 and row[15] == '明细多余记录'))
-            quantity_mismatch = sum(1 for row in rows if (isinstance(row, dict) and row.get('check_status') == '数量不一致') or (not isinstance(row, dict) and len(row) > 15 and row[15] == '数量不一致'))
-            
+            # 统计不同类型的差异（按列名定位 check_status，避免列顺序变化导致索引错位）
+            report_extra, detail_extra, quantity_mismatch = _count_check_status(columns, rows)
             result.add_info(f"报表多余记录: {report_extra} 条")
             result.add_info(f"明细多余记录: {detail_extra} 条")
             result.add_info(f"数量不一致: {quantity_mismatch} 条")
-    
+
     result.set_end_time()
     return result
 

@@ -45,6 +45,11 @@ window.showSqlInspect = function () {
 const COLS_WITH_COLOR = '"total", "produce_order_code", "work_shop_id", "process_version_id", "section_id", "line_id", "user_line_id", "produce_process_name", "staff_id", "station_no", "reporting_date", "craft_seq", "tenant_code", "product_code", "color_name", "size_name"';
 const COLS_NO_COLOR = '"total", "produce_order_code", "work_shop_id", "process_version_id", "section_id", "line_id", "user_line_id", "produce_process_name", "staff_id", "station_no", "reporting_date", "craft_seq", "tenant_code", "product_code"';
 
+// 「工人产量与报工明细稽查」专用：不含工序名称(produce_process_name)维度
+// （sfd 稽核仍保留工序名称维度，继续使用上面的 COLS_WITH_COLOR）
+const COLS_WITH_COLOR_NO_PROCESS = '"total", "produce_order_code", "work_shop_id", "process_version_id", "section_id", "line_id", "user_line_id", "staff_id", "station_no", "reporting_date", "craft_seq", "tenant_code", "product_code", "color_name", "size_name"';
+const COLS_NO_COLOR_NO_PROCESS = '"total", "produce_order_code", "work_shop_id", "process_version_id", "section_id", "line_id", "user_line_id", "staff_id", "station_no", "reporting_date", "craft_seq", "tenant_code", "product_code"';
+
 // 枚举 [startDate, endDate] 覆盖的所有月份后缀（如 ['2026_6', '2026_7']）
 function getCacheMonths(startDate, endDate) {
     const start = new Date(startDate);
@@ -77,12 +82,13 @@ function buildCacheUnionFrom(selectCols, whereExpr, startDate, endDate) {
 }
 
 // 生成「工人产量与报工明细稽核」SQL（report_mes_user_process_output_cache 报表）
+// 注：对比维度不含工序名称(produce_process_name)
 function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
     const startDT = startDate + ' 00:00:00';
     const endDT = endDate + ' 23:59:59';
     const whereExpr = '"reporting_work_date" BETWEEN \'' + startDT + '\' AND \'' + endDT + '\'';
     const detailFromWhere = buildCacheUnionFrom(
-        hasColorSize ? COLS_WITH_COLOR : COLS_NO_COLOR, whereExpr, startDate, endDate);
+        hasColorSize ? COLS_WITH_COLOR_NO_PROCESS : COLS_NO_COLOR_NO_PROCESS, whereExpr, startDate, endDate);
 
     if (hasColorSize) {
         return `-- 稽核脚本：比较明细汇总与报表数据是否一致（包含颜色尺码维度）
@@ -97,7 +103,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          "section_id"           AS section_id,
          "line_id"              AS line_id,
          "user_line_id"         AS user_line_id,
-         "produce_process_name" AS produce_process_name,
          "staff_id"             AS staff_id,
          "station_no"           AS station_no,
          "reporting_date"       AS reporting_date,
@@ -110,7 +115,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      GROUP BY
          "tenant_code",
          "produce_order_code",
-         "produce_process_name",
          "work_shop_id",
          "line_id",
          "user_line_id",
@@ -134,7 +138,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          produce_section_id,
          line_id,
          user_line_id,
-         produce_process_name,
          staff_id,
          station_no,
          report_date,
@@ -152,7 +155,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          produce_section_id,
          line_id,
          user_line_id,
-         produce_process_name,
          staff_id,
          station_no,
          report_date,
@@ -171,7 +173,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      COALESCE(d.section_id, r.produce_section_id) AS section_id,
      COALESCE(d.line_id, r.line_id) AS line_id,
      COALESCE(d.user_line_id, r.user_line_id) AS user_line_id,
-     COALESCE(d.produce_process_name, r.produce_process_name) AS produce_process_name,
      COALESCE(d.staff_id, r.staff_id) AS staff_id,
      COALESCE(d.station_no, r.station_no) AS station_no,
      COALESCE(d.reporting_date, r.report_date) AS reporting_date,
@@ -196,7 +197,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
      AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
      AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
-     AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
      AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
      AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
      AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
@@ -220,7 +220,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          "section_id"           AS section_id,
          "line_id"              AS line_id,
          "user_line_id"         AS user_line_id,
-         "produce_process_name" AS produce_process_name,
          "staff_id"             AS staff_id,
          "station_no"           AS station_no,
          "reporting_date"       AS reporting_date,
@@ -231,7 +230,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      GROUP BY
          "tenant_code",
          "produce_order_code",
-         "produce_process_name",
          "work_shop_id",
          "line_id",
          "user_line_id",
@@ -253,7 +251,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          produce_section_id,
          line_id,
          user_line_id,
-         produce_process_name,
          staff_id,
          station_no,
          report_date,
@@ -269,7 +266,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          produce_section_id,
          line_id,
          user_line_id,
-         produce_process_name,
          staff_id,
          station_no,
          report_date,
@@ -285,7 +281,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      COALESCE(d.section_id, r.produce_section_id) AS section_id,
      COALESCE(d.line_id, r.line_id) AS line_id,
      COALESCE(d.user_line_id, r.user_line_id) AS user_line_id,
-     COALESCE(d.produce_process_name, r.produce_process_name) AS produce_process_name,
      COALESCE(d.staff_id, r.staff_id) AS staff_id,
      COALESCE(d.station_no, r.station_no) AS station_no,
      COALESCE(d.reporting_date, r.report_date) AS reporting_date,
@@ -308,7 +303,6 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      AND COALESCE(d.section_id, -9999) = COALESCE(r.produce_section_id, -9999)
      AND COALESCE(d.line_id, -9999) = COALESCE(r.line_id, -9999)
      AND COALESCE(d.user_line_id, -9999) = COALESCE(r.user_line_id, -9999)
-     AND COALESCE(d.produce_process_name, '__NULL_STR__') = COALESCE(r.produce_process_name, '__NULL_STR__')
      AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
      AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
      AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)

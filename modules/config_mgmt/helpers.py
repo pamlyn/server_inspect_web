@@ -23,7 +23,8 @@ _config_state = {
     'dailyInspection': {
         "enabled": False,
         "hour": 17,
-        "minute": 0
+        "minute": 0,
+        "only_error_notification": False
     },
     'thresholds': THRESHOLDS,
     'inspectionItems': INSPECTION_ITEMS,
