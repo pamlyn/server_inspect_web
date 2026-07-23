@@ -66,14 +66,14 @@ function buildCacheUnionFrom(selectCols, whereExpr, startDate, endDate) {
     const months = getCacheMonths(startDate, endDate);
     if (months.length <= 1) {
         return 'FROM jack_mes.produce_mes_reporting_work_cache_' + months[0] +
-               '\n     WHERE ' + whereExpr;
+            '\n     WHERE ' + whereExpr;
     }
     const parts = months.map(function (suffix) {
         return 'SELECT ' + selectCols + ' FROM jack_mes.produce_mes_reporting_work_cache_' + suffix +
-               ' WHERE ' + whereExpr;
+            ' WHERE ' + whereExpr;
     });
     return 'FROM (\n         ' + parts.join('\n         UNION ALL\n         ') +
-           '\n     ) AS cache_union';
+        '\n     ) AS cache_union';
 }
 
 // 生成「工人产量与报工明细稽核」SQL（report_mes_user_process_output_cache 报表）
@@ -200,7 +200,7 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
      AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
      AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
-     AND COALESCE(d.craft_seq, '__NULL_STR__') = COALESCE(r.craft_seq, '__NULL_STR__')
+     AND COALESCE(d.craft_seq, '-99999') = COALESCE(r.craft_seq, '-99999')
      AND COALESCE(d.tenant_code, '__NULL_STR__') = COALESCE(r.tenant_code, '__NULL_STR__')
      AND COALESCE(d.product_code, '__NULL_STR__') = COALESCE(r.product_code, '__NULL_STR__')
      AND COALESCE(d.color_name, '__NULL_STR__') = COALESCE(r.color_name, '__NULL_STR__')
@@ -312,7 +312,7 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
      AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
      AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
      AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
-     AND COALESCE(d.craft_seq, '__NULL_STR__') = COALESCE(r.craft_seq, '__NULL_STR__')
+     AND COALESCE(d.craft_seq, '-99999') = COALESCE(r.craft_seq, '-99999')
      AND COALESCE(d.tenant_code, '__NULL_STR__') = COALESCE(r.tenant_code, '__NULL_STR__')
      AND COALESCE(d.product_code, '__NULL_STR__') = COALESCE(r.product_code, '__NULL_STR__')
  WHERE d.total_qty IS DISTINCT FROM r.number   -- 只过滤有差异的记录（包括某一方缺失）
@@ -440,7 +440,7 @@ FULL OUTER JOIN report_data r
     AND COALESCE(d.staff_id, '__NULL_STR__') = COALESCE(r.staff_id, '__NULL_STR__')
     AND COALESCE(d.station_no, '__NULL_STR__') = COALESCE(r.station_no, '__NULL_STR__')
     AND COALESCE(d.reporting_date, '1970-01-01'::date) = COALESCE(r.report_date, '1970-01-01'::date)
-    AND COALESCE(d.craft_seq, '__NULL_STR__') = COALESCE(r.craft_seq, '__NULL_STR__')
+    AND COALESCE(d.craft_seq, '-99999') = COALESCE(r.craft_seq, '-99999')
     AND COALESCE(d.tenant_code, '__NULL_STR__') = COALESCE(r.tenant_code, '__NULL_STR__')
     AND COALESCE(d.product_code, '__NULL_STR__') = COALESCE(r.product_code, '__NULL_STR__')
     AND COALESCE(d.color_name, '__NULL_STR__') = COALESCE(r.color_name, '__NULL_STR__')
