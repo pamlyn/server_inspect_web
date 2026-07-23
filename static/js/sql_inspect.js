@@ -144,7 +144,7 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          "color_name"            AS color_name,
          "size_name"            AS size_name
      FROM jack_mes.report_mes_user_process_output_cache
-     WHERE report_date BETWEEN '${startDate}' AND '${endDate}'
+     WHERE report_date BETWEEN '${startDate}' AND '${endDate}' and is_deleted = 0
      GROUP BY
          produce_order_code,
          work_shop_id,
@@ -261,7 +261,7 @@ function buildWorkerOutputSQL(hasColorSize, startDate, endDate) {
          tenant_code,
          product_code
      FROM jack_mes.report_mes_user_process_output_cache
-     WHERE report_date BETWEEN '${startDate}' AND '${endDate}'
+     WHERE report_date BETWEEN '${startDate}' AND '${endDate}' and is_deleted = 0
      GROUP BY
          produce_order_code,
          work_shop_id,
@@ -385,7 +385,7 @@ report_data AS (
         color_name,
         size_name
     FROM jack_mes.sfd_repo_mes_sfd_user_process_output_report
-    WHERE report_date BETWEEN '${startDate}' AND '${endDate}'
+    WHERE report_date BETWEEN '${startDate}' AND '${endDate}' and is_deleted = 0
     GROUP BY
         produce_order_code,
         work_shop_id,
