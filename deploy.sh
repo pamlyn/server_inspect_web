@@ -17,7 +17,7 @@
 set -e
 
 # -------------------- 配置 --------------------
-IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.3.0"
+IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.3.1"
 CONTAINER_NAME="server_inspect_web"
 HOST_PORT="59496"
 
