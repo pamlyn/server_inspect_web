@@ -98,6 +98,50 @@ def resolve_period_value(period_type, period_format='yyyy-MM'):
         return f"{year}-{month:02d}"
 
 
+def get_variable_value(var, params):
+    """根据变量配置和参数获取实际变量值。
+
+    动态日期类型（date_range_type）在运行时解析，保证定时/日常/实时通知每次
+    都取最新日期，而不是保存脚本那一刻的快照：
+      - last_n_days（含 last_n_to_yesterday / last_n_to_today）：最近N天，起始 = 今天 - (N - 1)
+      - today：今天
+      - yesterday：昨天
+    执行路径(execute_custom_script)若显式传入值则优先使用（支持临时改期测试），
+    否则按上述规则动态计算；定时/通知路径传入 {} 故始终动态计算。
+    年月(period)：按当前日期动态解析（当前月/当前年/上个月/去年），优先使用前端传值。
+
+    页面执行与定时/日常/实时通知共用本函数，确保变量解析口径一致。
+    """
+    var_name = var.get('name', '')
+    var_type = var.get('type', 'text')
+    date_range_type = var.get('date_range_type')
+    last_n_days = var.get('last_n_days', 7)
+
+    if var_type == 'period':
+        computed = resolve_period_value(
+            var.get('period_type'),
+            var.get('period_format', 'yyyy-MM'))
+        return params.get(var_name) or computed
+
+    today = datetime.datetime.now()
+
+    if date_range_type in ('last_n_days', 'last_n_to_yesterday', 'last_n_to_today'):
+        # 执行路径若显式传值则优先，否则按“最近N天（含今天）”计算
+        if params.get(var_name):
+            return params.get(var_name)
+        start_date = today - datetime.timedelta(days=last_n_days - 1)
+        return start_date.strftime('%Y-%m-%d')
+
+    if date_range_type == 'today':
+        return params.get(var_name) or today.strftime('%Y-%m-%d')
+
+    if date_range_type == 'yesterday':
+        yesterday = today - datetime.timedelta(days=1)
+        return params.get(var_name) or yesterday.strftime('%Y-%m-%d')
+
+    return params.get(var_name, var.get('default_value', ''))
+
+
 def check_row_against_rules(row, columns, rules):
     """根据规则检查单行数据是否异常
 
@@ -198,23 +242,14 @@ def run_custom_scripts(script_type):
 
             content = script.get('content')
             variables = script.get('variables', [])
-            today = datetime.datetime.now().strftime('%Y-%m-%d')
-            today_start = datetime.datetime.now().strftime('%Y-%m-%d 00:00:00')
 
             for var in variables:
                 var_name = var.get('name', '')
                 var_type = var.get('type', 'text')
-                var_value = var.get('default_value', '')
-
-                if var_type == 'period':
-                    var_value = resolve_period_value(
-                        var.get('period_type'),
-                        var.get('period_format', 'yyyy-MM'))
-                elif var_type == 'date' and not var_value:
-                    var_value = today
-                elif var_type == 'time' and not var_value:
-                    var_value = today_start
-
+                # 与页面执行路径(execute_custom_script)保持一致地解析变量，
+                # 否则 date_range_type=last_n_days 的 startDate 会被解析为“今天”，
+                # 与固定 endDate 构成反向区间，导致查询返回 0 条而漏报异常。
+                var_value = get_variable_value(var, {})
                 formatted_value = format_sql_value(var_type, var_value)
                 content = content.replace(f'#{{{var_name}}}', formatted_value)
 

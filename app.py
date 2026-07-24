@@ -36,7 +36,7 @@ app.register_blueprint(arthas_bp)
 
 # 注册test_custom_script路由（需要独立路径 /api/test_custom_script）
 from modules.auth.helpers import login_required
-from modules.custom_scripts.helpers import format_sql_value, resolve_period_value
+from modules.custom_scripts.helpers import format_sql_value, resolve_period_value, get_variable_value
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
@@ -63,12 +63,8 @@ def test_custom_script():
             for var in variables:
                 var_name = var.get('name', '')
                 var_type = var.get('type', 'text')
-                if var_type == 'period':
-                    var_value = resolve_period_value(
-                        var.get('period_type'),
-                        var.get('period_format', 'yyyy-MM'))
-                else:
-                    var_value = params.get(var_name, var.get('default_value', ''))
+                # 与执行/通知路径共用变量解析口径，统一支持动态 today/yesterday/last_n_days
+                var_value = get_variable_value(var, params)
                 formatted_value = format_sql_value(var_type, var_value)
                 sql_content = sql_content.replace(f'#{{{var_name}}}', formatted_value)
 
@@ -93,12 +89,7 @@ def test_custom_script():
             for var in variables:
                 var_name = var.get('name', '')
                 var_type = var.get('type', 'text')
-                if var_type == 'period':
-                    var_value = resolve_period_value(
-                        var.get('period_type'),
-                        var.get('period_format', 'yyyy-MM'))
-                else:
-                    var_value = params.get(var_name, var.get('default_value', ''))
+                var_value = get_variable_value(var, params)
                 formatted_value = format_sql_value(var_type, var_value)
                 source_sql = source_sql.replace(f'#{{{var_name}}}', formatted_value)
                 target_sql = target_sql.replace(f'#{{{var_name}}}', formatted_value)
