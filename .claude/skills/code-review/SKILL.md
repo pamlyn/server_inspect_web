@@ -48,6 +48,8 @@ description: 针对本项目不变量的代码审查清单。覆盖变量解析�
 - [ ] 若改了版本号，`deploy.sh` 和 `push_image.sh` 两处同步。
 - [ ] `config/config.json`、`config/custom_scripts.json`、`cookies.txt` 未被误提交（已 gitignore，含密钥）。
 - [ ] 依赖若新增，已加进 [requirements.txt](requirements.txt) 且 Dockerfile 能装上。
+- [ ] 自定义脚本 id 分配走 `allocate_script_id()`，没有手填 `next_id` 或复用已有 id（重复会在 load 时被自愈重分配）。
+- [ ] 更新镜像用 `./deploy.sh redeploy`（pull+删旧容器+重建），而非 `deploy`/`restart`（容器已存在时不会用上新镜像）。
 
 ## 审查输出建议
 - 按严重度排序：先「会漏报/误报异常」（A/B）>「会中断巡检」（D）>「通知缺失」（D/E）>「缓存/展示」（F）>「部署/规范」（G）。

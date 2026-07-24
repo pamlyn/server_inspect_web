@@ -7,7 +7,7 @@ import datetime
 import time
 
 from modules.auth.helpers import login_required
-from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value, get_variable_value
+from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value, get_variable_value, allocate_script_id
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
@@ -63,7 +63,7 @@ def custom_scripts_api():
                 script.pop('content', None)
         else:
             new_script = {
-                'id': str(script_id_counter),
+                'id': allocate_script_id(),
                 'name': name,
                 'mode': mode,
                 'scheduled': data.get('scheduled', False),
@@ -88,7 +88,6 @@ def custom_scripts_api():
                     return jsonify({'error': '源数据库和目标数据库SQL不能为空'}), 400
 
             custom_scripts.append(new_script)
-            script_id_counter += 1
 
         save_scripts()
         return jsonify({'message': '脚本保存成功'})

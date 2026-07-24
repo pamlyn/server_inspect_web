@@ -30,6 +30,60 @@ def load_scripts():
         except Exception as e:
             print(f"加载脚本失败: {e}")
 
+    # 校正历史遗留的重复 id（重新分配），并同步 next_id。
+    # 部署/容器重启后文件可能被覆盖或回退到旧版本，导致文件内的 id
+    # 与内存 script_id_counter 不同步：此处以文件实际状态为准重新校正，
+    # 避免后续新增脚本时分配到与现有脚本冲突的 id。
+    if _normalize_ids():
+        save_scripts()
+    script_id_counter = max(script_id_counter, _max_existing_id() + 1)
+
+
+def _max_existing_id():
+    """返回当前脚本列表中最大的数值 id（忽略非数字 id），无则返回 0。"""
+    max_id = 0
+    for s in custom_scripts:
+        try:
+            sid = int(s.get('id'))
+            if sid > max_id:
+                max_id = sid
+        except (TypeError, ValueError):
+            continue
+    return max_id
+
+
+def allocate_script_id():
+    """分配一个不与现有脚本冲突的新 id（字符串）。
+
+    基于 custom_scripts 中最大的数值 id + 1 计算，而非依赖模块级
+    script_id_counter——后者在容器重启或文件被外部覆盖后会与文件实际
+    状态不同步，曾导致新增脚本分配到已存在的 id（重复 id）。
+    同时推进 script_id_counter，保证写入文件的 next_id 不落后。
+    """
+    global script_id_counter
+    base = max(_max_existing_id(), script_id_counter - 1)
+    next_id = base + 1
+    script_id_counter = next_id + 1
+    return str(next_id)
+
+
+def _normalize_ids():
+    """校正重复 id：对出现多次的 id 重新分配，返回是否有改动。"""
+    seen = set()
+    changed = False
+    for s in custom_scripts:
+        sid = str(s.get('id', ''))
+        if sid in seen:
+            new_id = allocate_script_id()  # 基于当前最大 id + 1，天然不与现有 id 冲突
+            s['id'] = new_id
+            seen.add(new_id)
+            changed = True
+        else:
+            seen.add(sid)
+    if changed:
+        print(f"[{datetime.datetime.now()}] 检测到重复脚本 id，已自动重新分配并校正 next_id")
+    return changed
+
 
 def save_scripts():
     """保存脚本到文件"""

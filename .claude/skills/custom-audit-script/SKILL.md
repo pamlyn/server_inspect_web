@@ -73,6 +73,11 @@ description: 编写或排查自定义稽核脚本（custom_scripts.json）。说
 - `scheduled`/`realtime` 仅在有 criticals/warnings 时通知（带 300s 冷却）。
 - 自定义脚本结果 category 为 `custom_script_<id>`，钉钉里显示 `script_name`（见 [dingtalk.py](dingtalk.py) 对 `category.startswith('custom_script_')` 的处理）。
 
+## id 分配（不要手填 next_id）
+- 脚本 `id` 由后端 `allocate_script_id()` 分配，基于「现有最大数值 id + 1」，不依赖模块级 `script_id_counter`（后者在容器重启/文件被覆盖后会与文件不同步，曾导致重复 id）。
+- `load_scripts()` 启动时会自愈：检测到重复 id 自动重新分配并校正 `next_id`，回写文件。
+- 新增脚本走 `POST /api/custom_scripts`（不带 `id`）；编辑走带 `id` 的 POST。**不要**手动编辑 `custom_scripts.json` 的 `next_id` 或复制已有 id，否则下一次 load 会触发自愈重分配。
+
 ## 排查清单
 - 查询返回 0 条但预期有数据：检查变量解析是否走了 `get_variable_value`；`date_range_type=last_n_days` 的 startDate 是否被算成今天。
 - 通知里不显示脚本结果：确认对应 `scheduled/daily/realtime` 开关为 true。

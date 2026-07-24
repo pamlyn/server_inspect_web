@@ -38,7 +38,8 @@ description: 构建并推送 Docker 镜像到 Harbor、容器化部署、版本�
 | `./deploy.sh restart` | 停 + 启 |
 | `./deploy.sh logs [-f]` | 最近 100 行 / 跟踪 |
 | `./deploy.sh status` | 容器状态 |
-| `./deploy.sh deploy` | init + pull + start（全量） |
+| `./deploy.sh deploy` | init + pull + start（全量，首次用） |
+| `./deploy.sh redeploy` | pull + 删旧容器 + 用新镜像重建（更新镜像用，见下） |
 
 ### 容器启动关键配置（deploy.sh `start_container`）
 - `--restart unless-stopped`、`--platform linux/amd64`、`-p 59496:59496`、`-e TZ=Asia/Shanghai`
@@ -50,8 +51,14 @@ description: 构建并推送 Docker 镜像到 Harbor、容器化部署、版本�
 - 挂载 `/var/run/docker.sock`（若存在）：容器内需访问宿主 Docker（`clear_slow_sql_logs`、arthas 本机容器检测）
 - **改了挂载的配置文件后必须 `./deploy.sh restart`** 才生效（容器内 `_config_state` 不会自动热加载文件）；或在 Web 配置页保存（会触发 `start_scheduler`，但部分项仍建议 restart）。
 
+### `deploy` vs `redeploy`（关键坑）
+- `deploy` = init + pull + start。但 `start_container` 在**容器已存在**时只 `docker start`，**不会用上新镜像**。所以更新版本后跑 `deploy`，容器仍跑旧镜像。
+- `redeploy` = pull + `docker rm -f` 删旧容器 + 用新镜像重建。**更新镜像后必须用 `redeploy`**，否则白拉了。
+- `restart` = 停 + 启，不拉镜像、不重建，只用于配置文件改动后重启。
+
 ## 配置文件管理
 - `config/config.json`、`config/custom_scripts.json`、`cookies.txt` 被 `.gitignore`，**不入库**。
+- 运行时配置也通过 `.dockerignore` 排除，**不打包进镜像**（避免镜像内残留旧配置与卷挂载冲突）。
 - 模板：`config/config.json.example`、`config/custom_scripts.json.example`。
 - 首次部署 `./deploy.sh init` 会基于模板生成；生产配置（DB 密码、钉钉 token）只存在于部署机的 `config/` 目录。
 
@@ -63,7 +70,7 @@ description: 构建并推送 Docker 镜像到 Harbor、容器化部署、版本�
 ## 发布核对清单
 1. 版本号在 `deploy.sh` + `push_image.sh` 两处已改且一致。
 2. `./push_image.sh` 构建推送成功（看末尾「镜像推送完成」）。
-3. 生产机 `./deploy.sh pull && ./deploy.sh restart`（或 `./deploy.sh deploy`）。
+3. 生产机 `./deploy.sh redeploy`（拉新镜像 + 删旧容器 + 重建）。首次部署才用 `./deploy.sh deploy`。
 4. `./deploy.sh logs -f` 看启动日志，确认 scheduler 启动、无导入错误。
 5. 访问 `http://<host>:59496/`，登录验证；触发一次完整巡检确认 DB/钉钉连通。
 6. 若 config 卷未挂载或路径不对：容器会用镜像内打包的 `config/config.json`（可能含旧密码），务必确认 `CONFIG_DIR` 下的文件存在且 `./deploy.sh restart`。
