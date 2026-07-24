@@ -17,7 +17,7 @@
 set -e
 
 # -------------------- 配置 --------------------
-IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.3.0"
+IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.4.0"
 CONTAINER_NAME="server_inspect_web"
 HOST_PORT="59496"
 
@@ -490,6 +490,29 @@ deploy() {
     echo ""
 }
 
+# 重新拉取镜像并部署（强制用最新镜像重建容器）
+# 与 deploy 的区别：不跑 init（保留现有挂载配置），且强制删除旧容器后
+# 用新镜像重建--deploy/restart 在容器已存在时只 docker start，不会用上新镜像。
+redeploy() {
+    check_docker
+    pull_image
+
+    if container_exists; then
+        log_info "停止并删除旧容器 ${CONTAINER_NAME}（以便用新镜像重建）..."
+        docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+        log_success "旧容器已删除"
+    else
+        log_info "容器 ${CONTAINER_NAME} 不存在，将直接创建"
+    fi
+
+    start_container
+    echo ""
+    log_success "重新部署完成!（已使用最新镜像）"
+    echo ""
+    echo "访问地址: http://localhost:${HOST_PORT}"
+    echo ""
+}
+
 # 卸载
 uninstall() {
     check_docker
@@ -527,16 +550,18 @@ show_help() {
     echo "  logs -f   跟踪容器日志 (Ctrl+C 退出)"
     echo "  status    查看容器状态"
     echo "  deploy    完整部署 (init + pull + start)"
+    echo "  redeploy  重新拉取镜像并部署 (pull + 删旧容器 + 重建，用最新镜像)"
     echo "  uninstall 卸载容器"
     echo "  help      显示帮助信息"
     echo ""
     echo "配置文件目录: ${CONFIG_DIR}"
     echo ""
     echo "示例:"
-    echo "  首次部署:  ./deploy.sh deploy"
-    echo "  查看状态:  ./deploy.sh status"
-    echo "  查看日志:  ./deploy.sh logs"
-    echo "  重启:     ./deploy.sh restart"
+    echo "  首次部署:      ./deploy.sh deploy"
+    echo "  更新镜像部署:  ./deploy.sh redeploy"
+    echo "  查看状态:      ./deploy.sh status"
+    echo "  查看日志:      ./deploy.sh logs"
+    echo "  重启:         ./deploy.sh restart"
     echo ""
     echo "=============================================="
 }
@@ -572,6 +597,9 @@ case "${1:-}" in
         ;;
     deploy)
         deploy
+        ;;
+    redeploy)
+        redeploy
         ;;
     uninstall)
         uninstall

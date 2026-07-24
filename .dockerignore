@@ -26,3 +26,7 @@ cookies.txt
 *.log
 config.json
 custom_scripts.json
+# 运行时配置不打包进镜像：由 deploy.sh init 生成并通过卷挂载覆盖
+config/config.json
+config/custom_scripts.json
+config/cookies.txt

@@ -170,6 +170,7 @@ def run_daily_inspection():
     """执行日常巡检"""
     print(f"[{datetime.datetime.now()}] 开始执行日常巡检...")
     DAILY_INSPECTION_ITEMS = get_config('dailyInspectionItems')
+    DAILY_INSPECTION_CONFIG = get_config('dailyInspection')
     DINGTALK_CONFIG = get_config('dingtalk')
     start_time = datetime.datetime.now()
 
@@ -185,10 +186,26 @@ def run_daily_inspection():
 
         save_inspection_log_to_db(results, 'daily', start_time=start_time)
 
-        print(f"[{datetime.datetime.now()}] 日常巡检完成，发送通知...")
-        if DINGTALK_CONFIG.get('enabled', False):
-            dingtalk_notifier.send_inspection_report(results, "daily")
+        # 是否异常通知：开启时仅在异常时通知，关闭时无论是否异常都通知
+        only_error_notification = DAILY_INSPECTION_CONFIG.get('only_error_notification', False)
+        has_alert = False
+        alert_results = {}
+        for item, result in results.items():
+            if result.get('criticals') and len(result['criticals']) > 0:
+                has_alert = True
+                alert_results[item] = result
+            elif result.get('warnings') and len(result['warnings']) > 0:
+                has_alert = True
+                alert_results[item] = result
 
+        should_notify = (not only_error_notification) or has_alert
+        if should_notify and DINGTALK_CONFIG.get('enabled', False):
+            # 仅异常通知开启且有异常时，只发送异常项；其余情况发送全部结果
+            notify_results = alert_results if (only_error_notification and has_alert) else results
+            print(f"[{datetime.datetime.now()}] 日常巡检完成，发送通知...")
+            dingtalk_notifier.send_inspection_report(notify_results, "daily")
+        elif only_error_notification and not has_alert:
+            print(f"[{datetime.datetime.now()}] 日常巡检无异常，仅异常通知已开启，跳过通知")
         print(f"[{datetime.datetime.now()}] 日常巡检完成")
     except Exception as e:
         print(f"[{datetime.datetime.now()}] 日常巡检出错: {e}")

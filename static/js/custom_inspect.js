@@ -310,7 +310,18 @@ function renderVariables() {
             let selectedPreset = '';
             let hiddenClass = '';
             let lastNDaysValue = variable.last_n_days || 7;
-            if (defaultValue === today) {
+            if (variable.date_range_type === 'last_n_days' ||
+                variable.date_range_type === 'last_n_to_yesterday' ||
+                variable.date_range_type === 'last_n_to_today') {
+                selectedPreset = 'lastNDays';
+                hiddenClass = 'hidden';
+            } else if (variable.date_range_type === 'today') {
+                selectedPreset = 'today';
+                hiddenClass = 'hidden';
+            } else if (variable.date_range_type === 'yesterday') {
+                selectedPreset = 'yesterday';
+                hiddenClass = 'hidden';
+            } else if (defaultValue === today) {
                 selectedPreset = 'today';
                 hiddenClass = 'hidden';
             } else if (defaultValue === yesterday) {
@@ -318,11 +329,6 @@ function renderVariables() {
                 hiddenClass = 'hidden';
             } else if (defaultValue === monthFirst) {
                 selectedPreset = 'monthFirst';
-                hiddenClass = 'hidden';
-            } else if (variable.date_range_type === 'last_n_days' ||
-                variable.date_range_type === 'last_n_to_yesterday' ||
-                variable.date_range_type === 'last_n_to_today') {
-                selectedPreset = 'lastNDays';
                 hiddenClass = 'hidden';
             }
             const lastNDaysDivClass = selectedPreset === 'lastNDays' ? '' : 'hidden';
@@ -509,13 +515,21 @@ window.handleVariableDatePresetChange = function (index, preset) {
         currentVariables[index].last_n_days = currentVariables[index].last_n_days || 7;
         currentVariables[index].default_value = '';
         if (lastNDaysDiv) lastNDaysDiv.classList.remove('hidden');
+    } else if (preset === 'today') {
+        if (input) input.classList.add('hidden');
+        // 动态“今天”：运行时解析，不把字面量写进 default_value，避免定时任务取到保存当天的快照
+        currentVariables[index].date_range_type = 'today';
+        currentVariables[index].default_value = '';
+        delete currentVariables[index].last_n_days;
+    } else if (preset === 'yesterday') {
+        if (input) input.classList.add('hidden');
+        // 动态“昨天”：运行时解析，保证每天通知的 endDate 始终为最新昨天
+        currentVariables[index].date_range_type = 'yesterday';
+        currentVariables[index].default_value = '';
+        delete currentVariables[index].last_n_days;
     } else if (preset) {
         let value;
-        if (preset === 'today') {
-            value = window.getTodayDate();
-        } else if (preset === 'yesterday') {
-            value = window.getYesterdayDate();
-        } else if (preset === 'monthFirst') {
+        if (preset === 'monthFirst') {
             value = window.getMonthFirstDate();
         }
 
@@ -599,6 +613,14 @@ function renderParamsInputs(variables) {
                 d.setDate(d.getDate() - lastNDays + 1);
                 defaultValue = d.toISOString().split('T')[0];
                 selectedPreset = 'lastNDays';
+                hiddenClass = 'hidden';
+            } else if (variable.date_range_type === 'today') {
+                defaultValue = window.getTodayDate();
+                selectedPreset = 'today';
+                hiddenClass = 'hidden';
+            } else if (variable.date_range_type === 'yesterday') {
+                defaultValue = window.getYesterdayDate();
+                selectedPreset = 'yesterday';
                 hiddenClass = 'hidden';
             } else if (defaultValue === today) {
                 selectedPreset = 'today';
@@ -1759,6 +1781,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         // 最近N天：从 N 天前到今天，起始日期为今天减 (N-1) 天
                         d.setDate(d.getDate() - days + 1);
                         params[v.name] = d.toISOString().split('T')[0];
+                    } else if (v.date_range_type === 'today') {
+                        params[v.name] = window.getTodayDate();
+                    } else if (v.date_range_type === 'yesterday') {
+                        params[v.name] = window.getYesterdayDate();
                     } else if (!v.default_value) {
                         params[v.name] = today;
                     } else {

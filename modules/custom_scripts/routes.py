@@ -7,7 +7,7 @@ import datetime
 import time
 
 from modules.auth.helpers import login_required
-from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value
+from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value, get_variable_value, allocate_script_id
 from modules.custom_scripts.cross_db import compare_cross_db, cross_db_summary_text, cross_db_config_to_text
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
@@ -67,7 +67,7 @@ def custom_scripts_api():
                 script.pop('content', None)
         else:
             new_script = {
-                'id': str(script_id_counter),
+                'id': allocate_script_id(),
                 'name': name,
                 'mode': mode,
                 'scheduled': data.get('scheduled', False),
@@ -93,7 +93,6 @@ def custom_scripts_api():
                     return jsonify({'error': '源数据库和目标数据库SQL不能为空'}), 400
 
             custom_scripts.append(new_script)
-            script_id_counter += 1
 
         save_scripts()
         return jsonify({'message': '脚本保存成功'})
@@ -128,33 +127,6 @@ def custom_script_api(script_id):
         script['updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         save_scripts()
         return jsonify({'message': '脚本更新成功'})
-
-
-def get_variable_value(var, params):
-    """根据变量配置和参数获取实际变量值。
-
-    最近N天：从 N 天前到今天，起始日期 = 今天 - (N - 1) 天。
-    兼容旧配置 date_range_type 取值（last_n_to_yesterday / last_n_to_today）
-    统一按“最近N天（含今天）”语义计算。
-    年月(period)：按当前日期动态解析（当前月/当前年/上个月/去年），优先使用前端传值。
-    """
-    var_name = var.get('name', '')
-    var_type = var.get('type', 'text')
-    date_range_type = var.get('date_range_type')
-    last_n_days = var.get('last_n_days', 7)
-
-    if var_type == 'period':
-        computed = resolve_period_value(
-            var.get('period_type'),
-            var.get('period_format', 'yyyy-MM'))
-        return params.get(var_name) or computed
-
-    if date_range_type in ('last_n_days', 'last_n_to_yesterday', 'last_n_to_today'):
-        today = datetime.datetime.now()
-        start_date = today - datetime.timedelta(days=last_n_days - 1)
-        return start_date.strftime('%Y-%m-%d')
-
-    return params.get(var_name, var.get('default_value', ''))
 
 
 @custom_scripts_bp.route('/<script_id>/execute', methods=['POST'])

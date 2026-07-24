@@ -33,6 +33,60 @@ def load_scripts():
         except Exception as e:
             print(f"加载脚本失败: {e}")
 
+    # 校正历史遗留的重复 id（重新分配），并同步 next_id。
+    # 部署/容器重启后文件可能被覆盖或回退到旧版本，导致文件内的 id
+    # 与内存 script_id_counter 不同步：此处以文件实际状态为准重新校正，
+    # 避免后续新增脚本时分配到与现有脚本冲突的 id。
+    if _normalize_ids():
+        save_scripts()
+    script_id_counter = max(script_id_counter, _max_existing_id() + 1)
+
+
+def _max_existing_id():
+    """返回当前脚本列表中最大的数值 id（忽略非数字 id），无则返回 0。"""
+    max_id = 0
+    for s in custom_scripts:
+        try:
+            sid = int(s.get('id'))
+            if sid > max_id:
+                max_id = sid
+        except (TypeError, ValueError):
+            continue
+    return max_id
+
+
+def allocate_script_id():
+    """分配一个不与现有脚本冲突的新 id（字符串）。
+
+    基于 custom_scripts 中最大的数值 id + 1 计算，而非依赖模块级
+    script_id_counter——后者在容器重启或文件被外部覆盖后会与文件实际
+    状态不同步，曾导致新增脚本分配到已存在的 id（重复 id）。
+    同时推进 script_id_counter，保证写入文件的 next_id 不落后。
+    """
+    global script_id_counter
+    base = max(_max_existing_id(), script_id_counter - 1)
+    next_id = base + 1
+    script_id_counter = next_id + 1
+    return str(next_id)
+
+
+def _normalize_ids():
+    """校正重复 id：对出现多次的 id 重新分配，返回是否有改动。"""
+    seen = set()
+    changed = False
+    for s in custom_scripts:
+        sid = str(s.get('id', ''))
+        if sid in seen:
+            new_id = allocate_script_id()  # 基于当前最大 id + 1，天然不与现有 id 冲突
+            s['id'] = new_id
+            seen.add(new_id)
+            changed = True
+        else:
+            seen.add(sid)
+    if changed:
+        print(f"[{datetime.datetime.now()}] 检测到重复脚本 id，已自动重新分配并校正 next_id")
+    return changed
+
 
 def save_scripts():
     """保存脚本到文件"""
@@ -99,6 +153,50 @@ def resolve_period_value(period_type, period_format='yyyy-MM'):
         return f"{year}_{month}"
     else:
         return f"{year}-{month:02d}"
+
+
+def get_variable_value(var, params):
+    """根据变量配置和参数获取实际变量值。
+
+    动态日期类型（date_range_type）在运行时解析，保证定时/日常/实时通知每次
+    都取最新日期，而不是保存脚本那一刻的快照：
+      - last_n_days（含 last_n_to_yesterday / last_n_to_today）：最近N天，起始 = 今天 - (N - 1)
+      - today：今天
+      - yesterday：昨天
+    执行路径(execute_custom_script)若显式传入值则优先使用（支持临时改期测试），
+    否则按上述规则动态计算；定时/通知路径传入 {} 故始终动态计算。
+    年月(period)：按当前日期动态解析（当前月/当前年/上个月/去年），优先使用前端传值。
+
+    页面执行与定时/日常/实时通知共用本函数，确保变量解析口径一致。
+    """
+    var_name = var.get('name', '')
+    var_type = var.get('type', 'text')
+    date_range_type = var.get('date_range_type')
+    last_n_days = var.get('last_n_days', 7)
+
+    if var_type == 'period':
+        computed = resolve_period_value(
+            var.get('period_type'),
+            var.get('period_format', 'yyyy-MM'))
+        return params.get(var_name) or computed
+
+    today = datetime.datetime.now()
+
+    if date_range_type in ('last_n_days', 'last_n_to_yesterday', 'last_n_to_today'):
+        # 执行路径若显式传值则优先，否则按“最近N天（含今天）”计算
+        if params.get(var_name):
+            return params.get(var_name)
+        start_date = today - datetime.timedelta(days=last_n_days - 1)
+        return start_date.strftime('%Y-%m-%d')
+
+    if date_range_type == 'today':
+        return params.get(var_name) or today.strftime('%Y-%m-%d')
+
+    if date_range_type == 'yesterday':
+        yesterday = today - datetime.timedelta(days=1)
+        return params.get(var_name) or yesterday.strftime('%Y-%m-%d')
+
+    return params.get(var_name, var.get('default_value', ''))
 
 
 def check_row_against_rules(row, columns, rules):
@@ -177,10 +275,10 @@ def check_row_against_rules(row, columns, rules):
 def _resolve_variables_for_scheduled(variables):
     """定时任务场景下解析变量值：返回 {变量名: 格式化后SQL值} 字典。
 
-    - period: 按当前日期动态解析
-    - date: 默认今天
-    - time: 默认今天开始时间
-    - 其余: 用 default_value
+    与页面执行(execute_custom_script)/测试(test_custom_script)路径共用
+    get_variable_value 解析口径，保证 date_range_type（today/yesterday/
+    last_n_days 等）在定时/日常/实时通知时也动态取当天值，避免漏报。
+    date/time 无动态配置且无默认值时兜底取今天/今天开始时间。
     """
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     today_start = datetime.datetime.now().strftime('%Y-%m-%d 00:00:00')
@@ -189,13 +287,11 @@ def _resolve_variables_for_scheduled(variables):
     for var in variables:
         var_name = var.get('name', '')
         var_type = var.get('type', 'text')
-        var_value = var.get('default_value', '')
+        # 定时路径传空 params，强制按 date_range_type/period 动态计算
+        var_value = get_variable_value(var, {})
 
-        if var_type == 'period':
-            var_value = resolve_period_value(
-                var.get('period_type'),
-                var.get('period_format', 'yyyy-MM'))
-        elif var_type == 'date' and not var_value:
+        # date/time 无动态配置且无默认值时兜底（保留原定时场景行为）
+        if var_type == 'date' and not var_value:
             var_value = today
         elif var_type == 'time' and not var_value:
             var_value = today_start
