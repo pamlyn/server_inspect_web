@@ -37,15 +37,14 @@ def config():
         save_result = save_config_to_file(data)
         print(f"保存配置结果: {save_result}")
 
-        # 重启定时任务
-        from modules.scheduler.routes import scheduler, start_scheduler, stop_real_time_monitor
+        # 重启定时任务（实时监控线程由 start_real_time_monitor 复用，不再 stop+restart，避免多线程并存）
+        from modules.scheduler.routes import scheduler, start_scheduler
         if scheduler:
             try:
                 scheduler.shutdown(wait=True)
             except Exception as e:
                 print(f"停止定时任务时出错: {e}")
 
-        stop_real_time_monitor()
         start_scheduler()
 
         print('保存配置完成')

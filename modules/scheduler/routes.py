@@ -349,23 +349,43 @@ def real_time_monitor(stop_event):
 
 
 def start_real_time_monitor():
-    """启动实时监控（保证同一时刻只有一个监控线程）"""
+    """启动实时监控（保证同一时刻只有一个监控线程）。
+
+    监控线程每轮重读 realTimeMonitoring 配置，故配置变更（间隔、监测项、通知等）
+    无需重启线程，下一轮即生效。据此避免「每次保存配置都 stop+restart」导致的
+    并发多线程问题（旧线程周期长、join 超时后新线程并发启动）：
+    - 线程正常运行 + 启用：复用，不重启；
+    - 线程正常运行 + 禁用：通知退出；
+    - 线程正在退出 + 启用：等其退出后启动新线程；
+    - 无线程 + 启用：启动新线程。
+    """
     global real_time_monitor_thread, real_time_monitor_running, _realtime_stop_event
     REAL_TIME_MONITORING = get_config('realTimeMonitoring')
+    enabled = REAL_TIME_MONITORING.get('enabled', False)
 
-    print(f"[{datetime.datetime.now()}] 开始启动实时监控")
-    print(f"[{datetime.datetime.now()}] 实时监控配置: {REAL_TIME_MONITORING}")
+    print(f"[{datetime.datetime.now()}] 实时监控调度（enabled={enabled}）")
 
-    # 先停止并等待旧线程真正退出，避免多线程并存导致重复通知
-    if _realtime_stop_event is not None:
+    thread_alive = bool(real_time_monitor_thread and real_time_monitor_thread.is_alive())
+    # stop_event 已 set 表示线程正在退出（刚被禁用或停止）
+    stopping = _realtime_stop_event is not None and _realtime_stop_event.is_set()
+
+    if thread_alive and not stopping:
+        if enabled:
+            # 监控线程运行中，每轮重读配置，配置变更下一轮即生效，复用避免并发
+            print(f"[{datetime.datetime.now()}] 实时监控线程运行中，复用（配置下一轮生效）")
+            return
+        # 禁用：通知线程退出（线程在下个 stop_event 检查点退出）
         _realtime_stop_event.set()
-    if real_time_monitor_thread and real_time_monitor_thread.is_alive():
-        print(f"[{datetime.datetime.now()}] 等待旧实时监控线程退出...")
-        real_time_monitor_thread.join(timeout=10)
-        if real_time_monitor_thread.is_alive():
-            print(f"[{datetime.datetime.now()}] 警告：旧实时监控线程未在 10s 内退出（可能仍在执行检查），将并发启动新线程")
+        real_time_monitor_running = False
+        print(f"[{datetime.datetime.now()}] 实时监控已禁用，通知线程退出")
+        return
 
-    if REAL_TIME_MONITORING.get('enabled', False):
+    # 线程正在退出（禁用后重启等场景）：等待其真正退出，避免与新线程并发
+    if thread_alive and stopping:
+        print(f"[{datetime.datetime.now()}] 等待旧实时监控线程退出...")
+        real_time_monitor_thread.join(timeout=30)
+
+    if enabled:
         _realtime_stop_event = threading.Event()
         real_time_monitor_running = True
         real_time_monitor_thread = threading.Thread(
@@ -376,7 +396,7 @@ def start_real_time_monitor():
     else:
         _realtime_stop_event = None
         real_time_monitor_running = False
-        print(f"[{datetime.datetime.now()}] 实时监控已禁用，不启动线程")
+        print(f"[{datetime.datetime.now()}] 实时监控已禁用")
 
 
 def stop_real_time_monitor():
