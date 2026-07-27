@@ -472,6 +472,7 @@ def clear_slow_sql_logs():
                 'message': f'日志大小: {log_size_after} 字节' + (f'（清理失败: {truncate_result.stderr.strip()}）' if truncate_result.returncode != 0 else '')
             })
 
+        print(f"[{datetime.datetime.now()}] 清理慢SQL日志结果: {results!r}")
         return jsonify({'success': True, 'results': results})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

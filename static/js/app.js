@@ -303,7 +303,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (data.success) {
                             const failed = (data.results || []).filter(r => !r.success);
                             if (failed.length > 0) {
-                                showToast('部分容器清理失败: ' + failed.map(r => r.container).join(', '), 'warning');
+                                const detail = failed.map(r => `${r.container}(${r.message})`).join(' | ');
+                                showToast('部分容器清理失败: ' + detail, 'warning');
                             } else {
                                 showToast('慢SQL日志清理完成', 'success');
                             }
