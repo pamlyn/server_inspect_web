@@ -11,11 +11,6 @@ RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
         sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list; \
     fi \
     && apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    python3-dev \
-    libpq-dev \
-    default-libmysqlclient-dev \
     openssh-client \
     procps \
     iproute2 \
@@ -28,6 +23,9 @@ RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
     iputils-ping \
     sysstat \
     && rm -rf /var/lib/apt/lists/*
+# 说明：DB 驱动用 psycopg2-binary（预编译 wheel，自带 libpq）+ PyMySQL（纯 Python），
+# 无需任何编译，因此不装 gcc/g++/python3-dev/libpq-dev/default-libmysqlclient-dev
+# 这套编译工具链（曾占镜像约 250MB+）。仅保留运行时巡检命令依赖。
 
 # 安装 Docker CLI（静态二进制，用于从容器内与宿主机 Docker socket 通信）
 RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.1.4.tgz -o /tmp/docker.tgz \
