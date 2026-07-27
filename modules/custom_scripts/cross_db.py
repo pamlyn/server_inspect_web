@@ -82,6 +82,50 @@ def _diff_desc(compare_columns, source_dict, target_dict):
     return '；'.join(descs)
 
 
+def _scalar_compare(source_rows, target_rows, tolerance):
+    """标量对比：取两库结果各自第一行第一列的值（聚合值，如 COUNT/SUM）直接比对。
+
+    适用于「A 库某天总记录数 vs B 库」这类单值比对场景，无需维度对齐。
+    SQL 应保证只返回一行一个数值（COUNT/SUM/MAX 等聚合天然满足）。
+    """
+    def _first_cell(rows):
+        if not rows:
+            return None
+        row = rows[0]
+        if isinstance(row, dict):
+            return next(iter(row.values()), None)
+        if isinstance(row, (list, tuple)):
+            return row[0] if len(row) > 0 else None
+        return row
+
+    s = _first_cell(source_rows)
+    t = _first_cell(target_rows)
+    equal = _values_equal(s, t, tolerance)
+
+    # 数值时计算差值，便于直观看出相差多少
+    sn = _normalize_value(s)
+    tn = _normalize_value(t)
+    if isinstance(sn, (int, float)) and isinstance(tn, (int, float)):
+        diff = round(sn - tn, 6)
+    else:
+        diff = ''
+
+    status = '一致' if equal else '不一致'
+    diff_desc = '' if equal else f"差异: {s}↔{t}(容差{tolerance})"
+    return {
+        'columns': ['源库值', '目标库值', '差值', '状态', '差异说明'],
+        'rows': [['' if s is None else s, '' if t is None else t, diff, status, diff_desc]],
+        'summary': {
+            'consistent': 1 if equal else 0,
+            'inconsistent': 0 if equal else 1,
+            'only_source': 0,
+            'only_target': 0,
+            'total': 1,
+        },
+        'is_consistent': equal,
+    }
+
+
 def compare_cross_db(source_columns, source_rows, target_columns, target_rows, cross_db_config):
     """跨库对比主函数。
 
@@ -105,6 +149,17 @@ def compare_cross_db(source_columns, source_rows, target_columns, target_rows, c
     compare_type = config.get('compare_type', 'full_outer')
     dimension_columns = config.get('dimension_columns', []) or []
     compare_columns = config.get('compare_columns', []) or []
+
+    # 标量对比：两库各取一个数值（如总记录数）直接比对，无需维度对齐
+    if compare_type == 'scalar':
+        tol = config.get('scalar_tolerance')
+        if (tol is None or tol == '') and compare_columns:
+            tol = compare_columns[0].get('tolerance', 0)
+        try:
+            tol = float(tol) if tol not in (None, '') else 0.0
+        except (ValueError, TypeError):
+            tol = 0.0
+        return _scalar_compare(source_rows, target_rows, tol)
 
     # 维度列为空时退化：无法对齐，退回原拼接行为（按数据源堆叠）
     if not dimension_columns:
@@ -248,8 +303,17 @@ def cross_db_config_to_text(cross_db_config):
     dims = cross_db_config.get('dimension_columns', [])
     comps = cross_db_config.get('compare_columns', [])
     ct = cross_db_config.get('compare_type', 'full_outer')
-    ct_text = {'full_outer': '全外连接(不一致+缺失)', 'diff_only': '仅不一致', 'missing_only': '仅单库缺失'}.get(ct, ct)
+    ct_text = {
+        'full_outer': '全外连接(不一致+缺失)',
+        'diff_only': '仅不一致',
+        'missing_only': '仅单库缺失',
+        'scalar': '标量对比(单值比对)',
+    }.get(ct, ct)
     parts = [f"对比类型: {ct_text}"]
+    if ct == 'scalar':
+        tol = cross_db_config.get('scalar_tolerance', 0)
+        parts.append(f"容差: {tol}")
+        return '；'.join(parts)
     if dims:
         parts.append(f"维度列: {', '.join(dims)}")
     if comps:

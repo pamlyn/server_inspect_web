@@ -1536,6 +1536,7 @@ function renderCrossDbConfig() {
     if (!cfg.compare_type) cfg.compare_type = 'full_outer';
     if (!Array.isArray(cfg.dimension_columns)) cfg.dimension_columns = [];
     if (!Array.isArray(cfg.compare_columns)) cfg.compare_columns = [];
+    if (cfg.scalar_tolerance === undefined || cfg.scalar_tolerance === null) cfg.scalar_tolerance = 0;
 
     container.innerHTML = `
         <div class="mb-3">
@@ -1544,25 +1545,34 @@ function renderCrossDbConfig() {
                 <option value="full_outer" ${cfg.compare_type === 'full_outer' ? 'selected' : ''}>全外连接（不一致 + 仅单库数据）</option>
                 <option value="diff_only" ${cfg.compare_type === 'diff_only' ? 'selected' : ''}>仅不一致数据</option>
                 <option value="missing_only" ${cfg.compare_type === 'missing_only' ? 'selected' : ''}>仅单库缺失数据</option>
+                <option value="scalar" ${cfg.compare_type === 'scalar' ? 'selected' : ''}>标量对比（两库各查一个数值比对，如总记录数）</option>
             </select>
         </div>
-        <div class="mb-3">
-            <label class="block text-xs text-gray-500 mb-1">维度列（多列用逗号分隔，两库 SQL 都需 SELECT 这些列）</label>
-            <input type="text" id="crossDbDimensionColumns" placeholder="例如：produce_order_code, work_procedure_code"
-                value="${(cfg.dimension_columns || []).join(', ')}"
-                class="w-full px-2 py-1 text-sm border rounded">
-            <p class="text-xs text-gray-400 mt-1">用于两库数据对齐，相同维度的数据会逐行比较</p>
+        <div id="crossDbScalarConfig" class="mb-3 ${cfg.compare_type === 'scalar' ? '' : 'hidden'}">
+            <label class="block text-xs text-gray-500 mb-1">容差（两库数值差值在容差内视为一致，0 表示必须相等）</label>
+            <input type="number" step="any" id="crossDbScalarTolerance" value="${cfg.scalar_tolerance || 0}"
+                class="w-32 px-2 py-1 text-sm border rounded">
+            <p class="text-xs text-gray-400 mt-1">用法：两库 SQL 各返回一行一个数值（如 <code>SELECT COUNT(*)</code>），直接比对是否一致</p>
         </div>
-        <div>
-            <div class="flex items-center justify-between mb-2">
-                <label class="block text-xs text-gray-500">对比列（需比较是否一致的数值列，可配置容差）</label>
-                <button type="button" id="addCompareColumnBtn"
-                    class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-all">
-                    <i class="fa fa-plus mr-1"></i>添加对比列
-                </button>
+        <div id="crossDbJoinConfig" class="${cfg.compare_type === 'scalar' ? 'hidden' : ''}">
+            <div class="mb-3">
+                <label class="block text-xs text-gray-500 mb-1">维度列（多列用逗号分隔，两库 SQL 都需 SELECT 这些列）</label>
+                <input type="text" id="crossDbDimensionColumns" placeholder="例如：produce_order_code, work_procedure_code"
+                    value="${(cfg.dimension_columns || []).join(', ')}"
+                    class="w-full px-2 py-1 text-sm border rounded">
+                <p class="text-xs text-gray-400 mt-1">用于两库数据对齐，相同维度的数据会逐行比较</p>
             </div>
-            <div id="compareColumnsList" class="space-y-2"></div>
-            <p class="text-xs text-gray-400 mt-1">容差：两库数值差值在容差内视为一致（避免浮点误差），如填 0.01 则相差 0.01 以内算一致</p>
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-xs text-gray-500">对比列（需比较是否一致的数值列，可配置容差）</label>
+                    <button type="button" id="addCompareColumnBtn"
+                        class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-all">
+                        <i class="fa fa-plus mr-1"></i>添加对比列
+                    </button>
+                </div>
+                <div id="compareColumnsList" class="space-y-2"></div>
+                <p class="text-xs text-gray-400 mt-1">容差：两库数值差值在容差内视为一致（避免浮点误差），如填 0.01 则相差 0.01 以内算一致</p>
+            </div>
         </div>
     `;
 
@@ -1593,6 +1603,18 @@ function renderCrossDbConfig() {
     if (compareTypeEl) {
         compareTypeEl.addEventListener('change', function () {
             currentCrossDbConfig.compare_type = this.value;
+            // 切换 标量/行级 配置区显隐
+            const scalar = this.value === 'scalar';
+            const scalarCfg = document.getElementById('crossDbScalarConfig');
+            const joinCfg = document.getElementById('crossDbJoinConfig');
+            if (scalarCfg) scalarCfg.classList.toggle('hidden', !scalar);
+            if (joinCfg) joinCfg.classList.toggle('hidden', scalar);
+        });
+    }
+    const scalarTolEl = document.getElementById('crossDbScalarTolerance');
+    if (scalarTolEl) {
+        scalarTolEl.addEventListener('change', function () {
+            currentCrossDbConfig.scalar_tolerance = parseFloat(this.value) || 0;
         });
     }
     const dimEl = document.getElementById('crossDbDimensionColumns');
@@ -1635,11 +1657,20 @@ function collectCrossDbConfig() {
     // 确保从 DOM 收集最新值（input change 已同步到 currentCrossDbConfig，这里做一次清洗）
     const cfg = currentCrossDbConfig || {};
     cfg.compare_type = cfg.compare_type || 'full_outer';
+    if (cfg.compare_type === 'scalar') {
+        // 标量对比：只需容差，清掉行级配置
+        const tolEl = document.getElementById('crossDbScalarTolerance');
+        cfg.scalar_tolerance = tolEl ? (parseFloat(tolEl.value) || 0) : (cfg.scalar_tolerance || 0);
+        cfg.dimension_columns = [];
+        cfg.compare_columns = [];
+        return cfg;
+    }
     if (typeof cfg.dimension_columns === 'string') {
         cfg.dimension_columns = cfg.dimension_columns.split(',').map(s => s.trim()).filter(Boolean);
     }
     cfg.dimension_columns = (cfg.dimension_columns || []).filter(Boolean);
     cfg.compare_columns = (cfg.compare_columns || []).filter(c => c && c.name);
+    delete cfg.scalar_tolerance;
     return cfg;
 }
 
