@@ -130,15 +130,23 @@ def test_custom_script():
 
 
 if __name__ == '__main__':
+    import os
     try:
-        # 启动定时任务
-        from modules.scheduler.routes import start_scheduler
-        start_scheduler()
-
-        # 使用端口59496
+        # 是否开启 werkzeug reloader（开发热重载）。
+        # 开启时 reloader 父进程会 fork 子进程（WERKZEUG_RUN_MAIN=true）重新执行本脚本，
+        # 父子进程都会执行本块。定时/实时监控必须只在唯一的服务进程启动，否则双进程会各起一个
+        # real_time_monitor 线程，两个线程按 interval 周期独立巡检、起始错开约1s，导致每个监控
+        # 周期出现两条相差约1s的巡检日志（如 15:43:11 / 15:43:12）。生产/容器无需热重载，可置 False。
+        USE_RELOADER = True
         port = 59496
         print(f"服务器将运行在端口: {port}")
-        app.run(debug=True, host='0.0.0.0', port=port)
+        # reloader 开启→仅子进程(WERKZEUG_RUN_MAIN=true)启动；reloader 关闭→本进程即唯一服务进程，启动
+        is_reloader_child = os.environ.get('WERKZEUG_RUN_MAIN') == 'true'
+        if (not USE_RELOADER) or is_reloader_child:
+            print(f"[{datetime.datetime.now()}] 启动定时/实时监控（PID={os.getpid()}, reloader子进程={is_reloader_child}）")
+            from modules.scheduler.routes import start_scheduler
+            start_scheduler()
+        app.run(debug=True, host='0.0.0.0', port=port, use_reloader=USE_RELOADER)
     except Exception as e:
         print(f"服务器启动失败: {e}")
         import traceback
