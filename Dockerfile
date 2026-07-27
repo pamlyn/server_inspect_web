@@ -28,7 +28,12 @@ RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
 # 这套编译工具链（曾占镜像约 250MB+）。仅保留运行时巡检命令依赖。
 
 # 安装 Docker CLI（静态二进制，用于从容器内与宿主机 Docker socket 通信）
-RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.1.4.tgz -o /tmp/docker.tgz \
+# download.docker.com 偶发 HTTP/2 流中断(exit 18)，故强制 HTTP/1.1 + 自动重试，
+# 并以阿里云 docker-ce 镜像兜底，保证构建在网络抖动下仍能成功
+RUN (curl -fsSL --http1.1 --retry 5 --retry-delay 3 --retry-all-errors \
+        https://download.docker.com/linux/static/stable/x86_64/docker-26.1.4.tgz -o /tmp/docker.tgz \
+    || curl -fsSL --http1.1 --retry 5 --retry-delay 3 --retry-all-errors \
+        https://mirrors.aliyun.com/docker-ce/linux/static/stable/x86_64/docker-26.1.4.tgz -o /tmp/docker.tgz) \
     && tar -xzf /tmp/docker.tgz -C /tmp/ \
     && cp /tmp/docker/docker /usr/local/bin/ \
     && chmod +x /usr/local/bin/docker \
