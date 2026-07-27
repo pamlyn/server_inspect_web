@@ -48,21 +48,14 @@ window.runInspection = function (type) {
         }
     }
 
-    // Hide all content areas immediately
+    // 统一走 hideAllContent 隐藏所有面板，避免漏隐藏某面板
+    // （曾因漏隐藏 pgConfigContent/logContent，导致先看 PG配置/巡检日志
+    // 再跑完整巡检时，旧面板内容残留叠加在巡检结果上）
+    hideAllContent();
     const loading = document.getElementById('loading');
     const results = document.getElementById('results');
-    const configContent = document.getElementById('configContent');
-    const sqlInspectContent = document.getElementById('sqlInspectContent');
-    const customInspectContent = document.getElementById('customInspectContent');
     const inspectionContent = document.getElementById('inspectionContent');
-    const arthasContent = document.getElementById('arthasContent');
-
     loading.classList.remove('hidden');
-    results.classList.add('hidden');
-    configContent.classList.add('hidden');
-    sqlInspectContent.classList.add('hidden');
-    customInspectContent.classList.add('hidden');
-    if (arthasContent) arthasContent.classList.add('hidden');
 
     const deduplicateCheckbox = document.getElementById('deduplicateCheckbox');
     const deduplicate = deduplicateCheckbox ? deduplicateCheckbox.checked : true;
@@ -75,11 +68,11 @@ window.runInspection = function (type) {
         .then(response => response.json())
         .then(data => {
             loading.classList.add('hidden');
+            // 结果就绪前再次隐藏所有面板，防止加载期间用户切到其它页面
+            // （如 PG配置）后，结果回调把巡检内容叠加显示出来
+            hideAllContent();
             results.classList.remove('hidden');
             inspectionContent.classList.remove('hidden');
-            configContent.classList.add('hidden');
-            sqlInspectContent.classList.add('hidden');
-            customInspectContent.classList.add('hidden');
             results.classList.add('fade-in');
             // 单项巡检只展示当前结果，完整巡检展示汇总+详情
             displayResults(data, type === 'full');
