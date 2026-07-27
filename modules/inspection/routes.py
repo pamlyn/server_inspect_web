@@ -468,8 +468,8 @@ def clear_slow_sql_logs():
 
             results.append({
                 'container': container_name,
-                'success': truncate_result.returncode == 0 or log_size_after == 0,
-                'message': f'日志大小: {log_size_after} 字节'
+                'success': truncate_result.returncode == 0,
+                'message': f'日志大小: {log_size_after} 字节' + (f'（清理失败: {truncate_result.stderr.strip()}）' if truncate_result.returncode != 0 else '')
             })
 
         return jsonify({'success': True, 'results': results})

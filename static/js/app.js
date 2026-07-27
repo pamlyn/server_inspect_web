@@ -300,7 +300,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 fetch('/api/clear_slow_sql_logs', { method: 'POST' })
                     .then(response => response.json())
                     .then(data => {
-                        showToast(data.message || '慢SQL日志清理完成', 'success');
+                        if (data.success) {
+                            const failed = (data.results || []).filter(r => !r.success);
+                            if (failed.length > 0) {
+                                showToast('部分容器清理失败: ' + failed.map(r => r.container).join(', '), 'warning');
+                            } else {
+                                showToast('慢SQL日志清理完成', 'success');
+                            }
+                        } else {
+                            showToast(data.message || '清理慢SQL日志失败', 'error');
+                        }
                     })
                     .catch(error => {
                         showToast('清理慢SQL日志失败: ' + error.message, 'error');

@@ -367,6 +367,14 @@ start_container() {
             DOCKER_CMD="${DOCKER_CMD} \
                 -v /var/run/docker.sock:/var/run/docker.sock"
             log_info "已挂载 Docker socket：可在容器内检测宿主机容器"
+            # 挂载 Docker 容器日志目录（json-log），供容器内清理数据库容器的慢SQL日志
+            # 按宿主实际 data-root 同名挂载，truncate 清空 json-log 时路径与宿主一致
+            DATA_ROOT=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo "/var/lib/docker")
+            if [ -d "${DATA_ROOT}/containers" ]; then
+                DOCKER_CMD="${DOCKER_CMD} \
+                    -v ${DATA_ROOT}/containers:${DATA_ROOT}/containers"
+                log_info "已挂载 Docker 容器日志目录：${DATA_ROOT}/containers"
+            fi
         fi
 
         # 添加环境变量（可选）
