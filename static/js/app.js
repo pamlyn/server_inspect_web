@@ -267,6 +267,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Individual inspect buttons (sidebar navigation)
     inspectBtns.forEach(btn => {
+        // fullInspectBtn 同时带 .inspect-btn 类，已由上方专用监听器处理；
+        // 此处若再绑定会一次点击触发两次 runInspection，产生两条完整巡检日志
+        if (btn.id === 'fullInspectBtn') return;
         btn.addEventListener('click', function () {
             const type = this.getAttribute('data-type');
             if (type === 'config') {
