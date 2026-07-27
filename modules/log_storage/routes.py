@@ -12,7 +12,7 @@ from modules.auth.helpers import login_required
 from modules.log_storage.helpers import (
     _get_log_db_config, query_inspection_logs, get_inspection_log_detail, delete_inspection_logs,
 )
-from modules.log_storage.parser import parse_log_detail
+from modules.log_storage.parser import parse_log_detail, _target_label
 
 log_bp = Blueprint('logs', __name__, url_prefix='/api/logs')
 
@@ -58,11 +58,12 @@ def list_logs():
 
     try:
         logs, total = query_inspection_logs(db_type, db_config, filters, page, page_size)
-        # 序列化 datetime
+        # 序列化 datetime，并补充巡检对象中文标签
         for log in logs:
             for k, v in list(log.items()):
                 if isinstance(v, datetime.datetime):
                     log[k] = v.strftime('%Y-%m-%d %H:%M:%S')
+            log['target_label'] = _target_label(log.get('target'))
         return jsonify({
             'success': True,
             'logs': logs,

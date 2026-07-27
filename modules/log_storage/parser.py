@@ -52,6 +52,33 @@ def _type_label(inspection_type):
     }.get(inspection_type, inspection_type or '未知')
 
 
+def _target_label(target):
+    """巡检对象代号 -> 中文名。
+    巡检项代号(full/memory/disk 等)转中文；库别名(mes/hanging)走 _db_label；
+    其余(日期范围、自定义脚本名、自定义库 key 等)原样返回；空值返回 '-'。
+    代号表与 dingtalk.py 的 category 中文名映射保持一致。"""
+    if not target:
+        return '-'
+    labels = {
+        'full': '完整巡检',
+        'system_info': '系统信息',
+        'cpu': 'CPU使用率',
+        'memory': '内存使用情况',
+        'swap': '交换分区使用情况',
+        'disk': '磁盘使用情况',
+        'disk_io': '磁盘IO情况',
+        'processes': '进程状态',
+        'slow_sql': '慢SQL检查',
+        'database': '数据库检查',
+        'network': '网络状态',
+        'worker_output_with_color_size': '工人产量与报工明细稽核（含颜色尺码）',
+        'worker_output_without_color_size': '工人产量与报工明细稽核（不含颜色尺码）',
+        'worker_output_sfd': '工人产量与报工明细数据稽核(sfd)',
+        'mes_hanging': 'MES报工明细与吊挂报工明细稽核',
+    }
+    return labels.get(target) or _db_label(target)
+
+
 def _rows_preview(rows, limit=50):
     """结果行预览：超过 limit 行时只展示前 limit 行并提示总数。"""
     if not rows:
@@ -252,7 +279,7 @@ def parse_log_detail(log_row):
         {'label': '巡检类型', 'value': _type_label(inspection_type)},
         {'label': '触发来源', 'value': _trigger_label(log_row.get('trigger_source'))},
         {'label': '状态', 'value': _status_label(log_row.get('status'))},
-        {'label': '巡检对象', 'value': log_row.get('target') or '-'},
+        {'label': '巡检对象', 'value': _target_label(log_row.get('target'))},
         {'label': '操作人', 'value': log_row.get('operator') or '系统'},
         {'label': '记录数', 'value': log_row.get('record_count') if log_row.get('record_count') is not None else '-'},
         {'label': '开始时间', 'value': str(log_row.get('start_time') or '')},

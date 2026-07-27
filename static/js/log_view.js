@@ -120,7 +120,7 @@ function renderLogList(logs) {
         const sourceLabel = LOG_SOURCE_LABELS[log.trigger_source] || log.trigger_source || '-';
         const statusLabel = LOG_STATUS_LABELS[log.status] || log.status || '-';
         const statusCls = LOG_STATUS_STYLES[log.status] || 'bg-gray-100 text-gray-700';
-        const target = log.target || '-';
+        const target = log.target_label || log.target || '-';
         const summary = log.summary || '';
         const operator = log.operator || '系统';
         const recordCount = log.record_count !== null && log.record_count !== undefined ? log.record_count : '-';
