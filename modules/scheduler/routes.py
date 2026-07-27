@@ -254,7 +254,10 @@ def real_time_monitor(stop_event):
        通知；异常内容变化则立即通知；冷却期过后相同内容会再通知一次（周期提醒）。
     3. 周期修正：每轮休眠扣除本轮检查耗时，保证实际监控周期≈interval，不受检查耗时长短影响。
     """
-    global real_time_monitor_running
+    # _realtime_last_signature / _realtime_last_notify_time 必须声明 global：
+    # 函数内既有读(312/331)又有写(319/332)，不声明则 Python 视为局部变量，
+    # 首次读取即抛 UnboundLocalError，导致每轮必失败、回退到 10s 兜底休眠。
+    global real_time_monitor_running, _realtime_last_signature, _realtime_last_notify_time
     real_time_monitor_running = True
     print(f"[{datetime.datetime.now()}] 实时监控线程启动")
 
