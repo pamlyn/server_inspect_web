@@ -368,23 +368,16 @@ start_container() {
                 -v /var/run/docker.sock:/var/run/docker.sock"
             log_info "已挂载 Docker socket：可在容器内检测宿主机容器"
             # 挂载 Docker 容器日志目录（json-log），供容器内清理数据库容器的慢SQL日志
-            # 按宿主实际 data-root 同名挂载，truncate 清空 json-log 时路径与宿主一致
-            DATA_ROOT=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null)
-            # docker info 检测失败或目录不存在时，兜底遍历常见 data-root
-            if [ -z "${DATA_ROOT}" ] || [ ! -d "${DATA_ROOT}/containers" ]; then
-                for candidate in /var/lib/docker /data/docker /home/docker /opt/docker; do
-                    if [ -d "${candidate}/containers" ]; then
-                        DATA_ROOT="${candidate}"
-                        break
-                    fi
-                done
-            fi
-            if [ -n "${DATA_ROOT}" ] && [ -d "${DATA_ROOT}/containers" ]; then
+            # 通过 docker inspect 取任一容器 LogPath 推断 data-root（经 docker daemon，
+            # 不受执行用户对 data-root 目录的访问权限限制；docker run -v 由 daemon 以 root 挂载）
+            SAMPLE_LOG_PATH=$(docker ps -q 2>/dev/null | head -1 | xargs -r docker inspect --format '{{.LogPath}}' 2>/dev/null | head -1)
+            DATA_ROOT=$(echo "${SAMPLE_LOG_PATH}" | sed -n 's|^\(.*\)/containers/.*|\1|p')
+            if [ -n "${DATA_ROOT}" ]; then
                 DOCKER_CMD="${DOCKER_CMD} \
                     -v ${DATA_ROOT}/containers:${DATA_ROOT}/containers"
                 log_info "已挂载 Docker 容器日志目录：${DATA_ROOT}/containers"
             else
-                log_warn "未找到 Docker 容器日志目录，清理慢SQL日志功能将不可用"
+                log_warn "无法检测 Docker 容器日志目录，清理慢SQL日志功能将不可用"
             fi
         fi
 
