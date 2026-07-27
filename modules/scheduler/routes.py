@@ -99,8 +99,12 @@ def run_daily_now():
         return jsonify({'error': str(e)}), 500
 
 
-def save_inspection_log_to_db(results, inspection_type, *, target='full', error=None, start_time=None):
-    """保存巡检日志到数据库（定时/日常/实时巡检，含成功与失败）。"""
+def save_inspection_log_to_db(results, inspection_type, *, target=None, error=None, start_time=None):
+    """保存巡检日志到数据库（定时/日常/实时巡检，含成功与失败）。
+
+    target 默认取 inspection_type（scheduled/daily/real_time）作为巡检对象代号，经
+    _target_label 映射为「定时巡检/日常巡检/实时监控」，避免与手动完整巡检
+    （target='full' -> 「完整巡检」）混淆。"""
     try:
         now = datetime.datetime.now()
         if error:
@@ -109,6 +113,8 @@ def save_inspection_log_to_db(results, inspection_type, *, target='full', error=
         else:
             status = derive_status(results)
             summary = f"巡检完成: {inspection_type}"
+        if target is None:
+            target = inspection_type
         record_inspection_log(
             inspection_type='system', trigger_source=inspection_type,
             target=target, operator=None, status=status,
@@ -168,7 +174,7 @@ def run_scheduled_inspection():
         print(f"[{datetime.datetime.now()}] 定时巡检出错: {e}")
         import traceback
         traceback.print_exc()
-        save_inspection_log_to_db(None, 'scheduled', target='full', error=str(e), start_time=start_time)
+        save_inspection_log_to_db(None, 'scheduled', error=str(e), start_time=start_time)
 
 
 def run_daily_inspection():
@@ -216,7 +222,7 @@ def run_daily_inspection():
         print(f"[{datetime.datetime.now()}] 日常巡检出错: {e}")
         import traceback
         traceback.print_exc()
-        save_inspection_log_to_db(None, 'daily', target='full', error=str(e), start_time=start_time)
+        save_inspection_log_to_db(None, 'daily', error=str(e), start_time=start_time)
 
 
 def _alert_signature(alert_results):
@@ -339,7 +345,7 @@ def real_time_monitor(stop_event):
             print(f"[{datetime.datetime.now()}] 实时监控线程出错: {e}")
             import traceback
             traceback.print_exc()
-            save_inspection_log_to_db(None, 'real_time', target='full', error=str(e), start_time=start_time)
+            save_inspection_log_to_db(None, 'real_time', error=str(e), start_time=start_time)
             # 出错后短暂休眠，避免异常死循环；被停止事件唤醒则退出
             if stop_event.wait(10):
                 break

@@ -61,6 +61,10 @@ def _target_label(target):
         return '-'
     labels = {
         'full': '完整巡检',
+        # 自动触发的全量系统巡检：target 复用 trigger_source 代号，映射成中文，避免与手动「完整巡检」混淆
+        'scheduled': '定时巡检',
+        'daily': '日常巡检',
+        'real_time': '实时监控',
         'system_info': '系统信息',
         'cpu': 'CPU使用率',
         'memory': '内存使用情况',
