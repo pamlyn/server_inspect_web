@@ -113,12 +113,35 @@
         </div>
 
         <!-- 分页 -->
-        <div id="logPagination" class="mt-4 flex items-center justify-between">
-            <span id="logPageInfo" class="text-xs text-gray-500"></span>
+        <div id="logPagination" class="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <span id="logPageInfo" class="text-xs text-gray-500"></span>
+                <div class="flex items-center space-x-1 text-xs text-gray-500">
+                    <span>每页</span>
+                    <select id="logPageSizeSelect"
+                        class="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <span>条</span>
+                </div>
+            </div>
             <div class="flex items-center space-x-2">
                 <button id="logPrevBtn" class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50" disabled>上一页</button>
                 <span id="logPageNum" class="text-sm text-gray-600">1</span>
                 <button id="logNextBtn" class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50" disabled>下一页</button>
+                <div class="flex items-center space-x-1 ml-2 text-xs text-gray-500">
+                    <span>跳至</span>
+                    <input type="number" id="logJumpInput" min="1" value="1"
+                        class="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                    <span>页</span>
+                    <button id="logJumpBtn" class="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">跳转</button>
+                </div>
             </div>
         </div>
     </div>

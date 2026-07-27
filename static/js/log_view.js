@@ -11,7 +11,7 @@
 // ========== 模块状态 ==========
 
 let logCurrentPage = 1;
-const logPageSize = 20;
+let logPageSize = 20;
 let logTotalPages = 1;
 let logTotalCount = 0;
 
@@ -89,6 +89,7 @@ function loadLogs(page) {
         .then(data => {
             if (!data.success) {
                 bodyEl.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">${data.error || '查询失败'}</td></tr>`;
+                logTotalPages = 1;
                 updatePagination(0, 1);
                 return;
             }
@@ -154,11 +155,20 @@ function updatePagination(total, page) {
     const pageNum = document.getElementById('logPageNum');
     const prevBtn = document.getElementById('logPrevBtn');
     const nextBtn = document.getElementById('logNextBtn');
+    const jumpInput = document.getElementById('logJumpInput');
+    const jumpBtn = document.getElementById('logJumpBtn');
 
     pageInfo.textContent = `共 ${total} 条记录`;
     pageNum.textContent = `${page} / ${logTotalPages}`;
     prevBtn.disabled = page <= 1;
     nextBtn.disabled = page >= logTotalPages;
+
+    // 跳转页输入框：同步当前页码与上限；总页数≤1 时禁用跳转
+    if (jumpInput) {
+        jumpInput.max = logTotalPages;
+        jumpInput.value = page;
+    }
+    if (jumpBtn) jumpBtn.disabled = logTotalPages <= 1;
 }
 
 // ========== 日志详情 ==========
@@ -355,6 +365,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearBtn = document.getElementById('logClearBtn');
     const prevBtn = document.getElementById('logPrevBtn');
     const nextBtn = document.getElementById('logNextBtn');
+    const pageSizeSelect = document.getElementById('logPageSizeSelect');
+    const jumpInput = document.getElementById('logJumpInput');
+    const jumpBtn = document.getElementById('logJumpBtn');
     const detailCloseBtn = document.getElementById('logDetailCloseBtn');
     const detailOverlay = document.getElementById('logDetailOverlay');
     const clearCancelBtn = document.getElementById('logClearCancelBtn');
@@ -374,6 +387,24 @@ document.addEventListener('DOMContentLoaded', function () {
     if (clearBtn) clearBtn.addEventListener('click', openClearModal);
     if (prevBtn) prevBtn.addEventListener('click', () => { if (logCurrentPage > 1) loadLogs(logCurrentPage - 1); });
     if (nextBtn) nextBtn.addEventListener('click', () => { if (logCurrentPage < logTotalPages) loadLogs(logCurrentPage + 1); });
+
+    // 每页条数：切换后重置到第 1 页（后端 page_size 上限 200，下拉已约束）
+    if (pageSizeSelect) pageSizeSelect.addEventListener('change', () => {
+        logPageSize = parseInt(pageSizeSelect.value, 10) || 20;
+        loadLogs(1);
+    });
+    // 跳转页码：越界提示；回车等同点击跳转
+    if (jumpBtn) jumpBtn.addEventListener('click', () => {
+        const target = parseInt(jumpInput && jumpInput.value, 10);
+        if (isNaN(target) || target < 1 || target > logTotalPages) {
+            showToast(`请输入 1~${logTotalPages} 之间的页码`, 'warning');
+            return;
+        }
+        if (target !== logCurrentPage) loadLogs(target);
+    });
+    if (jumpInput) jumpInput.addEventListener('keypress', e => {
+        if (e.key === 'Enter' && jumpBtn && !jumpBtn.disabled) jumpBtn.click();
+    });
 
     if (detailCloseBtn) detailCloseBtn.addEventListener('click', () => {
         document.getElementById('logDetailDrawer').classList.add('hidden');
