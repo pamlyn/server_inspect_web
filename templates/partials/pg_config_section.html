@@ -1,0 +1,111 @@
+<div id="pgConfigContent" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
+                style="background: var(--primary-light);">
+                <i class="fa fa-database text-sm" style="color: var(--primary-color);"></i>
+            </div>
+            PostgreSQL 容器配置
+        </h2>
+
+        <!-- 容器选择 -->
+        <div class="border border-gray-200 rounded-lg p-4 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+                <i class="fa fa-cube mr-2" style="color: var(--primary-color);"></i>
+                目标容器
+            </h3>
+            <div class="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">PG 容器名</label>
+                    <input type="text" id="pgContainerName" placeholder="mes_postgresql"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">连接用户</label>
+                    <input type="text" id="pgUserName" placeholder="postgres"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                        style="--tw-ring-color: var(--primary-color);">
+                </div>
+                <div class="flex items-end gap-2">
+                    <button type="button" id="pgSaveConfigBtn"
+                        class="px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">
+                        保存默认
+                    </button>
+                    <button type="button" id="pgRefreshContainersBtn"
+                        class="px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">
+                        刷新容器
+                    </button>
+                </div>
+            </div>
+            <div id="pgContainerList" class="space-y-2"></div>
+        </div>
+
+        <!-- 一键推荐配置 -->
+        <div class="border border-gray-200 rounded-lg p-4 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                <i class="fa fa-magic mr-2" style="color: var(--primary-color);"></i>
+                一键应用推荐配置
+            </h3>
+            <p class="text-xs text-gray-500 mb-3 leading-relaxed">
+                关闭普通SQL执行日志 + 设置慢查询阈值10s + 关闭日志收集器 + 限制单条日志512MB，并自动重载配置。<br>
+                <span class="text-amber-600">注意：日志收集器(logging_collector)为 postmaster 级别，重载不生效，需重启 PG 容器。</span>
+            </p>
+            <button type="button" id="pgApplyPresetBtn"
+                class="px-4 py-2 text-sm text-white rounded-lg transition-all hover:opacity-90"
+                style="background: var(--primary-color);">
+                应用推荐配置
+            </button>
+        </div>
+
+        <!-- 快捷操作 -->
+        <div class="border border-gray-200 rounded-lg p-4 mb-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+                <i class="fa fa-sliders mr-2" style="color: var(--primary-color);"></i>
+                快捷操作
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <button type="button" class="pg-quick-btn px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+                    data-name="log_statement" data-value="none" data-desc="关闭普通SQL执行日志">关闭SQL日志</button>
+                <button type="button" class="pg-quick-btn px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+                    data-name="log_statement" data-value="ddl" data-desc="记录DDL">仅记录DDL</button>
+                <button type="button" class="pg-quick-btn px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+                    data-name="logging_collector" data-value="off" data-desc="关闭日志收集器">关闭收集器</button>
+                <button type="button" class="pg-quick-btn px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+                    data-name="logging_collector" data-value="on" data-desc="开启日志收集器">开启收集器</button>
+                <button type="button" class="pg-quick-btn px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+                    data-name="log_rotation_size" data-value="512MB" data-desc="单条日志512MB">日志512MB</button>
+                <button type="button" class="pg-quick-btn px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+                    data-name="log_rotation_size" data-value="0" data-desc="不按大小轮转">不限大小</button>
+                <button type="button" id="pgSetThresholdBtn"
+                    class="px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">
+                    设置慢查询阈值
+                </button>
+                <button type="button" id="pgReloadBtn"
+                    class="px-3 py-2 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">
+                    重载配置
+                </button>
+            </div>
+        </div>
+
+        <!-- 当前参数 -->
+        <div class="border border-gray-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 flex items-center">
+                    <i class="fa fa-list mr-2" style="color: var(--primary-color);"></i>
+                    当前参数
+                </h3>
+                <button type="button" id="pgRefreshSettingsBtn"
+                    class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">
+                    刷新
+                </button>
+            </div>
+            <div id="pgSettingsTable" class="overflow-x-auto">
+                <p class="text-sm text-gray-400">点击「刷新」加载当前参数</p>
+            </div>
+        </div>
+
+        <!-- 结果区 -->
+        <div id="pgResult" class="mt-4"></div>
+    </div>
+</div>

@@ -17,7 +17,7 @@
 set -e
 
 # -------------------- 配置 --------------------
-IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.4.0"
+IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.4.1"
 CONTAINER_NAME="server_inspect_web"
 HOST_PORT="59496"
 
@@ -481,18 +481,29 @@ deploy() {
     check_docker
     init_config
     pull_image
+
+    # 容器已存在则重建：否则 start_container 在容器运行中只会 no-op（见 start_container
+    # 的「已在运行中」分支），旧进程不会重启 -> 内存配置(_config_state)与调度器任务表
+    # 都不会刷新，表现为「第二次部署后系统页面配置/调度不生效，需手动 restart 才读取」。
+    # 重建后全新进程会重跑 load_config_from_file() + start_scheduler()，配置即时生效。
+    if container_exists; then
+        log_info "检测到已有容器 ${CONTAINER_NAME}，重建以应用最新镜像与配置..."
+        docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+        log_success "旧容器已移除"
+    fi
+
     start_container
     echo ""
-    log_success "部署完成!"
+    log_success "部署完成!（已应用最新镜像与配置）"
     echo ""
-    echo "请编辑配置文件: ${CONFIG_DIR}/config.json"
-    echo "重启容器使配置生效: ./deploy.sh restart"
+    echo "访问地址: http://localhost:${HOST_PORT}"
     echo ""
 }
 
 # 重新拉取镜像并部署（强制用最新镜像重建容器）
-# 与 deploy 的区别：不跑 init（保留现有挂载配置），且强制删除旧容器后
-# 用新镜像重建--deploy/restart 在容器已存在时只 docker start，不会用上新镜像。
+# 与 deploy 的区别：不跑 init（保留现有挂载配置），其余均为「拉镜像 + 存在即重建」。
+# deploy 现在也会在容器已存在时重建，两者唯一差异是 deploy 会先跑 init_config。
+# restart 仅 stop+start（复用容器），用于改了挂载配置后重启进程重读配置，不换镜像。
 redeploy() {
     check_docker
     pull_image

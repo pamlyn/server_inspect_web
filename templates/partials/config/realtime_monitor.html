@@ -16,6 +16,7 @@
         </div>
         <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">监测间隔(秒)</label>
+            <p class="text-[11px] text-gray-400 mb-1 leading-tight">监控循环周期，每 N 秒检查一次（实际周期≈N，已扣除检查耗时）</p>
             <input type="number" id="realTimeMonitoringInterval"
                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
                 style="--tw-ring-color: var(--primary-color);" min="5" value="30">
@@ -94,7 +95,8 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">冷却周期(秒)</label>
+                <label class="block text-xs font-medium text-gray-600 mb-1">相同异常内容抑制(秒)</label>
+                <p class="text-[11px] text-gray-400 mb-1 leading-tight">异常内容完全一致时，抑制期内不重复通知；内容变化时立即通知</p>
                 <input type="number" id="rtmCooldownPeriod"
                     class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
                     style="--tw-ring-color: var(--primary-color);" min="60" value="300">

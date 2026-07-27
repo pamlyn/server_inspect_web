@@ -49,12 +49,13 @@ description: 构建并推送 Docker 镜像到 Harbor、容器化部署、版本�
   - `${CONFIG_DIR}/cookies.txt`（若存在）-> `/app/cookies.txt`
   - `CONFIG_DIR` 默认是 `<脚本所在目录>/config`
 - 挂载 `/var/run/docker.sock`（若存在）：容器内需访问宿主 Docker（`clear_slow_sql_logs`、arthas 本机容器检测）
-- **改了挂载的配置文件后必须 `./deploy.sh restart`** 才生效（容器内 `_config_state` 不会自动热加载文件）；或在 Web 配置页保存（会触发 `start_scheduler`，但部分项仍建议 restart）。
+- **改了挂载的配置文件后**：跑 `./deploy.sh restart`（停+启，复用容器、重跑进程重读配置）即可；或 `./deploy.sh deploy`/`redeploy`（重建容器，同样会重读）。容器内 `_config_state` 不会自动热加载文件，必须让进程重启。Web 配置页保存会触发 `start_scheduler`，但调度器 schedule 仍以进程启动时为准，部分项建议 restart/deploy。
 
-### `deploy` vs `redeploy`（关键坑）
-- `deploy` = init + pull + start。但 `start_container` 在**容器已存在**时只 `docker start`，**不会用上新镜像**。所以更新版本后跑 `deploy`，容器仍跑旧镜像。
-- `redeploy` = pull + `docker rm -f` 删旧容器 + 用新镜像重建。**更新镜像后必须用 `redeploy`**，否则白拉了。
-- `restart` = 停 + 启，不拉镜像、不重建，只用于配置文件改动后重启。
+### `deploy` vs `redeploy` vs `restart`
+- `deploy` = init + pull + **存在即重建**（`docker rm -f` 旧容器 + `docker run` 新镜像）。每次跑都会用最新镜像并重启进程 -> 重读 config.json + 重建调度器。**首次与后续部署均可直接用 `deploy`。**
+- `redeploy` = pull + 存在即重建，**不跑 init**（保留现有挂载配置）。与 `deploy` 唯一区别是不初始化配置文件。
+- `restart` = 停 + 启（`docker stop` + `docker start`），**复用容器、不换镜像**，只用于配置文件改动后重启进程重读配置。
+- 历史坑（已修复）：旧版 `deploy` 在容器已运行时只 `docker start`（no-op），导致「第二次部署后系统页面配置/调度不生效，需手动 restart」。现 `deploy` 已改为存在即重建，无需额外 restart。
 
 ## 配置文件管理
 - `config/config.json`、`config/custom_scripts.json`、`cookies.txt` 被 `.gitignore`，**不入库**。
@@ -70,7 +71,7 @@ description: 构建并推送 Docker 镜像到 Harbor、容器化部署、版本�
 ## 发布核对清单
 1. 版本号在 `deploy.sh` + `push_image.sh` 两处已改且一致。
 2. `./push_image.sh` 构建推送成功（看末尾「镜像推送完成」）。
-3. 生产机 `./deploy.sh redeploy`（拉新镜像 + 删旧容器 + 重建）。首次部署才用 `./deploy.sh deploy`。
+3. 生产机 `./deploy.sh deploy`（init + 拉新镜像 + 存在即重建）。首次与后续部署均用 `deploy`；`redeploy` 用于不想跑 init 的场景。
 4. `./deploy.sh logs -f` 看启动日志，确认 scheduler 启动、无导入错误。
 5. 访问 `http://<host>:59496/`，登录验证；触发一次完整巡检确认 DB/钉钉连通。
 6. 若 config 卷未挂载或路径不对：容器会用镜像内打包的 `config/config.json`（可能含旧密码），务必确认 `CONFIG_DIR` 下的文件存在且 `./deploy.sh restart`。

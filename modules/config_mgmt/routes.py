@@ -20,7 +20,10 @@ def config():
         load_config_from_file()
         config_data = get_all_config()
         print(f"返回配置: {config_data}")
-        return jsonify(config_data)
+        # no-store：避免浏览器缓存配置 JSON，确保部署/重启后页面始终读取最新配置
+        response = jsonify(config_data)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
     elif request.method == 'POST':
         data = request.json
         print(f"收到配置数据: {data}")

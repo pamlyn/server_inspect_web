@@ -37,6 +37,9 @@ app.register_blueprint(arthas_bp)
 from modules.log_storage.routes import log_bp
 app.register_blueprint(log_bp)
 
+from modules.pg_config.routes import pg_config_bp
+app.register_blueprint(pg_config_bp)
+
 # 注册test_custom_script路由（需要独立路径 /api/test_custom_script）
 from modules.auth.helpers import login_required
 from modules.custom_scripts.helpers import format_sql_value, resolve_period_value, get_variable_value

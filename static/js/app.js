@@ -155,6 +155,7 @@ function hideAllContent() {
     const customInspectContent = document.getElementById('customInspectContent');
     const logContent = document.getElementById('logContent');
     const arthasContent = document.getElementById('arthasContent');
+    const pgConfigContent = document.getElementById('pgConfigContent');
 
     if (loading) loading.classList.add('hidden');
     if (results) results.classList.add('hidden');
@@ -164,6 +165,7 @@ function hideAllContent() {
     if (customInspectContent) customInspectContent.classList.add('hidden');
     if (logContent) logContent.classList.add('hidden');
     if (arthasContent) arthasContent.classList.add('hidden');
+    if (pgConfigContent) pgConfigContent.classList.add('hidden');
 }
 
 // ========== DOMContentLoaded Setup ==========
@@ -277,6 +279,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.showLogs();
             } else if (type === 'arthas') {
                 window.showArthas();
+            } else if (type === 'pg_config') {
+                window.showPgConfig();
             } else {
                 window.runInspection(type);
             }
@@ -346,6 +350,15 @@ window.showArthas = function () {
     hideAllContent();
     const arthasContent = document.getElementById('arthasContent');
     if (arthasContent) arthasContent.classList.remove('hidden');
+};
+
+window.showPgConfig = function () {
+    hideAllContent();
+    const results = document.getElementById('results');
+    const pgConfigContent = document.getElementById('pgConfigContent');
+    if (results) results.classList.remove('hidden');
+    if (pgConfigContent) pgConfigContent.classList.remove('hidden');
+    if (typeof loadPgConfig === 'function') loadPgConfig();
 };
 
 window.showLogs = function () {

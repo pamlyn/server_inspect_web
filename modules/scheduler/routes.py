@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify
 import datetime
 import threading
 import time
+import json
 
 from modules.auth.helpers import login_required
 from modules.config_mgmt.helpers import get_config, notification_cooldowns
@@ -21,7 +22,11 @@ scheduler = None
 
 # 全局实时监控线程变量
 real_time_monitor_thread = None
-real_time_monitor_running = False
+real_time_monitor_running = False          # 状态镜像，供外部查询；停止控制改用 _realtime_stop_event
+_realtime_stop_event = None               # 当前监控线程的停止事件（每线程一个，可中断休眠）
+_realtime_lock = threading.Lock()         # 保护下面的去重状态
+_realtime_last_signature = None           # 上次通知的异常内容签名（None=无异常或已重置）
+_realtime_last_notify_time = 0.0          # 上次通知的时间戳
 
 
 @scheduler_bp.route('/status', methods=['GET'])
@@ -214,21 +219,55 @@ def run_daily_inspection():
         save_inspection_log_to_db(None, 'daily', target='full', error=str(e), start_time=start_time)
 
 
-def real_time_monitor():
-    """实时监控线程"""
+def _alert_signature(alert_results):
+    """对异常内容计算稳定签名：相同签名 = 异常内容完全一致。
+    仅取每个异常项的 criticals/warnings，忽略无关字段，保证内容相同则签名相同。"""
+    try:
+        payload = {}
+        for item, result in sorted(alert_results.items()):
+            payload[item] = {
+                'criticals': result.get('criticals', []),
+                'warnings': result.get('warnings', []),
+            }
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    except Exception:
+        # 退化方案：保证总能产出可比较的字符串，绝不因异常而漏比较
+        return repr(alert_results)
+
+
+def _realtime_sleep(stop_event, interval, cycle_start):
+    """周期修正休眠：实际休眠 = max(0, interval - 本轮检查耗时)，保证监控周期≈interval。
+    被 stop_event 唤醒时立即返回（用于线程停止），可中断。"""
+    elapsed = time.time() - cycle_start
+    remaining = interval - elapsed
+    if remaining > 0:
+        stop_event.wait(remaining)
+
+
+def real_time_monitor(stop_event):
+    """实时监控线程
+
+    设计要点：
+    1. 单线程保证：由 start_real_time_monitor 通过 stop_event + join 确保同一时刻只有一个
+       监控线程，避免「多次保存配置 -> 多线程并存 -> 重复通知」。
+    2. 内容指纹去重：异常内容（各异常项的 criticals/warnings）完全一致时，在冷却期内不重复
+       通知；异常内容变化则立即通知；冷却期过后相同内容会再通知一次（周期提醒）。
+    3. 周期修正：每轮休眠扣除本轮检查耗时，保证实际监控周期≈interval，不受检查耗时长短影响。
+    """
     global real_time_monitor_running
+    real_time_monitor_running = True
     print(f"[{datetime.datetime.now()}] 实时监控线程启动")
 
-    while real_time_monitor_running:
+    while not stop_event.is_set():
+        cycle_start = time.time()
         start_time = datetime.datetime.now()
         try:
             REAL_TIME_MONITORING = get_config('realTimeMonitoring')
             if not REAL_TIME_MONITORING.get('enabled', False):
                 print(f"[{datetime.datetime.now()}] 实时监控已禁用，线程准备退出")
-                real_time_monitor_running = False
                 break
 
-            interval = REAL_TIME_MONITORING.get('interval', 10)
+            interval = REAL_TIME_MONITORING.get('interval', 30)
             items = REAL_TIME_MONITORING.get('items', {})
             notification_config = REAL_TIME_MONITORING.get('notification', {})
             notification_enabled = notification_config.get('enabled', False)
@@ -238,17 +277,20 @@ def real_time_monitor():
 
             results = {}
             for item, enabled in items.items():
+                if stop_event.is_set():
+                    break
                 if enabled and item in get_inspection_functions():
                     result = get_inspection_functions()[item]()
                     results[item] = result.to_dict()
 
-            custom_results = run_custom_scripts('realtime')
-            results.update(custom_results)
+            if not stop_event.is_set():
+                custom_results = run_custom_scripts('realtime')
+                results.update(custom_results)
 
             save_inspection_log_to_db(results, 'real_time', start_time=start_time)
 
             if not notification_enabled:
-                time.sleep(interval)
+                _realtime_sleep(stop_event, interval, cycle_start)
                 continue
 
             has_alert = False
@@ -264,53 +306,82 @@ def real_time_monitor():
                         alert_results[item] = result
 
             if has_alert:
-                current_time = time.time()
-                last_notification = notification_cooldowns.get('real_time', 0)
-                if current_time - last_notification > cooldown_period:
-                    print(f"[{datetime.datetime.now()}] 实时监控发现异常，发送通知")
+                signature = _alert_signature(alert_results)
+                now = time.time()
+                with _realtime_lock:
+                    last_sig = _realtime_last_signature
+                    last_time = _realtime_last_notify_time
+                    # 通知条件：内容变化（新/不同异常）立即通知；或内容相同但已超过冷却期（周期提醒）
+                    content_changed = (signature != last_sig)
+                    cooldown_elapsed = (now - last_time) >= cooldown_period
+                    should_notify = content_changed or cooldown_elapsed
+                    if should_notify:
+                        _realtime_last_signature = signature
+                        _realtime_last_notify_time = now
+
+                if should_notify:
+                    reason = '内容变化' if content_changed else '冷却到期'
+                    print(f"[{datetime.datetime.now()}] 实时监控发现异常，发送通知（{reason}）")
                     DINGTALK_CONFIG = get_config('dingtalk')
                     if dingtalk_enabled and DINGTALK_CONFIG.get('enabled', False):
                         dingtalk_notifier.send_inspection_report(alert_results, "real_time")
-                    notification_cooldowns['real_time'] = current_time
+            else:
+                # 异常消除：重置签名，便于下次异常再次通知
+                with _realtime_lock:
+                    if _realtime_last_signature is not None:
+                        _realtime_last_signature = None
 
-            time.sleep(interval)
+            _realtime_sleep(stop_event, interval, cycle_start)
         except Exception as e:
             print(f"[{datetime.datetime.now()}] 实时监控线程出错: {e}")
             import traceback
             traceback.print_exc()
             save_inspection_log_to_db(None, 'real_time', target='full', error=str(e), start_time=start_time)
-            time.sleep(10)
+            # 出错后短暂休眠，避免异常死循环；被停止事件唤醒则退出
+            if stop_event.wait(10):
+                break
 
+    real_time_monitor_running = False
     print(f"[{datetime.datetime.now()}] 实时监控线程停止")
 
 
 def start_real_time_monitor():
-    """启动实时监控"""
-    global real_time_monitor_thread, real_time_monitor_running
+    """启动实时监控（保证同一时刻只有一个监控线程）"""
+    global real_time_monitor_thread, real_time_monitor_running, _realtime_stop_event
     REAL_TIME_MONITORING = get_config('realTimeMonitoring')
 
     print(f"[{datetime.datetime.now()}] 开始启动实时监控")
     print(f"[{datetime.datetime.now()}] 实时监控配置: {REAL_TIME_MONITORING}")
 
+    # 先停止并等待旧线程真正退出，避免多线程并存导致重复通知
+    if _realtime_stop_event is not None:
+        _realtime_stop_event.set()
     if real_time_monitor_thread and real_time_monitor_thread.is_alive():
-        print(f"[{datetime.datetime.now()}] 停止现有的实时监控线程")
-        real_time_monitor_running = False
-        time.sleep(0.5)
+        print(f"[{datetime.datetime.now()}] 等待旧实时监控线程退出...")
+        real_time_monitor_thread.join(timeout=10)
+        if real_time_monitor_thread.is_alive():
+            print(f"[{datetime.datetime.now()}] 警告：旧实时监控线程未在 10s 内退出（可能仍在执行检查），将并发启动新线程")
 
     if REAL_TIME_MONITORING.get('enabled', False):
+        _realtime_stop_event = threading.Event()
         real_time_monitor_running = True
-        real_time_monitor_thread = threading.Thread(target=real_time_monitor, daemon=True)
+        real_time_monitor_thread = threading.Thread(
+            target=real_time_monitor, args=(_realtime_stop_event,), daemon=True
+        )
         real_time_monitor_thread.start()
         print(f"[{datetime.datetime.now()}] 实时监控线程已启动")
     else:
-        print(f"[{datetime.datetime.now()}] 实时监控已禁用，不启动线程")
+        _realtime_stop_event = None
         real_time_monitor_running = False
+        print(f"[{datetime.datetime.now()}] 实时监控已禁用，不启动线程")
 
 
 def stop_real_time_monitor():
     """停止实时监控"""
-    global real_time_monitor_running
+    global real_time_monitor_running, _realtime_stop_event
     print(f"[{datetime.datetime.now()}] 停止实时监控")
+    if _realtime_stop_event is not None:
+        _realtime_stop_event.set()
     real_time_monitor_running = False
 
 

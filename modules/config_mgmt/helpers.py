@@ -58,6 +58,10 @@ _config_state = {
     'inspectionDateConfig': INSPECTION_DATE_CONFIG,
     'databaseConfig': DATABASE_CONFIG,
     'arthasServers': [],
+    'pgConfig': {
+        'container': 'mes_postgresql',
+        'user': 'postgres'
+    },
     'logDatabase': {
         'enabled': False,
         'type': 'postgresql',
