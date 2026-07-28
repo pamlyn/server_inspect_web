@@ -2119,8 +2119,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadDatabaseOptions();
 
-    // ========== Initialize variable and rules rendering ==========
+    // ========== Initialize variable, rules and cross-db rendering ==========
 
     renderVariables();
     renderRulesConfig();
+    // 预渲染跨库对比配置（默认隐藏）：否则新建脚本切换到跨库模式时
+    // #crossDbCompareConfig 容器虽显示，但 #crossDbCompareFields 为空，无法配置
+    renderCrossDbConfig();
 });
