@@ -237,7 +237,14 @@ function printLogDetail() {
     th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: normal !important; }
     th { background: #f3f4f6; font-weight: 600; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .fa { display: none; }
+    .log-detail-summary, .log-detail-section { border: 1px solid #d1d5db; border-radius: 6px; margin-bottom: 12px; }
+    .log-detail-summary { padding: 12px; } .log-detail-summary__topline { display:flex; justify-content:space-between; gap:10px; } .log-detail-summary__text { margin:9px 0 0; font-size:13px; font-weight:600; }
+    .log-detail-section__heading { display:flex; gap:7px; align-items:center; padding:9px 11px; border-bottom:1px solid #d1d5db; background:#f3f4f6; }.log-detail-section__heading h4 { margin:0; }
+    .log-detail-meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.log-detail-meta-item { padding:9px 11px; border-right:1px solid #d1d5db; border-bottom:1px solid #d1d5db; }.log-detail-meta-item span, .log-detail-keyvalue > span { display:block; color:#4b5563; font-size:10px; }.log-detail-meta-item strong { display:block; margin-top:3px; overflow-wrap:anywhere; }
+    .log-detail-keyvalues, .log-detail-messages { padding:10px 11px; }.log-detail-keyvalue { display:grid; grid-template-columns:110px minmax(0,1fr); gap:9px; padding:7px 0; border-bottom:1px dashed #d1d5db; }.log-detail-keyvalue:last-child { border-bottom:0; }.log-detail-keyvalue strong { overflow-wrap:anywhere; }.log-detail-keyvalue .is-mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .log-detail-message { display:flex; gap:7px; margin-bottom:7px; padding:8px; border:1px solid #d1d5db; border-radius:4px; }.log-detail-message:last-child { margin-bottom:0; }.log-detail-table-wrap { overflow:visible; }.log-detail-table { width:100%; border-collapse:collapse; }.log-detail-table th, .log-detail-table td { padding:6px 8px; border:1px solid #d1d5db; text-align:left; vertical-align:top; overflow-wrap:anywhere; }.log-detail-table th { background:#f3f4f6; }.log-detail-code { margin:0; padding:10px; background:#f3f4f6; color:#1f2937; font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; }.log-detail-notice { margin:8px 11px; color:#4b5563; font-size:11px; }
+    .fa { display:none; }
+    @media print { .log-detail-meta-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 </style>
 </head>
 <body><h1>${escapeHtml(title)}</h1>${content}</body>
@@ -348,99 +355,75 @@ window.openLogDetail = function (logId) {
 function renderLogDetail(log, parsed) {
     const content = document.getElementById('logDetailContent');
     const title = document.getElementById('logDetailTitle');
-    title.textContent = parsed.type_label + ' 详情';
+    const typeLabel = parsed.type_label || '巡检日志';
+    const statusClass = LOG_STATUS_STYLES[log.status] || 'bg-gray-100 text-gray-700';
+    title.textContent = `${typeLabel}详情`;
 
-    let html = '';
-
-    // 摘要卡片
-    html += `<div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-semibold text-gray-800">${escapeHtml(parsed.summary_text || '无摘要')}</span>
-            <span class="px-2 py-1 rounded-full text-xs font-medium ${LOG_STATUS_STYLES[log.status] || 'bg-gray-100 text-gray-700'}">${parsed.status_label}</span>
+    let html = `<section class="log-detail-summary">
+        <div class="log-detail-summary__topline">
+            <span class="log-detail-summary__type"><i class="fa fa-clipboard" aria-hidden="true"></i>${escapeHtml(typeLabel)}</span>
+            <span class="log-detail-summary__status ${statusClass}">${escapeHtml(parsed.status_label || LOG_STATUS_LABELS[log.status] || '未知')}</span>
         </div>
-    </div>`;
+        <p class="log-detail-summary__text">${escapeHtml(parsed.summary_text || '本次巡检未生成摘要信息')}</p>
+    </section>`;
 
-    // 元信息
-    html += '<div class="bg-white border border-gray-200 rounded-lg p-4"><h4 class="text-sm font-semibold text-gray-700 mb-3">基本信息</h4><div class="grid grid-cols-2 gap-3">';
-    parsed.meta.forEach(m => {
-        html += `<div><span class="text-xs text-gray-500 block">${m.label}</span><span class="text-sm text-gray-800 break-all">${escapeHtml(String(m.value))}</span></div>`;
-    });
-    html += '</div></div>';
+    if ((parsed.meta || []).length) {
+        html += '<section class="log-detail-section log-detail-section--meta"><div class="log-detail-section__heading"><i class="fa fa-info-circle" aria-hidden="true"></i><h4>基本信息</h4></div><div class="log-detail-meta-grid">';
+        parsed.meta.forEach(meta => {
+            html += `<div class="log-detail-meta-item"><span>${escapeHtml(meta.label)}</span><strong>${escapeHtml(String(meta.value ?? '-'))}</strong></div>`;
+        });
+        html += '</div></section>';
+    }
 
-    // 各分区
     (parsed.sections || []).forEach(section => {
         html += renderSection(section);
     });
-
     content.innerHTML = html;
 }
 
 function renderSection(section) {
-    let html = `<div class="bg-white border border-gray-200 rounded-lg p-4">
-        <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-            <i class="fa fa-folder-open-o mr-2" style="color: var(--primary-color);"></i>${escapeHtml(section.title)}
-        </h4>`;
+    let html = `<section class="log-detail-section log-detail-section--${escapeHtml(section.type || 'content')}">
+        <div class="log-detail-section__heading"><i class="fa fa-folder-open-o" aria-hidden="true"></i><h4>${escapeHtml(section.title)}</h4></div>`;
 
     if (section.type === 'keyvalue') {
-        html += '<div class="space-y-2">';
+        html += '<div class="log-detail-keyvalues">';
         (section.items || []).forEach(item => {
-            const highlight = item.highlight ? 'bg-red-50 text-red-700 font-medium' : 'text-gray-800';
-            html += `<div class="flex">
-                <span class="text-xs text-gray-500 w-24 flex-shrink-0 pt-1">${escapeHtml(item.label)}</span>
-                <span class="text-sm ${highlight} ${item.mono ? 'font-mono bg-gray-50 px-2 py-1 rounded' : ''} break-all flex-1">${escapeHtml(String(item.value))}</span>
-            </div>`;
+            html += `<div class="log-detail-keyvalue${item.highlight ? ' is-highlighted' : ''}"><span>${escapeHtml(item.label)}</span><strong class="${item.mono ? 'is-mono' : ''}">${escapeHtml(String(item.value))}</strong></div>`;
         });
         html += '</div>';
     } else if (section.type === 'messages') {
-        html += '<div class="space-y-2">';
+        html += '<div class="log-detail-messages">';
         (section.items || []).forEach(item => {
-            const cls = item.level === 'criticals' ? 'border-red-200 bg-red-50' :
-                item.level === 'warnings' ? 'border-yellow-200 bg-yellow-50' :
-                    item.level === 'normals' ? 'border-green-200 bg-green-50' :
-                        'border-gray-200 bg-gray-50';
-            const icon = item.level === 'criticals' ? 'fa-times-circle text-red-500' :
-                item.level === 'warnings' ? 'fa-exclamation-circle text-yellow-500' :
-                    item.level === 'normals' ? 'fa-check-circle text-green-500' :
-                        'fa-info-circle text-gray-400';
-            html += `<div class="flex items-start p-2 border rounded ${cls}">
-                <i class="fa ${icon} mt-0.5 mr-2"></i>
-                <span class="text-sm text-gray-700 break-all flex-1">${escapeHtml(item.text)}</span>
-            </div>`;
+            const level = ['criticals', 'warnings', 'normals'].includes(item.level) ? item.level : 'info';
+            const icon = level === 'criticals' ? 'fa-times-circle' : level === 'warnings' ? 'fa-exclamation-circle' : level === 'normals' ? 'fa-check-circle' : 'fa-info-circle';
+            html += `<div class="log-detail-message is-${level}"><i class="fa ${icon}" aria-hidden="true"></i><span>${escapeHtml(item.text)}</span></div>`;
         });
         html += '</div>';
     } else if (section.type === 'table') {
         const cols = section.columns || [];
         const rows = section.rows || [];
-        html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-xs"><thead class="bg-gray-50"><tr>';
-        cols.forEach(c => {
-            html += `<th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">${escapeHtml(String(c))}</th>`;
-        });
-        html += '</tr></thead><tbody class="bg-white divide-y divide-gray-100">';
-        if (rows.length === 0) {
-            html += `<tr><td colspan="${cols.length}" class="px-3 py-3 text-center text-gray-400">无数据</td></tr>`;
+        html += '<div class="log-detail-table-wrap"><table class="log-detail-table"><thead><tr>';
+        cols.forEach(column => { html += `<th>${escapeHtml(String(column))}</th>`; });
+        html += '</tr></thead><tbody>';
+        if (!rows.length) {
+            html += `<tr><td colspan="${cols.length}" class="log-detail-table__empty">无数据</td></tr>`;
         } else {
             rows.forEach(row => {
                 html += '<tr>';
-                cols.forEach((c, i) => {
-                    let val = Array.isArray(row) ? row[i] : (row[c] !== undefined ? row[c] : '');
-                    if (val === null || val === undefined) val = '';
-                    html += `<td class="px-3 py-2 text-gray-700 whitespace-nowrap break-all">${escapeHtml(String(val))}</td>`;
+                cols.forEach((column, index) => {
+                    let value = Array.isArray(row) ? row[index] : (row[column] !== undefined ? row[column] : '');
+                    html += `<td>${escapeHtml(String(value ?? ''))}</td>`;
                 });
                 html += '</tr>';
             });
         }
         html += '</tbody></table></div>';
-        if (section.truncated) {
-            html += '<p class="text-xs text-gray-400 mt-2">注：数据较多，仅展示部分记录，完整数据请查看原始日志</p>';
-        }
+        if (section.truncated) html += '<p class="log-detail-notice"><i class="fa fa-info-circle" aria-hidden="true"></i>数据较多，仅展示部分记录，完整数据请查看原始日志。</p>';
     } else if (section.type === 'raw') {
-        html += `<pre class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto whitespace-pre-wrap">${escapeHtml(section.text || '')}</pre>`;
-        if (section.truncated) {
-            html += '<p class="text-xs text-gray-400 mt-2">注：内容较长，已截断展示</p>';
-        }
+        html += `<pre class="log-detail-code">${escapeHtml(section.text || '')}</pre>`;
+        if (section.truncated) html += '<p class="log-detail-notice"><i class="fa fa-info-circle" aria-hidden="true"></i>内容较长，已截断展示。</p>';
     }
-    html += '</div>';
-    return html;
+    return html + '</section>';
 }
 
 function closeLogDetail() {

@@ -176,27 +176,26 @@
 </div>
 
 <!-- 日志详情抽屉 -->
-<div id="logDetailDrawer" class="hidden fixed inset-0 z-50 flex justify-end">
-    <div id="logDetailOverlay" class="absolute inset-0 bg-black/40"></div>
-    <div class="relative w-full max-w-2xl bg-white shadow-2xl h-full overflow-y-auto flex flex-col">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-            <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                <i class="fa fa-file-text-o mr-2" style="color: var(--primary-color);"></i>
-                <span id="logDetailTitle">日志详情</span>
-            </h3>
-            <div class="flex items-center space-x-3">
-                <button id="logDetailPrintBtn"
-                    class="hidden px-3 py-1.5 border border-primary text-primary rounded-lg hover:bg-blue-50 transition-all text-sm font-medium">
-                    <i class="fa fa-print mr-1"></i>打印详情
-                </button>
-                <button id="logDetailCloseBtn" class="text-gray-400 hover:text-gray-600 text-xl">
-                <i class="fa fa-times"></i>
-            </button>
-        </div>
-        <div id="logDetailContent" class="px-6 py-4 space-y-4">
+<div id="logDetailDrawer" class="log-detail-drawer hidden" role="dialog" aria-modal="true" aria-labelledby="logDetailTitle">
+    <div id="logDetailOverlay" class="log-detail-drawer__overlay"></div>
+    <section class="log-detail-drawer__panel">
+        <header class="log-detail-drawer__header">
+            <div class="log-detail-drawer__heading">
+                <span class="log-detail-drawer__icon"><i class="fa fa-file-text-o" aria-hidden="true"></i></span>
+                <div>
+                    <p class="page-kicker">INSPECTION RECORD</p>
+                    <h3 id="logDetailTitle">日志详情</h3>
+                </div>
+            </div>
+            <div class="log-detail-drawer__actions">
+                <button id="logDetailPrintBtn" class="log-detail-drawer__print hidden" type="button"><i class="fa fa-print" aria-hidden="true"></i><span>打印</span></button>
+                <button id="logDetailCloseBtn" class="log-detail-drawer__close" type="button" aria-label="关闭日志详情"><i class="fa fa-times" aria-hidden="true"></i></button>
+            </div>
+        </header>
+        <div id="logDetailContent" class="log-detail-drawer__content">
             <!-- 解析后的内容将通过JavaScript动态生成 -->
         </div>
-    </div>
+    </section>
 </div>
 
 <!-- 清理日志弹窗 -->
