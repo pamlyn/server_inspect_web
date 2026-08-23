@@ -662,6 +662,21 @@ input:focus, select:focus, textarea:focus { box-shadow:0 0 0 3px var(--focus-rin
 .config-page #configFormActions { position:sticky; bottom:0; z-index:20; display:flex !important; min-height:68px; margin:18px 0 0; padding:12px 0 0; background:var(--surface); border-top:1px solid var(--line); box-shadow:0 -10px 22px rgba(15,23,42,.06); }
 .config-page #configFormActions button[type="submit"] { display:inline-flex !important; align-items:center; justify-content:center; min-width:104px; color:#fff !important; background:var(--accent) !important; box-shadow:0 7px 14px color-mix(in srgb,var(--accent) 25%,transparent); }
 
+/* 统一原生下拉框：保留语义与行为，仅以尾部按钮替换浏览器默认箭头。 */
+.select-control { position:relative; display:inline-block; max-width:100%; vertical-align:middle; }
+.select-control--full { display:block; width:100%; }
+.select-control__native { appearance:none; -webkit-appearance:none; padding-right:42px !important; background-image:none !important; }
+.select-control__native::-ms-expand { display:none; }
+.custom-script-dropdown-toggle, .select-control__toggle { position:absolute; top:50%; right:5px; display:grid; width:30px; height:30px; place-items:center; border:1px solid transparent; border-radius:7px; color:var(--muted); background:transparent; transform:translateY(-50%); font-size:11px; transition:background .16s,border-color .16s,color .16s,transform .16s; }
+.custom-script-dropdown-toggle:hover, .custom-script-dropdown-toggle.is-open, .select-control__toggle:hover, .select-control__native:focus + .select-control__toggle { border-color:color-mix(in srgb,var(--accent) 30%,var(--line)); color:var(--accent-dark); background:var(--accent-soft); }
+.custom-script-dropdown-toggle.is-open i, .select-control__native:focus + .select-control__toggle i { transform:rotate(180deg); }
+.custom-script-dropdown-toggle:focus-visible, .select-control__native:focus + .select-control__toggle { outline:0; box-shadow:0 0 0 3px var(--focus-ring); }
+.select-control__toggle:focus-visible { outline:0; box-shadow:0 0 0 3px var(--focus-ring); }
+.select-control--compact .select-control__native { padding-right:34px !important; }
+.select-control--compact .select-control__toggle { right:3px; width:24px; height:24px; border-radius:6px; font-size:9px; }
+.select-control__native:disabled + .select-control__toggle { opacity:.48; cursor:not-allowed; }
+.style-midnight .custom-script-dropdown-toggle:hover, .style-midnight .custom-script-dropdown-toggle.is-open, .style-midnight .select-control__toggle:hover, .style-midnight .select-control__native:focus + .select-control__toggle { background:color-mix(in srgb,var(--accent) 18%,#1a2537); }
+
 /* ---------- PG container selection and shared confirmation dialog ---------- */
 .pg-container-pick { display:inline-flex; align-items:center; gap:4px; padding:6px 11px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--surface); font-size:12px; font-weight:600; transition:background .18s,border-color .18s,color .18s,box-shadow .18s,transform .18s; }
 .pg-workspace-page #pgApplyPresetBtn { color:#fff !important; background:var(--accent) !important; box-shadow:0 6px 14px color-mix(in srgb,var(--accent) 25%,transparent); }

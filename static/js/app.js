@@ -395,6 +395,43 @@ function hideAllContent() {
     if (userPermissionContent) userPermissionContent.classList.add('hidden');
 }
 
+// ========== Unified Select Controls ==========
+
+function enhanceSelectControl(select) {
+    if (!select || select.closest('.select-control')) return;
+
+    const compact = select.classList.contains('px-2') || select.classList.contains('py-1');
+    const wrapper = document.createElement('span');
+    wrapper.className = `select-control${select.classList.contains('w-full') ? ' select-control--full' : ''}${compact ? ' select-control--compact' : ''}`;
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+    select.classList.add('select-control__native');
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'select-control__toggle';
+    toggle.tabIndex = -1;
+    toggle.setAttribute('aria-hidden', 'true');
+    toggle.innerHTML = '<i class="fa fa-chevron-down" aria-hidden="true"></i>';
+    toggle.addEventListener('mousedown', event => event.preventDefault());
+    toggle.addEventListener('click', () => {
+        if (select.disabled) return;
+        select.focus({ preventScroll: true });
+        try {
+            if (typeof select.showPicker === 'function') select.showPicker();
+            else select.click();
+        } catch (_) {
+            select.click();
+        }
+    });
+    wrapper.appendChild(toggle);
+}
+
+function enhanceSelectControls(root = document) {
+    if (root instanceof HTMLSelectElement) enhanceSelectControl(root);
+    root.querySelectorAll?.('select').forEach(enhanceSelectControl);
+}
+
 // ========== DOMContentLoaded Setup ==========
 
 // Replace native alert with custom toast.
@@ -406,6 +443,16 @@ document.addEventListener('DOMContentLoaded', function () {
     window.alert = function (message) {
         showToast(message, 'info');
     };
+
+    enhanceSelectControls();
+    const selectObserver = new MutationObserver(records => {
+        records.forEach(record => {
+            record.addedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) enhanceSelectControls(node);
+            });
+        });
+    });
+    selectObserver.observe(document.body, { childList: true, subtree: true });
 });
 
 // Load saved workspace preferences on page load

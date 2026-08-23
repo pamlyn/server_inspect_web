@@ -2144,12 +2144,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (dropdownToggle) {
         dropdownToggle.addEventListener('click', function () {
             const dropdown = document.getElementById('customScriptDropdown');
-            if (dropdown.classList.contains('hidden')) {
-                dropdown.classList.remove('hidden');
-                customScriptSearch.focus();
-            } else {
-                dropdown.classList.add('hidden');
-            }
+            const opened = dropdown.classList.contains('hidden');
+            dropdown.classList.toggle('hidden', !opened);
+            this.classList.toggle('is-open', opened);
+            this.setAttribute('aria-expanded', opened ? 'true' : 'false');
+            if (opened) customScriptSearch.focus();
         });
     }
 
