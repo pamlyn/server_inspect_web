@@ -151,6 +151,9 @@ async function loadAccess() {
         document.querySelectorAll('[data-permission]').forEach(item => {
             item.classList.toggle('hidden', !data.permissions.includes(item.dataset.permission));
         });
+        const homeContent = document.getElementById('homeContent');
+        if (homeContent && !data.permissions.includes('dashboard')) homeContent.classList.add('hidden');
+        document.dispatchEvent(new CustomEvent('authaccessloaded', { detail: data }));
         return data;
     } catch (error) {
         authAccess = null;

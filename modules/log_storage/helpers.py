@@ -469,6 +469,39 @@ def _row_to_plain_dict(row):
     return d
 
 
+def get_inspection_summary(db_type, db_config, start_time):
+    """汇总指定起始时间后的巡检状态数量，供首页统计卡使用。"""
+    conn = cursor = None
+    try:
+        conn, cursor = _connect_dict(db_type, db_config)
+        cursor.execute(
+            '''SELECT status, COUNT(*) AS count
+               FROM inspection_logs
+               WHERE start_time >= %s
+               GROUP BY status''',
+            (start_time,),
+        )
+        counts = {'success': 0, 'warning': 0, 'critical': 0, 'error': 0}
+        for row in cursor.fetchall():
+            item = _row_to_plain_dict(row)
+            status = item.get('status')
+            if status in counts:
+                counts[status] = int(item.get('count') or 0)
+        total = sum(counts.values())
+        abnormal = counts['warning'] + counts['critical'] + counts['error']
+        return {
+            'total': total,
+            'abnormal': abnormal,
+            'abnormal_rate': round(abnormal * 100 / total, 1) if total else 0,
+            'counts': counts,
+        }
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 def query_inspection_logs(db_type, db_config, filters=None, page=1, page_size=20):
     """分页查询巡检日志列表。
 

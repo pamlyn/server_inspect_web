@@ -16,7 +16,12 @@ def _public_user(user):
 def index():
     if 'username' not in session:
         return redirect(url_for('auth.login'))
-    return render_template('index.html', current_user=get_public_user_identity(session['username']))
+    from modules.config_mgmt.helpers import get_config
+    return render_template(
+        'index.html',
+        current_user=get_public_user_identity(session['username']),
+        project_name=get_config('projectName', '服务器巡检系统'),
+    )
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])

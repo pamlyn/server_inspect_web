@@ -28,6 +28,7 @@ ALL_PERMISSIONS = {
     'config_inspection_strategy': '系统配置：巡检策略',
     'config_data_notification': '系统配置：数据与通知',
     'config_custom_sql': '系统配置：自定义SQL配置',
+    'dashboard': '运行总览',
     'inspection': '巡检执行', 'sql_inspect': '数据稽查',
     'custom_sql': '自定义SQL', 'logs': '巡检日志', 'pg_config': 'PG配置', 'diagnostics': '诊断工具',
 }

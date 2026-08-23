@@ -301,15 +301,18 @@ function closeWorkspaceTabs(action) {
 }
 
 function navigationButtonForType(type) {
-    return type === 'full'
-        ? document.getElementById('fullInspectBtn')
+    return type === 'home'
+        ? document.getElementById('homeBtn')
+        : type === 'full'
+            ? document.getElementById('fullInspectBtn')
         : document.querySelector(`.inspect-btn[data-type="${type}"]`);
 }
 
 function openWorkspaceType(type, button = navigationButtonForType(type)) {
     if (document.body.classList.contains('inspection-running')) return;
     registerWorkspaceTab(button, type);
-    if (type === 'full') window.runInspection('full');
+    if (type === 'home') window.showHomeDashboard();
+    else if (type === 'full') window.runInspection('full');
     else if (type === 'config') window.showConfig();
     else if (type === 'sql_inspect') window.showSqlInspect();
     else if (type === 'custom_inspect') window.showCustomInspect();
@@ -467,7 +470,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Default: show neutral welcome page. Feature pages open only from an authorized menu click.
     const homeContent = document.getElementById('homeContent');
-    if (homeContent) homeContent.classList.remove('hidden');
+    if (homeContent && !homeContent.classList.contains('hidden')) homeContent.classList.remove('hidden');
     setActiveButton(null);
     setPageContext('服务器巡检中心', '选择已授权的功能开始工作', 'OPERATIONS CONSOLE', '实时监控已连接');
 
@@ -605,6 +608,13 @@ document.addEventListener('DOMContentLoaded', function () {
 // These functions are exposed as window.* globals so other modules can call them.
 // They are assigned here as placeholders and will be overwritten by their
 // respective module JS files when those files load.
+window.showHomeDashboard = function () {
+    setPageContext('运行总览', '聚合服务器资源、巡检状态与日常操作入口', 'OPERATIONS OVERVIEW', '实时状态概览');
+    hideAllContent();
+    document.getElementById('homeContent')?.classList.remove('hidden');
+    if (typeof window.loadHomeDashboard === 'function') window.loadHomeDashboard();
+};
+
 window.showConfig = function () {
     setPageContext('系统配置', '按权限管理巡检、告警、通知和数据连接配置', 'SYSTEM SETTINGS', '配置工作区');
     hideAllContent();

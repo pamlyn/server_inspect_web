@@ -11,7 +11,7 @@ import datetime
 from modules.auth.helpers import login_required
 from modules.config_mgmt.helpers import get_config
 from modules.log_storage.helpers import (
-    _get_log_db_config, query_inspection_logs, export_inspection_logs,
+    _get_log_db_config, query_inspection_logs, get_inspection_summary, export_inspection_logs,
     get_inspection_log_detail, get_continuous_resource_history, get_resource_history,
     aggregate_resource_samples, delete_inspection_logs,
 )
@@ -98,6 +98,27 @@ def list_logs():
         return jsonify({'success': False, 'error': f'查询日志失败: {e}',
                         'logs': [], 'total': 0}), 500
 
+
+@log_bp.route('/summary', methods=['GET'])
+@login_required
+def inspection_summary():
+    """返回首页所需的近 N 天巡检汇总。"""
+    cfg, err = _log_db_or_403()
+    if err:
+        return err
+    try:
+        days = max(1, min(90, int(request.args.get('days', 7))))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': '统计天数无效'}), 400
+    try:
+        db_type, db_config = cfg
+        start_time = datetime.datetime.now() - datetime.timedelta(days=days)
+        summary = get_inspection_summary(db_type, db_config, start_time)
+        return jsonify({'success': True, 'days': days, **summary})
+    except Exception as error:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'加载巡检统计失败: {error}'}), 500
 
 @log_bp.route('/resource-history', methods=['GET'])
 @login_required

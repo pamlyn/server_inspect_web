@@ -1,8 +1,8 @@
 import datetime
 import unittest
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
-from modules.log_storage.helpers import _downsample_samples, aggregate_resource_samples, format_inspection_duration
+from modules.log_storage.helpers import _downsample_samples, aggregate_resource_samples, format_inspection_duration, get_inspection_summary
 from modules.resource_metrics.collector import collect_resource_metrics
 
 
@@ -31,6 +31,23 @@ class ResourceMetricsTests(unittest.TestCase):
         self.assertEqual(format_inspection_duration(62.3), '1m 02.3s')
         self.assertEqual(format_inspection_duration(3662.3), '1h 01m 02.3s')
         self.assertEqual(format_inspection_duration(-1), '0ms')
+    def test_inspection_summary_counts_abnormal_statuses(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {'status': 'success', 'count': 14}, {'status': 'warning', 'count': 3},
+            {'status': 'critical', 'count': 2}, {'status': 'error', 'count': 1},
+        ]
+        connection = MagicMock()
+        with patch('modules.log_storage.helpers._connect_dict', return_value=(connection, cursor)):
+            summary = get_inspection_summary('postgresql', {}, datetime.datetime(2026, 8, 16))
+
+        self.assertEqual(summary['total'], 20)
+        self.assertEqual(summary['abnormal'], 6)
+        self.assertEqual(summary['abnormal_rate'], 30.0)
+        self.assertEqual(summary['counts']['critical'], 2)
+        cursor.execute.assert_called_once()
+        cursor.close.assert_called_once()
+        connection.close.assert_called_once()
 
 
     @patch('modules.resource_metrics.collector._read_cpu_times', side_effect=[

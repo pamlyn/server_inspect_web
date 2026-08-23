@@ -7,7 +7,7 @@
                 <i class="fa fa-server text-lg" style="color: var(--primary-color);"></i>
             </div>
             <div>
-                <h1 class="text-base font-bold text-gray-800">服务器巡检系统</h1>
+                <h1 id="sidebarProjectName" class="text-base font-bold text-gray-800">{{ project_name | default('服务器巡检系统') }}</h1>
                 <p class="text-xs text-gray-500">实时监控 · 智能告警</p>
             </div>
         </div>
@@ -48,6 +48,10 @@
     <!-- 导航按钮 -->
     <nav class="flex-1 overflow-y-auto p-3 space-y-1">
         <p class="nav-section-label">工作台</p>
+        <button data-type="home" data-permission="dashboard" id="homeBtn" class="inspect-btn w-full text-left px-3 py-2.5 rounded-lg flex items-center transition-all duration-200 hover:bg-gray-50 text-gray-700 text-sm font-medium hidden">
+            <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center mr-3"><i class="fa fa-home text-sm text-gray-600"></i></div>
+            运行总览
+        </button>
         <button data-type="config" data-config-menu id="configBtn"
             class="inspect-btn w-full text-left px-3 py-2.5 rounded-lg flex items-center transition-all duration-200 hover:bg-gray-50 text-gray-700 text-sm font-medium hidden">
             <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center mr-3">

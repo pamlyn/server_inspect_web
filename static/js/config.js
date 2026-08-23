@@ -437,6 +437,10 @@ function setupConfigFormSubmit() {
                 .then(response => response.json())
                 .then(data => {
                     if (data.message) {
+                        const projectName = document.getElementById('projectName').value.trim() || '服务器巡检系统';
+                        const sidebarProjectName = document.getElementById('sidebarProjectName');
+                        if (sidebarProjectName) sidebarProjectName.textContent = projectName;
+                        document.title = projectName;
                         showToast('配置保存成功！', 'success');
                     } else {
                         showToast('配置保存失败: ' + (data.error || '未知错误'), 'error');
