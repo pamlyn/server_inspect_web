@@ -57,6 +57,18 @@ function loadConfig(scope = activeConfigScope) {
             document.getElementById('memoryCriticalThreshold').value = data.thresholds?.memory?.critical || 90;
             document.getElementById('diskWarningThreshold').value = data.thresholds?.disk?.warning || 80;
             document.getElementById('diskCriticalThreshold').value = data.thresholds?.disk?.critical || 90;
+            document.getElementById('cpuLoadWarningThreshold').value = data.thresholds?.cpu?.load_per_core_warning || 1;
+            document.getElementById('cpuLoadCriticalThreshold').value = data.thresholds?.cpu?.load_per_core_critical || 1.5;
+            document.getElementById('cpuIowaitWarningThreshold').value = data.thresholds?.cpu?.iowait_warning || 10;
+            document.getElementById('cpuIowaitCriticalThreshold').value = data.thresholds?.cpu?.iowait_critical || 25;
+            document.getElementById('memoryAvailableWarningThreshold').value = data.thresholds?.memory?.available_warning || 20;
+            document.getElementById('memoryAvailableCriticalThreshold').value = data.thresholds?.memory?.available_critical || 10;
+            document.getElementById('inodeWarningThreshold').value = data.thresholds?.disk?.inode_warning || 80;
+            document.getElementById('inodeCriticalThreshold').value = data.thresholds?.disk?.inode_critical || 90;
+            document.getElementById('diskIoWarningThreshold').value = data.thresholds?.disk_io?.warning || 10;
+            document.getElementById('diskIoCriticalThreshold').value = data.thresholds?.disk_io?.critical || 25;
+            document.getElementById('swapWarningThreshold').value = data.thresholds?.swap?.warning || 30;
+            document.getElementById('swapCriticalThreshold').value = data.thresholds?.swap?.critical || 50;
             document.getElementById('diskFreeWarningThreshold').value = data.thresholds?.disk_free?.warning || 10;
             document.getElementById('diskFreeCriticalThreshold').value = data.thresholds?.disk_free?.critical || 5;
             document.getElementById('slowSqlWarningThreshold').value = data.thresholds?.slow_sql?.warning || 5;
@@ -132,6 +144,11 @@ function loadConfig(scope = activeConfigScope) {
             document.getElementById('rtmMesHanging').checked = data.realTimeMonitoring?.items?.mes_hanging === true;
             document.getElementById('rtmNotificationEnabled').value = data.realTimeMonitoring?.notification?.enabled ? 'true' : 'false';
             document.getElementById('rtmCooldownPeriod').value = data.realTimeMonitoring?.notification?.cooldown_period || 300;
+
+            // 连续资源历史采集配置（独立于实时告警）
+            document.getElementById('resourceHistoryMonitoringEnabled').value = data.resourceHistoryMonitoring?.enabled !== false ? 'true' : 'false';
+            document.getElementById('resourceHistoryMonitoringInterval').value = data.resourceHistoryMonitoring?.interval_seconds || 60;
+            document.getElementById('resourceHistoryMonitoringRetention').value = data.resourceHistoryMonitoring?.retention_days || 90;
 
             // Scheduled inspection — only error notification
             document.getElementById('schedulerOnlyErrorNotification').value = data.scheduler?.only_error_notification ? 'true' : 'false';
@@ -265,22 +282,43 @@ function setupConfigFormSubmit() {
                         }
                     }
                 },
+                resourceHistoryMonitoring: {
+                    enabled: document.getElementById('resourceHistoryMonitoringEnabled').value === 'true',
+                    interval_seconds: parseInt(document.getElementById('resourceHistoryMonitoringInterval').value) || 60,
+                    retention_days: parseInt(document.getElementById('resourceHistoryMonitoringRetention').value) || 90
+                },
                 thresholds: {
                     cpu: {
                         warning: parseInt(document.getElementById('cpuWarningThreshold').value),
-                        critical: parseInt(document.getElementById('cpuCriticalThreshold').value)
+                        critical: parseInt(document.getElementById('cpuCriticalThreshold').value),
+                        load_per_core_warning: parseFloat(document.getElementById('cpuLoadWarningThreshold').value),
+                        load_per_core_critical: parseFloat(document.getElementById('cpuLoadCriticalThreshold').value),
+                        iowait_warning: parseInt(document.getElementById('cpuIowaitWarningThreshold').value),
+                        iowait_critical: parseInt(document.getElementById('cpuIowaitCriticalThreshold').value)
                     },
                     memory: {
                         warning: parseInt(document.getElementById('memoryWarningThreshold').value),
-                        critical: parseInt(document.getElementById('memoryCriticalThreshold').value)
+                        critical: parseInt(document.getElementById('memoryCriticalThreshold').value),
+                        available_warning: parseInt(document.getElementById('memoryAvailableWarningThreshold').value),
+                        available_critical: parseInt(document.getElementById('memoryAvailableCriticalThreshold').value)
                     },
                     disk: {
                         warning: parseInt(document.getElementById('diskWarningThreshold').value),
-                        critical: parseInt(document.getElementById('diskCriticalThreshold').value)
+                        critical: parseInt(document.getElementById('diskCriticalThreshold').value),
+                        inode_warning: parseInt(document.getElementById('inodeWarningThreshold').value),
+                        inode_critical: parseInt(document.getElementById('inodeCriticalThreshold').value)
                     },
                     disk_free: {
                         warning: parseInt(document.getElementById('diskFreeWarningThreshold').value),
                         critical: parseInt(document.getElementById('diskFreeCriticalThreshold').value)
+                    },
+                    disk_io: {
+                        warning: parseInt(document.getElementById('diskIoWarningThreshold').value),
+                        critical: parseInt(document.getElementById('diskIoCriticalThreshold').value)
+                    },
+                    swap: {
+                        warning: parseInt(document.getElementById('swapWarningThreshold').value),
+                        critical: parseInt(document.getElementById('swapCriticalThreshold').value)
                     },
                     slow_sql: {
                         warning: parseInt(document.getElementById('slowSqlWarningThreshold').value),
@@ -768,7 +806,7 @@ function testLogDatabaseConnection() {
             if (data.success) {
                 resultSpan.textContent = data.message;
                 resultSpan.style.color = '#10b981';
-                showToast('日志数据库连接测试成功，表已创建！', 'success');
+                showToast('日志数据库连接测试成功，日志与资源指标表已创建！', 'success');
             } else {
                 resultSpan.textContent = data.error;
                 resultSpan.style.color = '#ef4444';

@@ -8,6 +8,7 @@ MES吊挂稽核 / 自定义脚本执行，含成功与失败）都记一行，�
 
 import uuid
 import json
+import re
 import datetime
 
 
@@ -33,6 +34,12 @@ _COLUMNS = [
 
 # 新表非主键列（建表/迁移用），id 为主键单独处理
 _NON_PK_COLUMNS = [c for c in _COLUMNS if c[0] != 'id']
+
+_RESOURCE_METRIC_COLUMNS = (
+    'cpu_busy_percent', 'cpu_load_per_core', 'cpu_iowait_percent',
+    'memory_used_percent', 'memory_available_percent',
+    'memory_total_bytes', 'memory_available_bytes',
+)
 
 
 def _connect(db_type, db_config):
@@ -163,6 +170,87 @@ def _get_existing_columns(cursor, db_type, table_name):
     except Exception as e:
         print(f"[{datetime.datetime.now()}] 查询列信息失败: {e}")
     return cols
+
+
+def ensure_resource_metrics_table(db_type, db_config):
+    """确保连续资源指标表存在，并建立时间索引。"""
+    conn = cursor = None
+    try:
+        conn, cursor = _connect(db_type, db_config)
+        if db_type == 'postgresql':
+            cursor.execute('''CREATE TABLE IF NOT EXISTS resource_metrics (
+                id SERIAL PRIMARY KEY, collected_at TIMESTAMP NOT NULL,
+                cpu_busy_percent DOUBLE PRECISION, cpu_load_per_core DOUBLE PRECISION,
+                cpu_iowait_percent DOUBLE PRECISION, memory_used_percent DOUBLE PRECISION,
+                memory_available_percent DOUBLE PRECISION, memory_total_bytes BIGINT,
+                memory_available_bytes BIGINT, collector_version VARCHAR(30)
+            )''')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_resource_metrics_time ON resource_metrics(collected_at)')
+        else:
+            cursor.execute('''CREATE TABLE IF NOT EXISTS resource_metrics (
+                id INT AUTO_INCREMENT PRIMARY KEY, collected_at DATETIME NOT NULL,
+                cpu_busy_percent DOUBLE, cpu_load_per_core DOUBLE, cpu_iowait_percent DOUBLE,
+                memory_used_percent DOUBLE, memory_available_percent DOUBLE,
+                memory_total_bytes BIGINT, memory_available_bytes BIGINT,
+                collector_version VARCHAR(30), INDEX idx_resource_metrics_time (collected_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4''')
+        conn.commit()
+        return True, '资源指标表已就绪'
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        return False, str(error)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def save_resource_metrics(db_type, db_config, metrics, collected_at=None):
+    """保存一次连续资源采样；缺失指标以 NULL 持久化。"""
+    conn = cursor = None
+    try:
+        conn, cursor = _connect(db_type, db_config)
+        collected_at = collected_at or datetime.datetime.now()
+        columns = ('collected_at',) + _RESOURCE_METRIC_COLUMNS + ('collector_version',)
+        placeholders = ', '.join(['%s'] * len(columns))
+        cursor.execute(
+            f"INSERT INTO resource_metrics ({', '.join(columns)}) VALUES ({placeholders})",
+            [collected_at] + [metrics.get(name) for name in _RESOURCE_METRIC_COLUMNS] + ['1'],
+        )
+        conn.commit()
+        return True, '资源指标保存成功'
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        return False, str(error)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def prune_resource_metrics(db_type, db_config, retention_days, now=None):
+    """按保留天数清理过期连续采样。"""
+    conn = cursor = None
+    try:
+        conn, cursor = _connect(db_type, db_config)
+        cutoff = (now or datetime.datetime.now()) - datetime.timedelta(days=max(1, int(retention_days)))
+        cursor.execute('DELETE FROM resource_metrics WHERE collected_at < %s', (cutoff,))
+        deleted = cursor.rowcount
+        conn.commit()
+        return True, deleted
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        return False, str(error)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def save_inspection_log(db_type, db_config, *, inspection_type, trigger_source,
@@ -453,20 +541,114 @@ def export_inspection_logs(db_type, db_config, filters=None, max_records=5000):
     return all_logs
 
 
-def get_inspection_log_detail(db_type, db_config, log_id):
-    """查询单条日志详情（含 result、error）。"""
-    conn = None
-    cursor = None
+def _downsample_samples(samples, max_points):
+    """按时间均匀抽样，同时保留首尾点。"""
+    if len(samples) <= max_points:
+        return samples
+    if max_points < 3:
+        return [samples[0], samples[-1]]
+    interior = len(samples) - 2
+    step = interior / (max_points - 2)
+    indexes = [0] + [1 + min(int(index * step), interior - 1) for index in range(max_points - 2)] + [len(samples) - 1]
+    return [samples[index] for index in indexes]
+
+
+def get_continuous_resource_history(db_type, db_config, start_time, max_records=50000, max_points=240):
+    """查询连续采集的资源指标，返回按时间升序且受限的可视化样本。"""
+    conn = cursor = None
     try:
         conn, cursor = _connect_dict(db_type, db_config)
-        cursor.execute('SELECT * FROM inspection_logs WHERE id = %s', (log_id,))
-        row = cursor.fetchone()
-        return _row_to_plain_dict(row)
+        cursor.execute(
+            '''SELECT collected_at, cpu_busy_percent, memory_used_percent
+               FROM resource_metrics WHERE collected_at >= %s
+               ORDER BY collected_at ASC LIMIT %s''',
+            (start_time, max_records),
+        )
+        samples = []
+        for row in cursor.fetchall():
+            row = _row_to_plain_dict(row)
+            timestamp = row.get('collected_at')
+            if isinstance(timestamp, datetime.datetime):
+                timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            samples.append({'time': str(timestamp), 'cpu': row.get('cpu_busy_percent'), 'memory': row.get('memory_used_percent')})
+        return _downsample_samples(samples, max_points)
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
+
+
+def get_resource_history(db_type, db_config, start_time, max_records=2000, max_points=160):
+    """从旧系统巡检日志提取 CPU 与内存利用率历史样本。"""
+    conn = cursor = None
+    try:
+        conn, cursor = _connect_dict(db_type, db_config)
+        cursor.execute(
+            '''SELECT start_time, result FROM inspection_logs
+               WHERE inspection_type = %s AND start_time >= %s AND result IS NOT NULL
+               ORDER BY start_time ASC LIMIT %s''',
+            ('system', start_time, max_records),
+        )
+        samples = []
+        for row in cursor.fetchall():
+            row = _row_to_plain_dict(row)
+            result = row.get('result')
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except (TypeError, ValueError):
+                    continue
+            if not isinstance(result, dict):
+                continue
+            cpu = _extract_metric(result.get('cpu'), 'cpu_busy_percent', r'CPU(?:整体)?使用率[：:]\s*([0-9.]+)%')
+            memory_used = _extract_metric(result.get('memory'), 'memory_used_percent', r'内存使用率[：:]\s*([0-9.]+)%')
+            if memory_used is None:
+                memory_available = _extract_metric(result.get('memory'), 'memory_available_percent', r'可用内存[：:]\s*([0-9.]+)%')
+                memory_used = 100 - memory_available if memory_available is not None else None
+            if cpu is None and memory_used is None:
+                continue
+            timestamp = row.get('start_time')
+            if isinstance(timestamp, datetime.datetime):
+                timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            samples.append({'time': str(timestamp), 'cpu': cpu, 'memory': memory_used})
+        return _downsample_samples(samples, max_points)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def _extract_metric(section, metric_name, pattern):
+    if not isinstance(section, dict):
+        return None
+    metrics = section.get('metrics') or {}
+    try:
+        if metrics.get(metric_name) is not None:
+            return round(float(metrics[metric_name]), 2)
+    except (TypeError, ValueError):
+        pass
+    for message in (section.get('info') or []) + (section.get('warnings') or []) + (section.get('criticals') or []) + (section.get('normals') or []):
+        match = re.search(pattern, str(message))
+        if match:
+            try:
+                return round(float(match.group(1)), 2)
+            except ValueError:
+                continue
+    return None
+
+
+def get_inspection_log_detail(db_type, db_config, log_id):
+    """查询单条日志详情（含 result、error）。"""
+    conn = cursor = None
+    try:
+        conn, cursor = _connect_dict(db_type, db_config)
+        cursor.execute('SELECT * FROM inspection_logs WHERE id = %s', (log_id,))
+        return _row_to_plain_dict(cursor.fetchone())
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 def delete_inspection_logs(db_type, db_config, before_date=None, keep_days=None):

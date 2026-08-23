@@ -9,9 +9,11 @@ from flask import Blueprint, jsonify, request, send_file
 import datetime
 
 from modules.auth.helpers import login_required
+from modules.config_mgmt.helpers import get_config
 from modules.log_storage.helpers import (
     _get_log_db_config, query_inspection_logs, export_inspection_logs,
-    get_inspection_log_detail, delete_inspection_logs,
+    get_inspection_log_detail, get_continuous_resource_history, get_resource_history,
+    delete_inspection_logs,
 )
 from modules.log_storage.parser import parse_log_detail, _target_label, _type_label, _trigger_label, _status_label
 from modules.log_storage.exporter import build_log_list_excel, EXCEL_MIMETYPE
@@ -97,7 +99,49 @@ def list_logs():
                         'logs': [], 'total': 0}), 500
 
 
-@log_bp.route('/export', methods=['GET'])
+@log_bp.route('/resource-history', methods=['GET'])
+@login_required
+def resource_history():
+    """返回持续采样；依次回退到本地时序库和旧巡检记录。"""
+    hours_by_range = {'24h': 24, '7d': 24 * 7, '30d': 24 * 30}
+    range_key = request.args.get('range', '24h')
+    if range_key not in hours_by_range:
+        return jsonify({'success': False, 'error': '时间范围无效'}), 400
+    try:
+        start_time = datetime.datetime.now() - datetime.timedelta(hours=hours_by_range[range_key])
+        cfg = _get_log_db_config()
+        samples = []
+        source = 'none'
+        if cfg is not None:
+            db_type, db_config = cfg
+            try:
+                samples = get_continuous_resource_history(db_type, db_config, start_time)
+            except Exception as error:
+                print(f'连续资源历史数据库读取失败，回退本地存储: {error}')
+                samples = []
+            if samples:
+                source = 'continuous_database'
+        if not samples:
+            from modules.resource_metrics.local_storage import get_resource_history as get_local_resource_history
+            samples = get_local_resource_history(start_time)
+            if samples:
+                source = 'continuous_local'
+        if not samples and cfg is not None:
+            samples = get_resource_history(db_type, db_config, start_time)
+            if samples:
+                source = 'inspection_log_fallback'
+        return jsonify({
+            'success': True, 'range': range_key, 'samples': samples,
+            'source': source,
+            'collection_interval_seconds': (get_config('resourceHistoryMonitoring', {}) or {}).get('interval_seconds', 60)
+            if source.startswith('continuous') else None,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'加载资源历史失败: {e}', 'samples': []}), 500
+
+
 @login_required
 def export_logs():
     """按当前筛选条件导出巡检日志列表。"""

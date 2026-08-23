@@ -2,7 +2,7 @@
 import uuid
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash
-from modules.auth.helpers import (ADMIN_USERNAME, ALL_PERMISSIONS, admin_required, authenticate, captcha_store, get_custom_sql_access, get_user_permissions, get_user_roles, load_auth_data, login_required, normalize_custom_sql_scope, password_errors, save_auth_data, valid_username)
+from modules.auth.helpers import (ADMIN_USERNAME, ALL_PERMISSIONS, admin_required, authenticate, captcha_store, get_custom_sql_access, get_public_user_identity, get_user_permissions, get_user_roles, load_auth_data, login_required, normalize_custom_sql_scope, password_errors, save_auth_data, valid_username)
 from modules.auth.helpers import generate_captcha
 
 auth_bp = Blueprint('auth', __name__)
@@ -14,7 +14,9 @@ def _public_user(user):
 
 @auth_bp.route('/')
 def index():
-    return render_template('index.html') if 'username' in session else redirect(url_for('auth.login'))
+    if 'username' not in session:
+        return redirect(url_for('auth.login'))
+    return render_template('index.html', current_user=get_public_user_identity(session['username']))
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])

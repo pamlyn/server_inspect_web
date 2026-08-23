@@ -1,0 +1,25 @@
+<!-- 连续资源历史采集 -->
+<div class="border border-gray-200 rounded-lg p-4">
+    <h3 class="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+        <i class="fa fa-line-chart mr-2" style="color: var(--primary-color);"></i>
+        资源历史采集
+    </h3>
+    <p class="text-xs text-gray-500 mb-4">独立记录本机 CPU 与内存指标，不依赖手动巡检或告警通知；需要在“数据与通知”中配置日志保存数据库。</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">是否启用</label>
+            <select id="resourceHistoryMonitoringEnabled" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);">
+                <option value="true">启用</option>
+                <option value="false">禁用</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">采集间隔(秒)</label>
+            <input type="number" id="resourceHistoryMonitoringInterval" min="30" value="60" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">保留天数</label>
+            <input type="number" id="resourceHistoryMonitoringRetention" min="1" value="90" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);">
+        </div>
+    </div>
+</div>

@@ -7,6 +7,7 @@ class InspectionResult:
         self.criticals = []
         self.normals = []
         self.slow_sqls = []
+        self.metrics = {}
         self.start_time = datetime.datetime.now()
         self.end_time = None
 
@@ -25,6 +26,10 @@ class InspectionResult:
     def add_slow_sql(self, message):
         self.slow_sqls.append(message)
 
+    def add_metric(self, name, value):
+        """保存可用于历史趋势的结构化巡检指标。"""
+        self.metrics[name] = value
+
     def set_end_time(self):
         self.end_time = datetime.datetime.now()
 
@@ -35,6 +40,7 @@ class InspectionResult:
             'criticals': self.criticals,
             'normals': self.normals,
             'slow_sqls': self.slow_sqls,
+            'metrics': self.metrics,
             'start_time': self.start_time.strftime('%Y-%m-%d %H:%M:%S'),
             'end_time': self.end_time.strftime('%Y-%m-%d %H:%M:%S') if self.end_time else None,
             'duration': str(self.end_time - self.start_time) if self.end_time else None

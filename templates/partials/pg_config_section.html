@@ -114,4 +114,41 @@
         <div id="pgResult" class="mt-4"></div>
         </div>
     </div>
+
+    <div id="pgQuickActionModal" class="pg-action-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pgQuickActionTitle">
+        <div class="pg-action-modal__backdrop" data-pg-action-close></div>
+        <section class="pg-action-modal__dialog">
+            <header class="pg-action-modal__header">
+                <span id="pgQuickActionIcon" class="pg-action-modal__icon"><i class="fa fa-sliders"></i></span>
+                <div>
+                    <p class="page-kicker">CONTROLLED CHANGE</p>
+                    <h3 id="pgQuickActionTitle">确认快捷操作</h3>
+                </div>
+                <button type="button" class="pg-action-modal__close" data-pg-action-close aria-label="关闭"><i class="fa fa-times"></i></button>
+            </header>
+            <div class="pg-action-modal__body">
+                <p id="pgQuickActionDescription" class="pg-action-modal__description"></p>
+                <div class="pg-action-target">
+                    <span><i class="fa fa-cube"></i> 容器 <strong id="pgQuickActionContainer">--</strong></span>
+                    <span><i class="fa fa-user"></i> 用户 <strong id="pgQuickActionUser">--</strong></span>
+                </div>
+                <div id="pgQuickActionInput" class="pg-action-input hidden">
+                    <label for="pgQuickActionValue">慢查询阈值（毫秒）</label>
+                    <input id="pgQuickActionValue" type="number" step="1" min="-1" placeholder="例如 10000">
+                    <p>0 表示记录全部 SQL；-1 表示关闭慢查询记录。</p>
+                </div>
+                <div class="pg-action-change">
+                    <span>参数</span><strong id="pgQuickActionName">--</strong>
+                    <span>当前值</span><strong id="pgQuickActionCurrent">尚未读取</strong>
+                    <span>变更为</span><strong id="pgQuickActionNext">--</strong>
+                </div>
+                <div id="pgQuickActionImpact" class="pg-action-impact"></div>
+                <p id="pgQuickActionError" class="pg-action-modal__error hidden" role="alert"></p>
+            </div>
+            <footer class="pg-action-modal__footer">
+                <button type="button" class="pg-action-modal__button pg-action-modal__button--cancel" data-pg-action-close>取消</button>
+                <button type="button" id="pgQuickActionConfirm" class="pg-action-modal__button pg-action-modal__button--confirm">确认应用</button>
+            </footer>
+        </section>
+    </div>
 </div>

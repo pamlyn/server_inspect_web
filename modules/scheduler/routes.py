@@ -12,7 +12,8 @@ from modules.auth.helpers import login_required, permission_required
 from modules.config_mgmt.helpers import get_config, notification_cooldowns
 from modules.inspection.helpers import get_inspection_functions
 from modules.custom_scripts.helpers import run_custom_scripts
-from modules.log_storage.helpers import record_inspection_log, derive_status
+from modules.log_storage.helpers import (_get_log_db_config, record_inspection_log,
+                                         derive_status)
 from dingtalk import dingtalk_notifier
 
 scheduler_bp = Blueprint('scheduler', __name__, url_prefix='/api/scheduler')
@@ -27,6 +28,12 @@ _realtime_stop_event = None               # 当前监控线程的停止事件（
 _realtime_lock = threading.Lock()         # 保护下面的去重状态
 _realtime_last_signature = None           # 上次通知的异常内容签名（None=无异常或已重置）
 _realtime_last_notify_time = 0.0          # 上次通知的时间戳
+
+# 连续资源历史采集线程（独立于实时告警监控）
+resource_history_collector_thread = None
+_resource_history_stop_event = None
+_resource_history_lock = threading.Lock()
+_resource_history_last_prune_date = None
 
 
 @scheduler_bp.route('/status', methods=['GET'])
@@ -357,6 +364,92 @@ def real_time_monitor(stop_event):
     print(f"[{datetime.datetime.now()}] 实时监控线程停止")
 
 
+def resource_history_collector(stop_event):
+    """持续采集本机 CPU/内存快照，不执行巡检、通知或外部操作。"""
+    global _resource_history_last_prune_date
+    print(f"[{datetime.datetime.now()}] 资源历史采集线程启动")
+    while not stop_event.is_set():
+        cycle_start = time.time()
+        try:
+            monitoring = get_config('resourceHistoryMonitoring', {}) or {}
+            if not monitoring.get('enabled', True):
+                break
+            cfg = _get_log_db_config()
+            from modules.resource_metrics.collector import collect_resource_metrics
+            from modules.resource_metrics import local_storage
+            metrics = collect_resource_metrics()
+            if cfg is None:
+                if metrics:
+                    local_storage.save_resource_metrics(metrics)
+                if _resource_history_last_prune_date != datetime.date.today():
+                    local_storage.prune_resource_metrics(monitoring.get('retention_days', 90))
+                    _resource_history_last_prune_date = datetime.date.today()
+            else:
+                db_type, db_config = cfg
+                from modules.log_storage.helpers import (ensure_resource_metrics_table,
+                                                         prune_resource_metrics,
+                                                         save_resource_metrics)
+                ready, message = ensure_resource_metrics_table(db_type, db_config)
+                if not ready:
+                    print(f"[{datetime.datetime.now()}] 资源历史表不可用: {message}")
+                    if metrics:
+                        local_storage.save_resource_metrics(metrics)
+                elif metrics:
+                    saved, message = save_resource_metrics(db_type, db_config, metrics)
+                    if not saved:
+                        print(f"[{datetime.datetime.now()}] 资源历史采样保存失败: {message}")
+                        local_storage.save_resource_metrics(metrics)
+                if _resource_history_last_prune_date != datetime.date.today():
+                    pruned, result = prune_resource_metrics(db_type, db_config, monitoring.get('retention_days', 90))
+                    if pruned:
+                        _resource_history_last_prune_date = datetime.date.today()
+                    else:
+                        print(f"[{datetime.datetime.now()}] 资源历史清理失败: {result}")
+            interval = max(30, int(monitoring.get('interval_seconds', 60)))
+            remaining = interval - (time.time() - cycle_start)
+            stop_event.wait(max(0, remaining))
+        except Exception as error:
+            print(f"[{datetime.datetime.now()}] 资源历史采集出错: {error}")
+            if stop_event.wait(30):
+                break
+    print(f"[{datetime.datetime.now()}] 资源历史采集线程停止")
+
+
+def start_resource_history_collector():
+    """以单线程方式维护连续资源采集器。"""
+    global resource_history_collector_thread, _resource_history_stop_event
+    monitoring = get_config('resourceHistoryMonitoring', {}) or {}
+    enabled = monitoring.get('enabled', True)
+    with _resource_history_lock:
+        alive = bool(resource_history_collector_thread and resource_history_collector_thread.is_alive())
+        stopping = bool(_resource_history_stop_event and _resource_history_stop_event.is_set())
+        if alive and not stopping:
+            if enabled:
+                return
+            _resource_history_stop_event.set()
+            return
+        if alive and stopping:
+            resource_history_collector_thread.join(timeout=5)
+            if resource_history_collector_thread.is_alive():
+                print(f"[{datetime.datetime.now()}] 等待旧资源历史采集线程退出")
+                return
+        if enabled:
+            _resource_history_stop_event = threading.Event()
+            resource_history_collector_thread = threading.Thread(
+                target=resource_history_collector,
+                args=(_resource_history_stop_event,), daemon=True,
+            )
+            resource_history_collector_thread.start()
+        else:
+            _resource_history_stop_event = None
+
+
+def stop_resource_history_collector():
+    """通知连续资源采集器尽快停止。"""
+    if _resource_history_stop_event is not None:
+        _resource_history_stop_event.set()
+
+
 def start_real_time_monitor():
     """启动实时监控（保证同一时刻只有一个监控线程）。
 
@@ -466,3 +559,4 @@ def start_scheduler():
         print(f"[{datetime.datetime.now()}] 没有注册任何定时任务")
 
     start_real_time_monitor()
+    start_resource_history_collector()

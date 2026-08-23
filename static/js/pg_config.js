@@ -3,6 +3,107 @@
  * 调用 /api/pg/* 接口，管理 PostgreSQL 容器日志相关参数
  */
 
+let pgPendingQuickAction = null;
+let pgSettingsByName = new Map();
+
+function closePgQuickActionModal() {
+    const modal = document.getElementById('pgQuickActionModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    pgPendingQuickAction = null;
+}
+
+function openPgQuickActionModal(action) {
+    const modal = document.getElementById('pgQuickActionModal');
+    if (!modal) return;
+    const { container, user } = pgCurrentConfig();
+    if (!container) {
+        showToast('请先填写或选择 PG 容器', 'warning');
+        return;
+    }
+    const setting = pgSettingsByName.get(action.name);
+    const requiresRestart = setting?.context === 'postmaster' || action.name === 'logging_collector';
+    const isThreshold = action.name === 'log_min_duration_statement';
+    pgPendingQuickAction = { ...action, requiresRestart, isThreshold };
+
+    document.getElementById('pgQuickActionTitle').textContent = isThreshold ? '设置慢查询阈值' : action.desc;
+    document.getElementById('pgQuickActionDescription').textContent = isThreshold
+        ? '设置 PostgreSQL 记录慢 SQL 的最小执行时长。'
+        : `确认将 PostgreSQL 参数调整为“${action.desc}”。`;
+    document.getElementById('pgQuickActionContainer').textContent = container;
+    document.getElementById('pgQuickActionUser').textContent = user || 'postgres';
+    document.getElementById('pgQuickActionName').textContent = action.name;
+    document.getElementById('pgQuickActionCurrent').textContent = setting?.setting ?? '尚未读取';
+    document.getElementById('pgQuickActionNext').textContent = isThreshold ? '等待输入' : action.value;
+    document.getElementById('pgQuickActionIcon').innerHTML = `<i class="fa ${requiresRestart ? 'fa-exclamation-triangle' : 'fa-sliders'}"></i>`;
+
+    const inputWrap = document.getElementById('pgQuickActionInput');
+    const input = document.getElementById('pgQuickActionValue');
+    inputWrap.classList.toggle('hidden', !isThreshold);
+    input.value = isThreshold ? (setting?.setting || '10000') : '';
+    const impact = document.getElementById('pgQuickActionImpact');
+    impact.className = `pg-action-impact ${requiresRestart ? 'is-restart' : 'is-reload'}`;
+    impact.innerHTML = requiresRestart
+        ? '<i class="fa fa-exclamation-triangle"></i><span>该参数需要重启 PG 容器后才会生效；本次仅保存配置并尝试重载。</span>'
+        : '<i class="fa fa-refresh"></i><span>确认后将保存参数并自动重载 PostgreSQL 配置。</span>';
+    const error = document.getElementById('pgQuickActionError');
+    error.classList.add('hidden');
+    error.textContent = '';
+    modal.classList.remove('hidden');
+    setTimeout(() => (isThreshold ? input : document.getElementById('pgQuickActionConfirm')).focus(), 0);
+}
+
+async function confirmPgQuickAction() {
+    if (!pgPendingQuickAction) return;
+    const action = { ...pgPendingQuickAction };
+    const error = document.getElementById('pgQuickActionError');
+    if (action.isThreshold) {
+        const input = document.getElementById('pgQuickActionValue');
+        const value = input.value.trim();
+        if (!/^-?\d+$/.test(value) || Number(value) < -1) {
+            error.textContent = '请输入不小于 -1 的整数毫秒值。';
+            error.classList.remove('hidden');
+            input.focus();
+            return;
+        }
+        action.value = value;
+        action.desc = `慢查询阈值 ${value}ms`;
+        document.getElementById('pgQuickActionNext').textContent = value;
+    }
+    const confirmBtn = document.getElementById('pgQuickActionConfirm');
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i>应用中';
+    try {
+        const success = await setSetting(action.name, action.value, action.desc);
+        if (success) {
+            closePgQuickActionModal();
+        } else {
+            error.textContent = '应用失败，请检查容器状态、连接用户和页面结果详情后重试。';
+            error.classList.remove('hidden');
+        }
+    } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '确认应用';
+    }
+}
+
+function bindPgQuickActionModal() {
+    document.querySelectorAll('[data-pg-action-close]').forEach(button => {
+        button.addEventListener('click', closePgQuickActionModal);
+    });
+    document.getElementById('pgQuickActionConfirm')?.addEventListener('click', confirmPgQuickAction);
+    document.getElementById('pgQuickActionValue')?.addEventListener('input', function () {
+        document.getElementById('pgQuickActionNext').textContent = this.value.trim() || '等待输入';
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closePgQuickActionModal();
+        if (event.key === 'Enter' && pgPendingQuickAction?.isThreshold && !event.isComposing) {
+            const modal = document.getElementById('pgQuickActionModal');
+            if (modal && !modal.classList.contains('hidden')) confirmPgQuickAction();
+        }
+    });
+}
+
 function pgCurrentConfig() {
     return {
         container: document.getElementById('pgContainerName').value.trim(),
@@ -86,12 +187,14 @@ async function loadPgSettings() {
     const data = await pgApi('/api/pg/settings?' + qs);
     if (data.error) {
         tableEl.innerHTML = `<p class="text-xs text-red-500">${escapeHtml(data.error)}</p>`;
+        pgSettingsByName = new Map();
         return;
     }
     if (!data.settings || data.settings.length === 0) {
         tableEl.innerHTML = '<p class="text-xs text-gray-400">无参数</p>';
         return;
     }
+    pgSettingsByName = new Map((data.settings || []).map(setting => [setting.name, setting]));
     const rows = data.settings.map(s => {
         const isPostmaster = s.context === 'postmaster';
         const ctxBadge = isPostmaster
@@ -146,16 +249,18 @@ async function setSetting(name, value, desc) {
     if (data.error) {
         showPgResult(`设置失败：${desc || name}`, 'error', data.error);
         showToast(`${desc || name} 设置失败`, 'error');
-    } else {
-        let msg = `已设置 ${desc || name}`;
-        if (data.reload && !data.reload.success) {
-            msg += `（但重载失败：${data.reload.error}）`;
-        }
-        if (data.note) msg += `\n${data.note}`;
-        showPgResult(msg, 'success');
-        showToast(`${desc || name} 设置成功`, 'success');
+        await loadPgSettings();
+        return false;
     }
+    let msg = `已设置 ${desc || name}`;
+    if (data.reload && !data.reload.success) {
+        msg += `（但重载失败：${data.reload.error}）`;
+    }
+    if (data.note) msg += `\n${data.note}`;
+    showPgResult(msg, 'success');
+    showToast(`${desc || name} 设置成功`, 'success');
     await loadPgSettings();
+    return true;
 }
 
 async function applyPreset() {
@@ -223,21 +328,24 @@ function bindPgEvents() {
     // 快捷操作按钮
     document.querySelectorAll('.pg-quick-btn').forEach(btn => {
         btn.addEventListener('click', function () {
-            setSetting(this.dataset.name, this.dataset.value, this.dataset.desc);
+            openPgQuickActionModal({
+                name: this.dataset.name,
+                value: this.dataset.value,
+                desc: this.dataset.desc,
+            });
         });
     });
 
-    // 慢查询阈值：弹输入
+    // 慢查询阈值：使用受控输入弹窗
     const thresholdBtn = document.getElementById('pgSetThresholdBtn');
     if (thresholdBtn) {
-        thresholdBtn.addEventListener('click', async function () {
-            const val = window.prompt('输入慢查询阈值（毫秒，0=记录全部，-1=关闭）：', '10000');
-            if (val === null) return;
-            const n = parseInt(val, 10);
-            if (isNaN(n)) { showToast('请输入有效整数', 'error'); return; }
-            await setSetting('log_min_duration_statement', String(n), `慢查询阈值 ${n}ms`);
-        });
+        thresholdBtn.addEventListener('click', () => openPgQuickActionModal({
+            name: 'log_min_duration_statement',
+            value: '',
+            desc: '慢查询阈值',
+        }));
     }
+    bindPgQuickActionModal();
 }
 
 document.addEventListener('DOMContentLoaded', bindPgEvents);

@@ -14,7 +14,7 @@ config_mgmt_bp = Blueprint('config_mgmt', __name__, url_prefix='/api/config')
 CONFIG_SCOPE_KEYS = {
     'basic': {'projectName', 'thresholds'},
     'inspection': {
-        'scheduler', 'dailyInspection', 'realTimeMonitoring', 'inspectionItems',
+        'scheduler', 'dailyInspection', 'realTimeMonitoring', 'resourceHistoryMonitoring', 'inspectionItems',
         'scheduledInspectionItems', 'dailyInspectionItems', 'fullInspectionItems',
         'inspectionDateConfig',
     },
@@ -63,6 +63,13 @@ def config():
         existing_dingtalk = get_config('dingtalk', {}) or {}
         if existing_dingtalk.get('secret'):
             data['dingtalk']['secret'] = existing_dingtalk['secret']
+
+    if scope == 'inspection':
+        monitoring = data.get('resourceHistoryMonitoring')
+        if monitoring is not None:
+            monitoring['interval_seconds'] = max(30, int(monitoring.get('interval_seconds', 60)))
+            monitoring['retention_days'] = max(1, int(monitoring.get('retention_days', 90)))
+            monitoring['enabled'] = bool(monitoring.get('enabled', True))
 
     update_config(data)
     save_result = save_config_to_file(get_all_config())
@@ -148,11 +155,13 @@ def test_log_database():
             'database': database
         }
         
-        from modules.log_storage.helpers import ensure_table_exists
+        from modules.log_storage.helpers import ensure_resource_metrics_table, ensure_table_exists
         success, message = ensure_table_exists(db_type, config)
-        
         if success:
-            return jsonify({'success': True, 'message': '日志数据库连接测试成功，表已创建'})
+            success, message = ensure_resource_metrics_table(db_type, config)
+
+        if success:
+            return jsonify({'success': True, 'message': '日志数据库连接测试成功，日志与资源指标表已创建'})
         else:
             return jsonify({'success': False, 'error': message}), 500
     except Exception as e:

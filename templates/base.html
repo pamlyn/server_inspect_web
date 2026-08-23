@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ project_name | default('服务器巡检系统') }}</title>
     <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260822-pg-preset-button" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260823-tab-arrow-bind" rel="stylesheet">
     <!-- 外部JS模块（app.js必须最先加载，提供共享工具函数） -->
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260822-confirm-dialog"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260823-tab-arrow-bind"></script>
 </head>
 
 <body class="min-h-screen font-sans layout-sidebar style-mist accent-blue" id="appBody">
@@ -24,10 +24,15 @@
                     <p id="appPageDescription" class="app-page-description">选择已授权的功能开始工作</p>
                 </div>
                 <div class="app-topbar-meta">
-                    <span class="app-live-dot"></span>
-                    <span id="appPageStatus">实时监控已连接</span>
+                    <div class="app-page-status"><span class="app-live-dot"></span><span id="appPageStatus">实时监控已连接</span></div>
+                    <div class="topbar-user" title="当前登录人：{{ current_user.username }}">
+                        <span class="topbar-user-avatar" aria-hidden="true">{{ (current_user.display_name or current_user.username or '?')[0] | upper }}</span>
+                        <span class="topbar-user-name">{{ current_user.display_name or current_user.username }}</span>
+                        <span class="topbar-user-account">{{ current_user.username }}</span>
+                    </div>
                 </div>
             </header>
+            <nav id="workspaceTabs" class="workspace-tabs hidden" aria-label="已打开页面"></nav>
             <div class="app-content">
                 {% block content %}{% endblock %}
             </div>
@@ -35,11 +40,11 @@
     </div>
 
     <!-- 模块JS（按依赖顺序加载） -->
-    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260822c"></script>
+    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260823-health-thresholds"></script>
     <script src="{{ url_for('static', filename='js/sql_inspect.js') }}?v=20260724a"></script>
     <script src="{{ url_for('static', filename='js/custom_inspect.js') }}?v=20260822-parameter-inputs"></script>
     <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260822-inspection-cancel"></script>
-    <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260822a"></script>
+    <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260823-tab-arrow-bind"></script>
     <script src="{{ url_for('static', filename='js/pg_config.js') }}?v=20260822-pg-container"></script>
     <script src="{{ url_for('static', filename='js/user_permission.js') }}?v=20260822-layout"></script>
     {# Arthas诊断模块已隐藏 - 使用Jinja2注释防止渲染 #}

@@ -15,6 +15,7 @@ let logPageSize = 20;
 let logTotalPages = 1;
 let logTotalCount = 0;
 let logCurrentDetailId = null;
+let resourceHistoryRange = '24h';
 
 // ========== 类型/状态中文映射 ==========
 
@@ -57,8 +58,85 @@ window.showLogs = function () {
     const logContent = document.getElementById('logContent');
     if (results) results.classList.remove('hidden');
     if (logContent) logContent.classList.remove('hidden');
+    loadResourceHistory();
     loadLogs(1);
 };
+
+// ========== 资源历史趋势 ==========
+
+function loadResourceHistory() {
+    const charts = document.getElementById('resourceHistoryCharts');
+    const meta = document.getElementById('resourceHistoryMeta');
+    if (!charts || !meta) return;
+    charts.innerHTML = '<div class="resource-history-loading"><i class="fa fa-spinner fa-spin mr-2"></i>加载历史样本...</div>';
+    fetch(`/api/logs/resource-history?range=${encodeURIComponent(resourceHistoryRange)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) throw new Error(data.error || '加载失败');
+            renderResourceHistory(data.samples || [], data);
+        })
+        .catch(error => {
+            meta.textContent = '无法加载资源历史，请确认日志库已启用。';
+            charts.innerHTML = `<div class="resource-history-empty"><i class="fa fa-line-chart"></i><span>${escapeHtml(error.message)}</span></div>`;
+        });
+}
+
+function renderResourceHistory(samples, metadata = {}) {
+    const charts = document.getElementById('resourceHistoryCharts');
+    const meta = document.getElementById('resourceHistoryMeta');
+    if (!charts || !meta) return;
+    const cpuSamples = samples.filter(sample => Number.isFinite(sample.cpu));
+    const memorySamples = samples.filter(sample => Number.isFinite(sample.memory));
+    if (!cpuSamples.length && !memorySamples.length) {
+        meta.textContent = '尚无连续资源样本。配置并启用日志保存数据库后，系统会按采集间隔自动记录本机 CPU 与内存。';
+        charts.innerHTML = '<div class="resource-history-empty"><i class="fa fa-line-chart"></i><span>资源历史采集启动后，这里将持续展示实际 CPU 与内存波动。</span></div>';
+        return;
+    }
+    const latestTime = samples[samples.length - 1].time || '--';
+    if (String(metadata.source || '').startsWith('continuous')) {
+        const interval = metadata.collection_interval_seconds || 60;
+        meta.textContent = `连续监控样本 ${samples.length} 条，采集间隔约 ${interval} 秒，最新采样时间：${latestTime}`;
+    } else {
+        meta.textContent = `当前没有连续监控样本，正在展示 ${samples.length} 条旧巡检记录，最新时间：${latestTime}`;
+    }
+    charts.innerHTML = renderTrendChart('CPU 忙碌率', 'cpu', cpuSamples, '#5b6cff') + renderTrendChart('内存使用率', 'memory', memorySamples, '#0f9f75');
+}
+
+function renderTrendChart(title, key, samples, color) {
+    if (!samples.length) {
+        return `<section class="resource-trend-card"><div class="resource-trend-title"><span>${title}</span><strong>暂无样本</strong></div><div class="resource-trend-no-data">该指标尚未被历史巡检采集。</div></section>`;
+    }
+    const width = 520;
+    const height = 160;
+    const padding = { top: 18, right: 14, bottom: 28, left: 34 };
+    const values = samples.map(sample => Math.max(0, Math.min(100, Number(sample[key]))));
+    const latest = values[values.length - 1];
+    const peak = Math.max(...values);
+    const plotWidth = width - padding.left - padding.right;
+    const plotHeight = height - padding.top - padding.bottom;
+    const points = values.map((value, index) => {
+        const x = padding.left + (values.length === 1 ? plotWidth : (plotWidth * index / (values.length - 1)));
+        const y = padding.top + plotHeight - (value / 100 * plotHeight);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const labels = [0, 50, 100].map(value => {
+        const y = padding.top + plotHeight - (value / 100 * plotHeight);
+        return `<g><line x1="${padding.left}" x2="${width - padding.right}" y1="${y}" y2="${y}" class="resource-chart-grid"/><text x="2" y="${y + 4}" class="resource-chart-label">${value}%</text></g>`;
+    }).join('');
+    const firstTime = escapeHtml(formatLogTime(samples[0].time));
+    const lastTime = escapeHtml(formatLogTime(samples[samples.length - 1].time));
+    return `<section class="resource-trend-card">
+        <div class="resource-trend-title"><span>${title}</span><strong style="color:${color}">${latest.toFixed(1)}%</strong></div>
+        <div class="resource-trend-summary"><span>峰值 ${peak.toFixed(1)}%</span><span>${samples.length} 个样本</span></div>
+        <svg class="resource-trend-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}历史趋势图">
+            ${labels}<polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="${points.split(' ').slice(-1)[0].split(',')[0]}" cy="${points.split(' ').slice(-1)[0].split(',')[1]}" r="4" fill="${color}" />
+            <text x="${padding.left}" y="${height - 7}" class="resource-chart-label">${firstTime}</text><text x="${width - padding.right}" y="${height - 7}" text-anchor="end" class="resource-chart-label">${lastTime}</text>
+        </svg>
+    </section>`;
+}
+
+// ========== 查询条件 ==========
 
 function buildLogFilterParams() {
     const params = new URLSearchParams();
@@ -454,6 +532,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearConfirmBtn = document.getElementById('logClearConfirmBtn');
 
     if (searchBtn) searchBtn.addEventListener('click', () => loadLogs(1));
+    document.querySelectorAll('.resource-history-range').forEach(button => {
+        button.addEventListener('click', () => {
+            resourceHistoryRange = button.dataset.range || '24h';
+            document.querySelectorAll('.resource-history-range').forEach(item => item.classList.toggle('is-active', item === button));
+            loadResourceHistory();
+        });
+    });
     if (resetBtn) resetBtn.addEventListener('click', () => {
         document.getElementById('logFilterType').value = '';
         document.getElementById('logFilterSource').value = '';

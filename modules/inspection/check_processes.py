@@ -1,91 +1,43 @@
-from modules.inspection.models import InspectionResult
 from modules.inspection.helpers import run_command
-from modules.config_mgmt.helpers import get_config
+from modules.inspection.models import InspectionResult
+
 
 def check_processes():
-    """检查进程状态"""
+    """检查进程、僵尸进程、文件描述符和容器运行状态。"""
     result = InspectionResult()
-    result.add_info("========== 开始进程/容器巡检 ==========")
+    top_cpu, _, _ = run_command('ps -eo pid,ppid,stat,comm,%cpu,%mem --sort=-%cpu 2>/dev/null | head -11')
+    top_mem, _, _ = run_command('ps -eo pid,ppid,stat,comm,%cpu,%mem --sort=-%mem 2>/dev/null | head -11')
+    if top_cpu.strip(): result.add_info('CPU占用TOP10进程:\n' + top_cpu.strip())
+    if top_mem.strip(): result.add_info('内存占用TOP10进程:\n' + top_mem.strip())
 
-    # 检查CPU占用最高的进程
-    result.add_info("资源占用TOP10进程(CPU):")
-    top_cpu_output = run_command("ps aux --sort=-%cpu | head -11")[0]
-    if top_cpu_output:
-        result.add_info(top_cpu_output.strip())
-
-    # 检查内存占用最高的进程
-    result.add_info("资源占用TOP10进程(内存):")
-    top_mem_output = run_command("ps aux --sort=-%mem | head -11")[0]
-    if top_mem_output:
-        result.add_info(top_mem_output.strip())
-
-    # 检查僵尸进程
-    result.add_info("僵尸进程检查:")
-    try:
-        zombie_count = run_command("ps aux | awk '$8 ~ /Z/ {print $0}' | wc -l")[0].strip()
-        if zombie_count.isdigit() and int(zombie_count) > 0:
-            result.add_warning(f"发现 {zombie_count} 个僵尸进程")
-            zombie_output = run_command("ps aux | awk '$8 ~ /Z/ {print $0}'")[0]
-            if zombie_output:
-                result.add_info(zombie_output.strip())
-        else:
-            result.add_normal("未发现僵尸进程")
-    except Exception as e:
-        result.add_warning(f"僵尸进程检查失败: {str(e)}")
-
-    # 检查Docker容器状态
-    # 直接认为Docker已安装，因为我们在Docker容器中运行
-    docker_available = True
-    docker_status = "Docker已安装"
-    result.add_info(f"Docker检查结果: {docker_status}")
-
-    # 检查docker命令是否存在
-    docker_cmd_output = run_command("command -v docker")
-    docker_cmd_exists = docker_cmd_output[0]
-    # 修复docker命令存在性检查
-    docker_cmd_exists = bool(docker_cmd_exists.strip())
-
-    if docker_available:
-        result.add_info("Docker容器状态:")
-        # 检查docker命令是否存在
-        if docker_cmd_exists:
-            try:
-                # 尝试运行docker ps命令
-                docker_output = run_command("docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' 2>&1")
-                if docker_output[0]:
-                    result.add_info(docker_output[0].strip())
-                elif docker_output[1]:
-                    result.add_warning(f"Docker命令执行失败: {docker_output[1]}")
-
-                # 检查已停止的容器
-                exited_containers = run_command("docker ps -a --filter 'status=exited' --filter 'status=dead' -q 2>&1 | wc -l")[0].strip()
-                if exited_containers and exited_containers.isdigit() and int(exited_containers) > 0:
-                    result.add_warning(f"发现 {exited_containers} 个已停止的容器")
-                    exited_containers_output = run_command("docker ps -a --filter 'status=exited' --filter 'status=dead' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' 2>&1")[0]
-                    if exited_containers_output:
-                        result.add_info("已停止的容器列表:")
-                        result.add_info(exited_containers_output.strip())
-
-                # 检查正在重启的容器
-                restarting_containers = run_command("docker ps -a --filter 'status=restarting' -q 2>&1 | wc -l")[0].strip()
-                if restarting_containers and restarting_containers.isdigit() and int(restarting_containers) > 0:
-                    result.add_critical(f"发现 {restarting_containers} 个正在重启的容器，可能存在问题！")
-                    restarting_containers_output = run_command("docker ps -a --filter 'status=restarting' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' 2>&1")[0]
-                    if restarting_containers_output:
-                        result.add_info("正在重启的容器列表:")
-                        result.add_info(restarting_containers_output.strip())
-            except Exception as e:
-                result.add_warning(f"Docker容器检查失败: {str(e)}")
-        else:
-            result.add_info("Docker socket存在但未安装docker命令，无法执行Docker容器操作")
+    zombies, _, _ = run_command("ps -eo stat= 2>/dev/null | awk '$1 ~ /^Z/ {count++} END {print count+0}'")
+    zombie_count = int(zombies.strip() or '0') if zombies.strip().isdigit() else 0
+    if zombie_count:
+        result.add_warning(f'发现 {zombie_count} 个僵尸进程')
     else:
-        result.add_info("未安装Docker或Docker socket不可用")
+        result.add_normal('未发现僵尸进程')
 
-    # 检查系统负载
-    result.add_info("系统负载:")
-    uptime_output = run_command("uptime")[0]
-    if uptime_output:
-        result.add_info(uptime_output.strip())
+    file_max, _, _ = run_command('cat /proc/sys/fs/file-max 2>/dev/null')
+    file_used, _, _ = run_command("cat /proc/sys/fs/file-nr 2>/dev/null | awk '{print $1}'")
+    try:
+        ratio = int(file_used.strip()) * 100 / int(file_max.strip())
+        result.add_info(f'系统文件描述符: 已分配 {file_used.strip()} / 上限 {file_max.strip()} ({ratio:.1f}%)')
+        if ratio >= 90: result.add_critical(f'系统文件描述符使用率 {ratio:.1f}% >= 90%')
+        elif ratio >= 80: result.add_warning(f'系统文件描述符使用率 {ratio:.1f}% >= 80%')
+        else: result.add_normal(f'系统文件描述符使用率 {ratio:.1f}%，正常')
+    except (ValueError, ZeroDivisionError):
+        result.add_info('无法读取系统文件描述符使用率')
 
+    docker_path, _, _ = run_command('command -v docker')
+    if docker_path.strip():
+        containers, error, code = run_command("docker ps -a --format '{{.Names}}\t{{.Status}}\t{{.Image}}' 2>&1")
+        if code == 0:
+            result.add_info('Docker容器状态:\n' + (containers.strip() or '暂无容器'))
+            restarting, _, _ = run_command("docker ps --filter status=restarting -q | wc -l")
+            if int(restarting.strip() or '0') > 0: result.add_critical(f'发现 {restarting.strip()} 个重启中的容器')
+        else:
+            result.add_warning(f'Docker状态读取失败: {(error or containers).strip()}')
+    else:
+        result.add_info('未检测到 docker 命令，跳过容器检查')
     result.set_end_time()
     return result

@@ -19,4 +19,7 @@ app.pid
 config/config.json
 config/custom_scripts.json
 config/cookies.txt
+config/auth_users.json
+config/resource_metrics.sqlite3
 cookies.txt
+.claude/

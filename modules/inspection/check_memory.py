@@ -1,67 +1,68 @@
-from modules.inspection.models import InspectionResult
-from modules.inspection.helpers import run_command
 from modules.config_mgmt.helpers import get_config
+from modules.inspection.helpers import run_command
+from modules.inspection.models import InspectionResult
+
+
+def _meminfo():
+    values = {}
+    try:
+        with open('/proc/meminfo', encoding='utf-8') as file:
+            for line in file:
+                key, value = line.split(':', 1)
+                values[key] = int(value.strip().split()[0]) * 1024
+    except (OSError, ValueError, IndexError):
+        return {}
+    return values
+
 
 def check_memory():
-    """检查内存使用情况"""
+    """使用 MemAvailable 评估可用内存，避免把文件缓存误判为压力。"""
     result = InspectionResult()
-    result.add_info("========== 开始内存使用率巡检 ==========")
+    thresholds = get_config('thresholds', {}).get('memory', {})
+    available_warning = float(thresholds.get('available_warning', 20))
+    available_critical = float(thresholds.get('available_critical', 10))
+    meminfo = _meminfo()
+    total = meminfo.get('MemTotal', 0)
+    available = meminfo.get('MemAvailable', 0)
 
-    THRESHOLDS = get_config('thresholds')
+    if not total or not available:
+        stdout, _, _ = run_command('free -b 2>/dev/null')
+        result.add_info(f'内存备用采样:\n{stdout.strip() or "不可用"}')
+        result.add_warning('无法读取 MemAvailable，未执行内存压力阈值判断')
+        result.set_end_time()
+        return result
 
-    if run_command("command -v free")[0]:
-        # 获取内存使用情况
-        stdout, stderr, _ = run_command("free -m")
-        if stdout:
-            lines = stdout.strip().split('\n')
-            if len(lines) >= 2:
-                memory_info = lines[1].split()
-                if len(memory_info) >= 7:
-                    total = memory_info[1]
-                    used = memory_info[2]
-                    buffers = memory_info[5]
-                    cached = memory_info[6]
-
-                    # 计算实际使用内存
-                    actual_used = int(used) - int(buffers) - int(cached)
-                    if actual_used < 0:
-                        actual_used = int(used)
-
-                    # 计算内存使用率
-                    if int(total) > 0:
-                        if run_command("command -v bc")[0]:
-                            mem_usage = run_command(f"echo 'scale=2; {actual_used} * 100 / {total}' | bc")[0].strip()
-                        else:
-                            mem_usage = run_command(f"echo '{actual_used} {total}' | awk '{{print int($1 * 100 / $2)}}'")[0].strip()
-                    else:
-                        mem_usage = "0"
-
-                    mem_usage_int = mem_usage.split('.')[0] if mem_usage else "0"
-
-                    result.add_info(f"内存总量: {total}MB")
-                    result.add_info(f"已用内存: {used}MB")
-                    result.add_info(f"缓存: {cached}MB")
-                    result.add_info(f"缓冲区: {buffers}MB")
-                    result.add_info(f"实际使用: {actual_used}MB")
-                    result.add_info(f"内存使用率: {mem_usage}%")
-
-                    # 分析内存使用率
-                    memory_thresholds = THRESHOLDS.get("memory", {})
-                    memory_warning = memory_thresholds.get("warning", 80)
-                    memory_critical = memory_thresholds.get("critical", 90)
-
-                    if int(mem_usage_int) > memory_critical:
-                        result.add_critical(f"内存使用率 {mem_usage}% > {memory_critical}%，处于紧急状态！")
-                    elif int(mem_usage_int) > memory_warning:
-                        result.add_warning(f"内存使用率 {mem_usage}% 在{memory_warning}%-{memory_critical}%之间，处于预警状态")
-                    else:
-                        result.add_normal(f"内存使用率 {mem_usage}%，正常")
-                else:
-                    result.add_warning("无法解析内存信息")
-            else:
-                result.add_warning("无法获取内存信息")
+    used = total - available
+    available_percent = available * 100 / total
+    used_percent = used * 100 / total
+    cache = meminfo.get('Cached', 0) + meminfo.get('Buffers', 0) + meminfo.get('SReclaimable', 0)
+    gib = 1024 ** 3
+    result.add_info(f'物理内存: 总计 {total / gib:.2f} GiB，可用 {available / gib:.2f} GiB ({available_percent:.1f}%)，已使用 {used / gib:.2f} GiB ({used_percent:.1f}%)')
+    result.add_info(f'可回收缓存与缓冲区: {cache / gib:.2f} GiB；指标基于 Linux MemAvailable 计算')
+    result.add_metric('memory_available_percent', round(available_percent, 2))
+    result.add_metric('memory_used_percent', round(used_percent, 2))
+    result.add_metric('memory_total_bytes', total)
+    result.add_metric('memory_available_bytes', available)
+    if available_percent <= available_critical:
+        result.add_critical(f'可用内存 {available_percent:.1f}% <= {available_critical}%，内存压力严重')
+    elif available_percent <= available_warning:
+        result.add_warning(f'可用内存 {available_percent:.1f}% <= {available_warning}%，请观察内存增长趋势')
     else:
-        result.add_warning("未找到free命令，无法检查内存使用情况")
+        result.add_normal(f'可用内存 {available_percent:.1f}%，正常')
 
+    vmstat = {}
+    try:
+        with open('/proc/vmstat', encoding='utf-8') as file:
+            for line in file:
+                key, value = line.split()
+                if key in {'pswpin', 'pswpout', 'pgmajfault'}:
+                    vmstat[key] = int(value)
+        result.add_info(f'累计换页: pswpin={vmstat.get("pswpin", 0)}, pswpout={vmstat.get("pswpout", 0)}, major_fault={vmstat.get("pgmajfault", 0)}')
+    except (OSError, ValueError):
+        result.add_info('无法读取 /proc/vmstat')
+
+    top_mem, _, _ = run_command('ps -eo pid,ppid,comm,%mem,rss --sort=-%mem 2>/dev/null | head -6')
+    if top_mem.strip():
+        result.add_info('内存占用TOP5进程:\n' + top_mem.strip())
     result.set_end_time()
     return result

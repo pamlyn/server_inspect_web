@@ -13,7 +13,8 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__fil
 # ===================== 默认配置（从config.py导入） =====================
 from config import (
     SCHEDULER_CONFIG, PROJECT_NAME, INSPECTION_ITEMS, THRESHOLDS,
-    DINGTALK_CONFIG, REAL_TIME_MONITORING, DATABASE_CONFIG, INSPECTION_DATE_CONFIG
+    DINGTALK_CONFIG, REAL_TIME_MONITORING, DATABASE_CONFIG, INSPECTION_DATE_CONFIG,
+    RESOURCE_HISTORY_MONITORING
 )
 
 # ===================== 全局配置状态 =====================
@@ -55,6 +56,7 @@ _config_state = {
     },
     'dingtalk': DINGTALK_CONFIG,
     'realTimeMonitoring': REAL_TIME_MONITORING,
+    'resourceHistoryMonitoring': RESOURCE_HISTORY_MONITORING,
     'inspectionDateConfig': INSPECTION_DATE_CONFIG,
     'databaseConfig': DATABASE_CONFIG,
     'arthasServers': [],

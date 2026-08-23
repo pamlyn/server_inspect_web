@@ -127,11 +127,16 @@ function showConfirm(message, title = '确认', options = {}) {
 
 const WORKSPACE_PREFERENCE_KEY = 'serverInspectWorkspacePreferences';
 const DEFAULT_WORKSPACE_PREFERENCES = { layout: 'sidebar', style: 'mist', accent: 'blue' };
+const VALID_WORKSPACE_LAYOUTS = ['sidebar', 'topnav', 'sidebar-tabs'];
+const workspaceTabs = new Map();
+let activeWorkspaceTab = null;
+let workspaceTabMenuOpen = false;
+let workspaceTabMenuPosition = null;
 
 function workspacePreferences() {
     try {
         const preferences = { ...DEFAULT_WORKSPACE_PREFERENCES, ...JSON.parse(localStorage.getItem(WORKSPACE_PREFERENCE_KEY) || '{}') };
-        return ['sidebar', 'topnav'].includes(preferences.layout)
+        return VALID_WORKSPACE_LAYOUTS.includes(preferences.layout)
             ? preferences
             : { ...preferences, layout: 'sidebar' };
     } catch (_) {
@@ -142,8 +147,14 @@ function workspacePreferences() {
 function applyWorkspacePreferences(preferences = workspacePreferences()) {
     const body = document.getElementById('appBody');
     if (!body) return;
-    body.classList.remove('layout-sidebar', 'layout-topnav', 'style-mist', 'style-midnight', 'style-warm', 'accent-blue', 'accent-green', 'accent-purple', 'accent-orange', 'accent-red', 'accent-cyan');
+    body.classList.remove('layout-sidebar', 'layout-topnav', 'layout-sidebar-tabs', 'style-mist', 'style-midnight', 'style-warm', 'accent-blue', 'accent-green', 'accent-purple', 'accent-orange', 'accent-red', 'accent-cyan');
     body.classList.add(`layout-${preferences.layout}`, `style-${preferences.style}`, `accent-${preferences.accent}`);
+    document.getElementById('workspaceTabs')?.classList.toggle('hidden', preferences.layout !== 'sidebar-tabs');
+    if (preferences.layout !== 'sidebar-tabs') {
+        workspaceTabMenuOpen = false;
+        workspaceTabMenuPosition = null;
+    }
+    renderWorkspaceTabs();
     document.querySelectorAll('[data-layout]').forEach(button => button.classList.toggle('is-active', button.dataset.layout === preferences.layout));
     document.querySelectorAll('[data-style]').forEach(button => button.classList.toggle('is-active', button.dataset.style === preferences.style));
     document.querySelectorAll('[data-accent]').forEach(button => button.classList.toggle('is-active', button.dataset.accent === preferences.accent));
@@ -151,7 +162,7 @@ function applyWorkspacePreferences(preferences = workspacePreferences()) {
 
 function saveWorkspacePreferences(update) {
     const preferences = workspacePreferences();
-    if (Object.prototype.hasOwnProperty.call(update, 'layout') && !['sidebar', 'topnav'].includes(update.layout)) return;
+    if (Object.prototype.hasOwnProperty.call(update, 'layout') && !VALID_WORKSPACE_LAYOUTS.includes(update.layout)) return;
     Object.assign(preferences, update);
     localStorage.setItem(WORKSPACE_PREFERENCE_KEY, JSON.stringify(preferences));
     applyWorkspacePreferences(preferences);
@@ -181,11 +192,144 @@ function setPageContext(title, description = '', eyebrow = 'OPERATIONS CONSOLE',
     if (statusEl) statusEl.textContent = status;
 }
 
-// ========== Button State Management ==========
+function isSidebarTabsLayout() {
+    return document.body.classList.contains('layout-sidebar-tabs');
+}
+
+function workspaceTabMeta(button, type) {
+    return {
+        type,
+        label: button?.textContent.trim().replace(/\s+/g, ' ') || type,
+        icon: button?.querySelector('i')?.className || 'fa fa-file-o',
+    };
+}
+
+function workspaceEscapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function renderWorkspaceTabs() {
+    const container = document.getElementById('workspaceTabs');
+    if (!container || !isSidebarTabsLayout()) return;
+    if (!workspaceTabs.size) {
+        container.innerHTML = '<span class="workspace-tabs__empty">从左侧菜单打开工作页</span>';
+        return;
+    }
+    const tabs = [...workspaceTabs.values()];
+    const activeIndex = tabs.findIndex(tab => tab.type === activeWorkspaceTab);
+    const hasRightTabs = activeIndex >= 0 && activeIndex < tabs.length - 1;
+    const tabHtml = tabs.map(tab => `<button type="button" class="workspace-tab ${tab.type === activeWorkspaceTab ? 'is-active' : ''}" data-workspace-tab="${tab.type}"><i class="${tab.icon}"></i><span>${workspaceEscapeHtml(tab.label)}</span><b data-workspace-tab-close="${tab.type}" aria-label="关闭 ${workspaceEscapeHtml(tab.label)}"><i class="fa fa-times"></i></b></button>`).join('');
+    const menuStyle = workspaceTabMenuPosition
+        ? `style="top:${workspaceTabMenuPosition.top}px;left:${workspaceTabMenuPosition.left}px"`
+        : '';
+    container.innerHTML = `${tabHtml}<div class="workspace-tab-actions"><button type="button" class="workspace-tab-actions__trigger ${workspaceTabMenuOpen ? 'is-open' : ''}" data-workspace-tab-menu aria-expanded="${workspaceTabMenuOpen}" aria-label="页签关闭操作"><i class="fa fa-chevron-down"></i></button></div>${workspaceTabMenuOpen ? `<div class="workspace-tab-actions__menu is-open" ${menuStyle} role="menu"><button type="button" data-workspace-tab-action="current" ${activeIndex < 0 ? 'disabled' : ''}>关闭当前页签</button><button type="button" data-workspace-tab-action="others" ${tabs.length < 2 || activeIndex < 0 ? 'disabled' : ''}>关闭其他页签</button><button type="button" data-workspace-tab-action="right" ${hasRightTabs ? '' : 'disabled'}>关闭右侧页签</button><button type="button" data-workspace-tab-action="all" ${tabs.length ? '' : 'disabled'}>全部关闭</button></div>` : ''}`;
+    bindWorkspaceTabControls(container);
+}
+
+function bindWorkspaceTabControls(container) {
+    const trigger = container.querySelector('[data-workspace-tab-menu]');
+    if (trigger) {
+        trigger.onclick = event => {
+            event.preventDefault();
+            event.stopPropagation();
+            workspaceTabMenuOpen = !workspaceTabMenuOpen;
+            if (workspaceTabMenuOpen) {
+                const rect = trigger.getBoundingClientRect();
+                workspaceTabMenuPosition = {
+                    top: Math.min(window.innerHeight - 190, rect.bottom + 7),
+                    left: Math.max(8, rect.right - 148),
+                };
+            } else {
+                workspaceTabMenuPosition = null;
+            }
+            renderWorkspaceTabs();
+        };
+    }
+    container.querySelectorAll('[data-workspace-tab-action]').forEach(button => {
+        button.onclick = event => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeWorkspaceTabs(button.dataset.workspaceTabAction);
+        };
+    });
+}
+
+function registerWorkspaceTab(button, type) {
+    if (!isSidebarTabsLayout()) return;
+    if (!workspaceTabs.has(type)) workspaceTabs.set(type, workspaceTabMeta(button, type));
+    activeWorkspaceTab = type;
+    renderWorkspaceTabs();
+}
+
+function closeWorkspaceTab(type) {
+    if (document.body.classList.contains('inspection-running')) return;
+    workspaceTabMenuOpen = false;
+    workspaceTabMenuPosition = null;
+    const tabs = [...workspaceTabs.keys()];
+    const index = tabs.indexOf(type);
+    const wasActive = activeWorkspaceTab === type;
+    workspaceTabs.delete(type);
+    if (!wasActive) return renderWorkspaceTabs();
+    const nextType = tabs[index + 1] || tabs[index - 1];
+    if (nextType) activateWorkspaceTab(nextType);
+    else { activeWorkspaceTab = null; hideAllContent(); document.getElementById('homeContent')?.classList.remove('hidden'); setActiveButton(null); renderWorkspaceTabs(); }
+}
+
+function closeWorkspaceTabs(action) {
+    if (document.body.classList.contains('inspection-running') || !workspaceTabs.size) return;
+    const types = [...workspaceTabs.keys()];
+    const activeIndex = types.indexOf(activeWorkspaceTab);
+    workspaceTabMenuOpen = false;
+    workspaceTabMenuPosition = null;
+    if (action === 'current' && activeWorkspaceTab) return closeWorkspaceTab(activeWorkspaceTab);
+    if (action === 'others' && activeWorkspaceTab) {
+        for (const type of types) if (type !== activeWorkspaceTab) workspaceTabs.delete(type);
+        return renderWorkspaceTabs();
+    }
+    if (action === 'right' && activeIndex >= 0) {
+        for (const type of types.slice(activeIndex + 1)) workspaceTabs.delete(type);
+        return renderWorkspaceTabs();
+    }
+    if (action === 'all') {
+        workspaceTabs.clear();
+        activeWorkspaceTab = null;
+        hideAllContent();
+        document.getElementById('homeContent')?.classList.remove('hidden');
+        setActiveButton(null);
+        renderWorkspaceTabs();
+    }
+}
+
+function navigationButtonForType(type) {
+    return type === 'full'
+        ? document.getElementById('fullInspectBtn')
+        : document.querySelector(`.inspect-btn[data-type="${type}"]`);
+}
+
+function openWorkspaceType(type, button = navigationButtonForType(type)) {
+    if (document.body.classList.contains('inspection-running')) return;
+    registerWorkspaceTab(button, type);
+    if (type === 'full') window.runInspection('full');
+    else if (type === 'config') window.showConfig();
+    else if (type === 'sql_inspect') window.showSqlInspect();
+    else if (type === 'custom_inspect') window.showCustomInspect();
+    else if (type === 'logs') window.showLogs();
+    else if (type === 'arthas') window.showArthas();
+    else if (type === 'user_permission') window.showUserPermission();
+    else if (type === 'pg_config') window.showPgConfig();
+    else window.runInspection(type);
+    setActiveButton(button);
+}
+
+function activateWorkspaceTab(type) {
+    const button = navigationButtonForType(type);
+    if (!workspaceTabs.has(type) || !button) return;
+    openWorkspaceType(type, button);
+}
 
 function setInspectionNavigationLocked(locked) {
     document.body.classList.toggle('inspection-running', locked);
-    document.querySelectorAll('.inspect-btn, #clearLogsBtn').forEach(control => {
+    document.querySelectorAll('.inspect-btn, #clearLogsBtn, .workspace-tab').forEach(control => {
         if (locked) {
             control.dataset.inspectionWasDisabled = control.disabled ? 'true' : 'false';
             control.disabled = true;
@@ -341,8 +485,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Full inspection button
     if (fullInspectBtn) {
         fullInspectBtn.addEventListener('click', function () {
-            window.runInspection('full');
-            setActiveButton(this);
+            openWorkspaceType('full', this);
         });
     }
 
@@ -352,27 +495,34 @@ document.addEventListener('DOMContentLoaded', function () {
         // 此处若再绑定会一次点击触发两次 runInspection，产生两条完整巡检日志
         if (btn.id === 'fullInspectBtn') return;
         btn.addEventListener('click', function () {
-            const type = this.getAttribute('data-type');
-            if (type === 'config') {
-                window.showConfig();
-            } else if (type === 'sql_inspect') {
-                window.showSqlInspect();
-            } else if (type === 'custom_inspect') {
-                window.showCustomInspect();
-            } else if (type === 'logs') {
-                window.showLogs();
-            } else if (type === 'arthas') {
-                window.showArthas();
-            } else if (type === 'user_permission') {
-                window.showUserPermission();
-            } else if (type === 'pg_config') {
-                window.showPgConfig();
-            } else {
-                window.runInspection(type);
-            }
-            setActiveButton(this);
+            openWorkspaceType(this.getAttribute('data-type'), this);
         });
     });
+
+    const workspaceTabsEl = document.getElementById('workspaceTabs');
+    if (workspaceTabsEl) {
+        workspaceTabsEl.addEventListener('click', event => {
+            if (document.body.classList.contains('inspection-running')) return;
+            const close = event.target.closest('[data-workspace-tab-close]');
+            if (close) return closeWorkspaceTab(close.dataset.workspaceTabClose);
+            const tab = event.target.closest('[data-workspace-tab]');
+            if (tab) activateWorkspaceTab(tab.dataset.workspaceTab);
+        });
+        document.addEventListener('click', event => {
+            if (workspaceTabMenuOpen && !workspaceTabsEl.contains(event.target)) {
+                workspaceTabMenuOpen = false;
+                workspaceTabMenuPosition = null;
+                renderWorkspaceTabs();
+            }
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && workspaceTabMenuOpen) {
+                workspaceTabMenuOpen = false;
+                workspaceTabMenuPosition = null;
+                renderWorkspaceTabs();
+            }
+        });
+    }
 
     // Clear logs button
     const clearLogsBtn = document.getElementById('clearLogsBtn');

@@ -36,15 +36,23 @@ INSPECTION_ITEMS = {
 THRESHOLDS = {
     "cpu": {
         "warning": 80,  # CPU使用率警告阈值（%）
-        "critical": 90  # CPU使用率紧急阈值（%）
+        "critical": 90,  # CPU使用率紧急阈值（%）
+        "load_per_core_warning": 1.0,  # 1分钟负载/逻辑核警告阈值
+        "load_per_core_critical": 1.5,
+        "iowait_warning": 10,  # CPU IO wait警告阈值（%）
+        "iowait_critical": 25
     },
     "memory": {
         "warning": 80,  # 内存使用率警告阈值（%）
-        "critical": 90  # 内存使用率紧急阈值（%）
+        "critical": 90,  # 内存使用率紧急阈值（%）
+        "available_warning": 20,  # 可用内存告警阈值（%）
+        "available_critical": 10
     },
     "disk": {
         "warning": 80,  # 磁盘使用率警告阈值（%）
-        "critical": 90  # 磁盘使用率紧急阈值（%）
+        "critical": 90,  # 磁盘使用率紧急阈值（%）
+        "inode_warning": 80,
+        "inode_critical": 90
     },
     "disk_free": {
         "warning": 30,  # 磁盘剩余空间警告阈值（GB）
@@ -52,7 +60,13 @@ THRESHOLDS = {
     },
     "swap": {
         "warning": 30,  # 交换分区使用率警告阈值（%）
-        "critical": 50  # 交换分区使用率紧急阈值（%）
+        "critical": 50,  # 交换分区使用率紧急阈值（%）
+        "activity_warning": 1,
+        "activity_critical": 10
+    },
+    "disk_io": {
+        "warning": 10,
+        "critical": 25
     },
     "slow_sql": {
         "warning": 1,  # 慢SQL数量警告阈值
@@ -91,6 +105,13 @@ REAL_TIME_MONITORING = {
             "memory_mb": 200  # 监控进程内存使用限制（MB）
         }
     }
+}
+
+# 连续资源历史采集配置（独立于告警型实时监控）
+RESOURCE_HISTORY_MONITORING = {
+    "enabled": True,
+    "interval_seconds": 60,
+    "retention_days": 90,
 }
 
 # 数据稽查日期配置

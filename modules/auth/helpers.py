@@ -61,6 +61,13 @@ def find_user(username):
     return next((u for u in load_auth_data()['users'] if u.get('username') == username), None)
 
 
+def get_public_user_identity(username):
+    """返回仅可用于页面展示的当前登录人信息。"""
+    user = find_user(username) or {}
+    display_name = str(user.get('display_name') or username).strip() or username
+    return {'username': username, 'display_name': display_name}
+
+
 def get_user_permissions(username):
     if username == ADMIN_USERNAME:
         return set(ALL_PERMISSIONS)

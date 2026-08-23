@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 - 服务器巡检系统</title>
     <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260822-inspection-centered" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260823-login-workspace" rel="stylesheet">
 </head>
 
 <body class="login-body">
@@ -14,21 +14,30 @@
     <div class="login-backdrop" aria-hidden="true"></div>
     <main class="login-shell login-shell-mist fade-in">
         <section class="login-intro-panel">
-            <div class="login-intro-mark"><i class="fa fa-server"></i></div>
-            <p class="app-eyebrow">OPERATIONS WORKSPACE</p>
-            <h1>服务器巡检管理中心</h1>
-            <p class="login-intro-copy">集中处理巡检任务、系统配置与历史日志，帮助团队保持日常运维工作的清晰与有序。</p>
-            <div class="login-capabilities" aria-label="系统能力">
-                <span><i class="fa fa-check-circle"></i>巡检</span>
-                <span><i class="fa fa-sliders"></i>配置</span>
-                <span><i class="fa fa-history"></i>日志</span>
+            <div class="login-intro-content">
+                <div class="login-intro-mark"><i class="fa fa-server"></i></div>
+                <p class="app-eyebrow">OPERATIONS WORKSPACE</p>
+                <h1>把日常巡检，变成清晰的工作流。</h1>
+                <p class="login-intro-copy">统一处理主机健康检查、专项数据查询、配置维护与巡检记录，让日常运维工作保持可见、可控、可追溯。</p>
+                <div class="login-capabilities" aria-label="系统能力">
+                    <span><i class="fa fa-heartbeat"></i>主机巡检</span>
+                    <span><i class="fa fa-code"></i>数据查询</span>
+                    <span><i class="fa fa-shield"></i>权限控制</span>
+                </div>
+            </div>
+            <div class="login-workflow" aria-label="使用流程示意">
+                <div><i class="fa fa-search"></i><span>采集</span></div>
+                <span class="login-workflow-line"></span>
+                <div><i class="fa fa-list-alt"></i><span>分析</span></div>
+                <span class="login-workflow-line"></span>
+                <div><i class="fa fa-check-circle"></i><span>处置</span></div>
             </div>
         </section>
         <section class="login-card login-form-panel">
             <div class="login-heading">
                 <p class="app-eyebrow">SIGN IN</p>
                 <h2>欢迎回来</h2>
-                <p>登录以进入服务器巡检中心</p>
+                <p>使用已分配的账号进入服务器巡检中心</p>
             </div>
             <form id="loginForm" class="space-y-6">
                 <div>
