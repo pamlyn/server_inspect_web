@@ -1,13 +1,19 @@
-<div id="sqlInspectContent" class="hidden">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+<div id="sqlInspectContent" class="hidden workspace-page sql-workspace-page">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 page-surface">
+        <div class="page-heading">
+            <div>
+                <p class="page-kicker">DATA VALIDATION</p>
+                <h2 class="text-lg font-bold text-gray-800 mb-2 flex items-center">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
                 style="background: var(--primary-light);">
                 <i class="fa fa-search text-sm" style="color: var(--primary-color);"></i>
             </div>
             数据稽查
-        </h2>
-        <div class="space-y-4">
+                </h2>
+                <p>选择稽查类型、配置范围并在结果工作区查看查询输出。</p>
+            </div>
+        </div>
+        <div class="workspace-control-panel space-y-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">稽查类型</label>
                 <select id="sqlInspectType"

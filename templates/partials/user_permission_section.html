@@ -1,0 +1,49 @@
+<div id="userPermissionContent" class="hidden workspace-page permission-workspace-page">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 page-surface space-y-6">
+        <div class="page-heading">
+            <div>
+                <p class="page-kicker">ACCESS CONTROL</p>
+                <h2 class="text-lg font-bold text-gray-800 flex items-center"><i class="fa fa-users mr-3" style="color: var(--primary-color);"></i>人员与权限</h2>
+                <p>仅管理员可配置角色、人员及功能权限；管理员账号固定拥有全部权限。</p>
+            </div>
+        </div>
+        <div class="permission-workspace-grid grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <section class="border border-gray-200 rounded-lg p-4 space-y-4">
+                <h3 class="text-sm font-semibold text-gray-700">角色与菜单权限配置</h3>
+                <input type="hidden" id="roleId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input id="roleName" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg" placeholder="角色名称">
+                    <input id="roleDescription" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg" placeholder="角色说明（可选）">
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 mb-2">可访问菜单</p>
+                    <div id="rolePermissionOptions" class="grid grid-cols-2 gap-2"></div>
+                </div>
+                <div id="customSqlScopeConfig" class="hidden border border-gray-200 rounded-lg p-3 space-y-3">
+                    <p class="text-xs font-medium text-gray-700">自定义SQL授权范围</p>
+                    <label class="flex items-center text-sm text-gray-700"><input type="radio" name="customSqlScopeMode" value="all" class="mr-2" checked>全部自定义SQL</label>
+                    <label class="flex items-center text-sm text-gray-700"><input type="radio" name="customSqlScopeMode" value="selected" class="mr-2">指定分类或脚本</label>
+                    <div id="customSqlSelectedScope" class="hidden space-y-3">
+                        <div><p class="text-xs text-gray-500 mb-1">授权分类（该分类下的全部脚本）</p><div id="customSqlCategoryOptions" class="grid grid-cols-2 gap-2"></div></div>
+                        <div><p class="text-xs text-gray-500 mb-1">授权具体脚本</p><div id="customSqlScriptOptions" class="space-y-1"></div></div>
+                    </div>
+                </div>
+                <div class="flex gap-2"><button id="saveRoleBtn" type="button" class="px-4 py-2 text-sm text-white rounded-lg bg-primary">保存角色</button><button id="cancelRoleBtn" type="button" class="px-4 py-2 text-sm border border-gray-300 rounded-lg">取消</button></div>
+                <div id="roleList" class="space-y-2"></div>
+            </section>
+            <section class="border border-gray-200 rounded-lg p-4 space-y-4">
+                <h3 class="text-sm font-semibold text-gray-700">人员配置</h3>
+                <input type="hidden" id="userUsernameEdit">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input id="userUsername" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg" placeholder="登录用户名">
+                    <input id="userDisplayName" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg" placeholder="显示名称">
+                    <input id="userPassword" type="password" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg" placeholder="密码（至少8位）">
+                    <select id="userEnabled" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"><option value="true">启用</option><option value="false">停用</option></select>
+                </div>
+                <div><p class="text-xs text-gray-500 mb-2">分配角色</p><div id="userRoleOptions" class="grid grid-cols-2 gap-2"></div></div>
+                <div class="flex gap-2"><button id="saveUserBtn" type="button" class="px-4 py-2 text-sm text-white rounded-lg bg-primary">保存人员</button><button id="cancelUserBtn" type="button" class="px-4 py-2 text-sm border border-gray-300 rounded-lg">取消</button></div>
+                <div id="userList" class="space-y-2"></div>
+            </section>
+        </div>
+    </div>
+</div>

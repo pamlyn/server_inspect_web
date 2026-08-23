@@ -24,9 +24,18 @@ async function pgApi(url, options = {}) {
     return data;
 }
 
+function isPgConfigVisible() {
+    const content = document.getElementById('pgConfigContent');
+    return content && !content.classList.contains('hidden');
+}
+
 window.loadPgConfig = async function () {
+    if (!isPgConfigVisible()) return;
+
     // 容器/用户默认值
     const data = await pgApi('/api/pg/config');
+    if (!isPgConfigVisible()) return;
+
     if (data.error) {
         // 无配置时用默认值
         document.getElementById('pgContainerName').value = 'mes_postgresql';
@@ -36,7 +45,7 @@ window.loadPgConfig = async function () {
         document.getElementById('pgUserName').value = data.user || 'postgres';
     }
     await loadPgContainers();
-    await loadPgSettings();
+    if (isPgConfigVisible()) await loadPgSettings();
 };
 
 async function loadPgContainers() {
@@ -54,11 +63,10 @@ async function loadPgContainers() {
     const currentName = document.getElementById('pgContainerName').value.trim();
     listEl.innerHTML = '<div class="flex flex-wrap gap-2">' + data.containers.map(c => {
         const active = c.name === currentName;
-        return `<button type="button" class="pg-container-pick px-3 py-1.5 text-xs rounded-lg border transition-all ${active ? 'text-white border-transparent' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}"
-            style="${active ? 'background: var(--primary-color);' : ''}"
+        return `<button type="button" class="pg-container-pick ${active ? 'is-selected' : ''}"
             data-name="${escapeHtml(c.name)}">
-            ${escapeHtml(c.name)} <span class="opacity-60">(${escapeHtml(c.image)})</span>
-            <span class="opacity-60">· ${escapeHtml(c.status)}</span>
+            ${escapeHtml(c.name)} <span class="pg-container-pick__meta">(${escapeHtml(c.image)})</span>
+            <span class="pg-container-pick__meta">· ${escapeHtml(c.status)}</span>
         </button>`;
     }).join('') + '</div>';
 }
@@ -69,6 +77,8 @@ function escapeHtml(s) {
 }
 
 async function loadPgSettings() {
+    if (!isPgConfigVisible()) return;
+
     const tableEl = document.getElementById('pgSettingsTable');
     tableEl.innerHTML = '<p class="text-xs text-gray-400">加载当前参数...</p>';
     const { container, user } = pgCurrentConfig();
@@ -149,7 +159,11 @@ async function setSetting(name, value, desc) {
 }
 
 async function applyPreset() {
-    const confirmed = await showConfirm('将应用推荐配置（关闭SQL日志+慢查询阈值10s+关闭日志收集器+日志512MB）并重载，确认？', '应用推荐配置');
+    const confirmed = await showConfirm(
+        '将关闭普通SQL执行日志、将慢查询阈值设为10秒、关闭日志收集器、限制单条日志为512MB，并重载配置。日志收集器需重启 PG 容器后才会生效。',
+        '应用推荐配置',
+        { confirmText: '确认应用', cancelText: '暂不应用' }
+    );
     if (!confirmed) return;
     const { container, user } = pgCurrentConfig();
     const data = await pgApi('/api/pg/apply_preset', {

@@ -1,4 +1,16 @@
-<div id="inspectionContent" class="hidden">
+<div id="inspectionContent" class="hidden workspace-page inspection-workspace-page">
+    <div class="inspection-results-heading hidden" id="inspectionResultsHeading">
+        <div><p class="page-kicker">INSPECTION RESULTS</p><h2>巡检结果工作区</h2><p>聚合巡检概览，并展开查看每个检查项的详细输出。</p></div>
+    </div>
+    <!-- 慢SQL去重选项：仅执行单项慢SQL巡检时显示 -->
+    <div id="deduplicateOption" class="hidden mb-4 flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm max-w-md">
+        <input type="checkbox" id="deduplicateCheckbox" checked
+            class="w-4 h-4 rounded border-gray-300 focus:ring-2 transition-all cursor-pointer"
+            style="color: var(--primary-color);">
+        <label for="deduplicateCheckbox" class="ml-2 text-sm text-gray-700 cursor-pointer">
+            慢SQL去重（默认开启，去除重复的SQL语句）
+        </label>
+    </div>
     <!-- 汇总表格（完整巡检时显示，单项巡检时隐藏） -->
     <div id="summaryTableWrapper" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-4">
         <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">

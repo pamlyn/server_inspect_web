@@ -8,7 +8,7 @@ import threading
 import time
 import json
 
-from modules.auth.helpers import login_required
+from modules.auth.helpers import login_required, permission_required
 from modules.config_mgmt.helpers import get_config, notification_cooldowns
 from modules.inspection.helpers import get_inspection_functions
 from modules.custom_scripts.helpers import run_custom_scripts
@@ -31,6 +31,7 @@ _realtime_last_notify_time = 0.0          # 上次通知的时间戳
 
 @scheduler_bp.route('/status', methods=['GET'])
 @login_required
+@permission_required('config_inspection_strategy')
 def scheduler_status():
     """获取定时任务状态"""
     global scheduler
@@ -77,6 +78,7 @@ def scheduler_status():
 
 @scheduler_bp.route('/run', methods=['POST'])
 @login_required
+@permission_required('config_inspection_strategy')
 def run_scheduler_now():
     """立即执行一次定时巡检"""
     try:
@@ -89,6 +91,7 @@ def run_scheduler_now():
 
 @scheduler_bp.route('/run-daily', methods=['POST'])
 @login_required
+@permission_required('config_inspection_strategy')
 def run_daily_now():
     """立即执行一次日常巡检"""
     try:

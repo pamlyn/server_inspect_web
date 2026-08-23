@@ -1,15 +1,29 @@
-<div id="customInspectContent" class="hidden">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+<div id="customInspectContent" class="hidden workspace-page sql-workspace-page">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 page-surface">
+        <div class="page-heading">
+            <div>
+                <p class="page-kicker">SAVED QUERIES</p>
+                <h2 class="text-lg font-bold text-gray-800 mb-2 flex items-center">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
                 style="background: var(--primary-light);">
                 <i class="fa fa-code text-sm" style="color: var(--primary-color);"></i>
             </div>
-            自定义稽核
-        </h2>
-        <div class="space-y-4">
+            自定义SQL
+                </h2>
+                <p>从已授权的脚本库中选择查询，填写参数后在右侧查看结果。</p>
+            </div>
+        </div>
+        <div class="workspace-control-panel space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">脚本分类</label>
+                <select id="customScriptCategoryFilter"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style="--tw-ring-color: var(--primary-color);">
+                    <option value="">全部分类</option>
+                </select>
+            </div>
             <div class="relative">
-                <label class="block text-sm font-medium text-gray-700 mb-1">选择稽核脚本</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">选择SQL脚本</label>
                 <div class="relative">
                     <input type="text" id="customScriptSearch" placeholder="搜索脚本名称..."
                         class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all pr-10"
@@ -70,18 +84,23 @@
                 <button id="executeCustomScriptBtn"
                     class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium"
                     disabled>
-                    <i class="fa fa-play mr-2"></i>执行稽核
+                    <i class="fa fa-play mr-2"></i>执行SQL
                 </button>
                 <button id="exportCustomScriptBtn"
                     class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary hover:bg-opacity-10 transition-all text-sm font-medium hidden">
                     <i class="fa fa-download mr-2"></i>导出结果
                 </button>
+                <label id="customSqlHeaderColorWrap" class="hidden flex items-center text-sm text-gray-600">
+                    <span class="mr-2">表头颜色</span>
+                    <input type="color" id="customSqlHeaderColor" value="#87CEEB" title="选择Excel表头颜色"
+                        class="w-9 h-9 p-1 border border-gray-300 rounded cursor-pointer">
+                </label>
             </div>
         </div>
         <div id="customScriptResult" class="mt-6 hidden">
-            <h3 class="text-sm font-semibold text-gray-700 mb-3">稽核结果</h3>
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">SQL结果</h3>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="w-max min-w-full table-auto divide-y divide-gray-200">
                     <thead id="customScriptResultHeader" class="bg-gray-50">
                         <!-- 表头将通过JavaScript动态生成 -->
                     </thead>

@@ -2,57 +2,96 @@
 配置管理模块 - 路由定义
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 import datetime
 
-from modules.auth.helpers import login_required
+from modules.auth.helpers import (can_access_config_scope, login_required,
+                                  permission_required)
 from modules.config_mgmt.helpers import get_config, set_config, get_all_config, update_config, save_config_to_file, load_config_from_file
 
 config_mgmt_bp = Blueprint('config_mgmt', __name__, url_prefix='/api/config')
+
+CONFIG_SCOPE_KEYS = {
+    'basic': {'projectName', 'thresholds'},
+    'inspection': {
+        'scheduler', 'dailyInspection', 'realTimeMonitoring', 'inspectionItems',
+        'scheduledInspectionItems', 'dailyInspectionItems', 'fullInspectionItems',
+        'inspectionDateConfig',
+    },
+    'data': {'dingtalk', 'databaseConfig', 'logDatabase'},
+    'custom-sql': set(),
+}
+
+
+def _config_scope():
+    scope = (request.args.get('scope') or '').strip()
+    if scope not in CONFIG_SCOPE_KEYS:
+        return None, (jsonify({'error': '系统配置页签无效'}), 400)
+    if not can_access_config_scope(session.get('username', ''), scope):
+        return None, (jsonify({'error': '没有该系统配置页签权限'}), 403)
+    return scope, None
+
+
+def _scoped_config(scope):
+    config = get_all_config()
+    return {key: config.get(key) for key in CONFIG_SCOPE_KEYS[scope]}
 
 
 @config_mgmt_bp.route('', methods=['GET', 'POST'])
 @login_required
 def config():
-    """配置管理"""
+    """按已授权页签读取或保存系统配置，避免跨页签读取敏感字段。"""
+    scope, error = _config_scope()
+    if error:
+        return error
     if request.method == 'GET':
-        # 从文件重新加载配置
         load_config_from_file()
-        config_data = get_all_config()
-        print(f"返回配置: {config_data}")
-        # no-store：避免浏览器缓存配置 JSON，确保部署/重启后页面始终读取最新配置
-        response = jsonify(config_data)
+        response = jsonify(_scoped_config(scope))
         response.headers['Cache-Control'] = 'no-store'
         return response
-    elif request.method == 'POST':
-        data = request.json
-        print(f"收到配置数据: {data}")
-        if not data:
-            return jsonify({'error': '配置数据不能为空'}), 400
 
-        # 更新全局配置
-        update_config(data)
+    data = request.get_json() or {}
+    if not data:
+        return jsonify({'error': '配置数据不能为空'}), 400
+    allowed_keys = CONFIG_SCOPE_KEYS[scope]
+    data = {key: value for key, value in data.items() if key in allowed_keys}
+    if not data:
+        return jsonify({'error': '当前页签没有可保存的系统配置'}), 400
 
-        # 保存配置到文件
-        save_result = save_config_to_file(data)
-        print(f"保存配置结果: {save_result}")
+    # 已从页面移除钉钉 Secret 配置；保存通知配置时保留已有签名配置。
+    if scope == 'data' and 'dingtalk' in data and 'secret' not in data['dingtalk']:
+        existing_dingtalk = get_config('dingtalk', {}) or {}
+        if existing_dingtalk.get('secret'):
+            data['dingtalk']['secret'] = existing_dingtalk['secret']
 
-        # 重启定时任务（实时监控线程由 start_real_time_monitor 复用，不再 stop+restart，避免多线程并存）
+    update_config(data)
+    save_result = save_config_to_file(get_all_config())
+    if not save_result:
+        return jsonify({'error': '配置保存失败'}), 500
+
+    # 仅巡检策略变更才需要重启调度任务。
+    if scope == 'inspection':
         from modules.scheduler.routes import scheduler, start_scheduler
         if scheduler:
             try:
                 scheduler.shutdown(wait=True)
-            except Exception as e:
-                print(f"停止定时任务时出错: {e}")
-
+            except Exception as error:
+                print(f"停止定时任务时出错: {error}")
         start_scheduler()
+    return jsonify({'message': '配置保存成功'})
 
-        print('保存配置完成')
-        return jsonify({'message': '配置保存成功'})
+
+@config_mgmt_bp.route('/database-options', methods=['GET'])
+@login_required
+@permission_required('custom_sql')
+def database_options():
+    """自定义 SQL 仅获取可选数据库名称，不返回连接参数或密码。"""
+    return jsonify({'databases': sorted(get_all_config().get('databaseConfig', {}))})
 
 
 @config_mgmt_bp.route('/test_database', methods=['POST'])
 @login_required
+@permission_required('config_data_notification')
 def test_database():
     """测试数据库连接"""
     try:
@@ -89,6 +128,7 @@ def test_database():
 
 @config_mgmt_bp.route('/test_log_database', methods=['POST'])
 @login_required
+@permission_required('config_data_notification')
 def test_log_database():
     """测试日志数据库连接并创建表"""
     try:
@@ -124,6 +164,7 @@ def test_log_database():
 
 @config_mgmt_bp.route('/database/<db_id>', methods=['DELETE'])
 @login_required
+@permission_required('config_data_notification')
 def delete_database_config(db_id):
     """删除数据库配置"""
     if db_id in ['mes', 'hanging']:
@@ -148,6 +189,7 @@ def delete_database_config(db_id):
 
 @config_mgmt_bp.route('/reload', methods=['POST'])
 @login_required
+@permission_required('config_inspection_strategy')
 def reload_config():
     """重新加载配置"""
     try:

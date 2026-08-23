@@ -1,24 +1,36 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- 去重选项 -->
-<div id="deduplicateOption"
-    class="mb-4 flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm max-w-md">
-    <input type="checkbox" id="deduplicateCheckbox" checked
-        class="w-4 h-4 rounded border-gray-300 focus:ring-2 transition-all cursor-pointer"
-        style="color: var(--primary-color);">
-    <label for="deduplicateCheckbox" class="ml-2 text-sm text-gray-700 cursor-pointer">
-        慢SQL去重（默认开启，去除重复的SQL语句）
-    </label>
+<!-- 巡检执行中：导航会临时锁定，避免结果渲染到其他工作区。 -->
+<div id="loading" class="hidden inspection-loading-panel" role="status" aria-live="polite">
+    <div class="inspection-loading-status">
+        <div class="inspection-loading-spinner animate-spin" aria-hidden="true"></div>
+        <div>
+            <div class="inspection-loading-title"><span>巡检执行中</span><span class="inspection-loading-badge">请勿切换菜单</span></div>
+            <p id="inspectionLoadingMessage">正在采集巡检结果，完成后将自动展示结果。</p>
+        </div>
+    </div>
+    <button type="button" id="cancelInspectionBtn" class="inspection-cancel-btn">
+        <i class="fa fa-times"></i><span>取消巡检</span>
+    </button>
 </div>
 
-<!-- 加载中 -->
-<div id="loading" class="hidden text-center py-16">
-    <div class="inline-block animate-spin rounded-full h-12 w-12 border-4"
-        style="border-color: var(--primary-light); border-top-color: var(--primary-color);">
+<section id="homeContent" class="welcome-panel">
+    <div class="welcome-copy">
+        <p class="app-eyebrow">WELCOME BACK</p>
+        <h2>让每一次巡检，都更清晰可靠。</h2>
+        <p>从左侧选择已授权的功能，查看运行状态、执行专项巡检或管理系统配置。</p>
     </div>
-    <p class="mt-4 text-gray-600 text-sm">正在执行巡检，请稍候...</p>
-</div>
+    <div class="welcome-orb" aria-hidden="true">
+        <i class="fa fa-shield"></i>
+    </div>
+    <div class="welcome-stats">
+        <div><span>服务状态</span><strong><i class="fa fa-circle"></i> 就绪</strong></div>
+        <div><span>操作方式</span><strong>按权限访问</strong></div>
+    </div>
+</section>
+
+{% include 'partials/user_permission_section.html' %}
 
 <!-- 结果区域 -->
 <div id="results" class="hidden space-y-4">

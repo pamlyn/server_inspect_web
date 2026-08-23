@@ -1,0 +1,48 @@
+<div class="space-y-4">
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">是否启用</label>
+            <select id="schedulerEnabled" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);">
+                <option value="true">启用</option>
+                <option value="false">禁用</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">执行方式</label>
+            <select id="scheduleType" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);">
+                <option value="interval">每多少分钟执行一次</option>
+                <option value="fixed">定点执行</option>
+                <option value="custom">自定义Cron表达式</option>
+            </select>
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">是否异常通知</label>
+            <select id="schedulerOnlyErrorNotification" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);">
+                <option value="true">开启（有异常才通知）</option>
+                <option value="false">关闭（无论是否异常都通知）</option>
+            </select>
+        </div>
+    </div>
+    <div id="intervalConfig" class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">每多少分钟</label>
+            <input type="number" id="intervalMinutes" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" min="1" value="20">
+        </div>
+    </div>
+    <div id="fixedConfig" class="grid grid-cols-2 gap-4 hidden">
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">小时</label>
+            <input type="number" id="fixedHour" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" min="0" max="23" value="0">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">分钟</label>
+            <input type="number" id="fixedMinute" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" min="0" max="59" value="0">
+        </div>
+    </div>
+    <div id="cronConfig" class="hidden">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Cron表达式</label>
+        <input type="text" id="schedulerCron" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" placeholder="*/20 * * * *">
+    </div>
+</div>

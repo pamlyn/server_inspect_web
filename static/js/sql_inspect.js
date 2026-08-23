@@ -9,6 +9,9 @@
 // ========== showSqlInspect - overwrite the app.js placeholder ==========
 
 window.showSqlInspect = function () {
+    if (typeof setPageContext === 'function') {
+        setPageContext('数据稽查', '构建并执行专项数据一致性查询', 'DATA VALIDATION', '查询工作区');
+    }
     hideAllContent();
     const results = document.getElementById('results');
     const sqlInspectContent = document.getElementById('sqlInspectContent');
@@ -773,7 +776,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Get inspection name
             const typeNames = {
-                'custom': '自定义SQL稽核',
+                'custom': '自定义SQL',
                 'worker_output': '工人产量与报工明细稽核',
                 'worker_output_sfd': '工人产量与报工明细数据稽核(sfd)',
                 'mes_hanging': 'MES报工明细与吊挂报工明细稽核'

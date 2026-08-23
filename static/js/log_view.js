@@ -14,6 +14,7 @@ let logCurrentPage = 1;
 let logPageSize = 20;
 let logTotalPages = 1;
 let logTotalCount = 0;
+let logCurrentDetailId = null;
 
 // ========== 类型/状态中文映射 ==========
 
@@ -21,7 +22,7 @@ const LOG_TYPE_LABELS = {
     system: '系统巡检',
     sql: 'SQL稽查',
     mes_hanging: 'MES吊挂稽核',
-    custom_script: '自定义稽核',
+    custom_script: '自定义SQL',
 };
 
 const LOG_SOURCE_LABELS = {
@@ -48,6 +49,9 @@ const LOG_STATUS_LABELS = {
 // ========== 页面切换 ==========
 
 window.showLogs = function () {
+    if (typeof setPageContext === 'function') {
+        setPageContext('巡检日志', '筛选、导出和查看巡检运行记录', 'ACTIVITY & AUDIT', '审计工作区');
+    }
     hideAllContent();
     const results = document.getElementById('results');
     const logContent = document.getElementById('logContent');
@@ -56,15 +60,8 @@ window.showLogs = function () {
     loadLogs(1);
 };
 
-// ========== 加载日志列表 ==========
-
-function loadLogs(page) {
-    logCurrentPage = page || 1;
-
+function buildLogFilterParams() {
     const params = new URLSearchParams();
-    params.set('page', logCurrentPage);
-    params.set('page_size', logPageSize);
-
     const type = document.getElementById('logFilterType').value;
     const source = document.getElementById('logFilterSource').value;
     const status = document.getElementById('logFilterStatus').value;
@@ -80,6 +77,17 @@ function loadLogs(page) {
     if (keyword) params.set('keyword', keyword);
     if (start) params.set('start_time', start.replace('T', ' ') + ':00');
     if (end) params.set('end_time', end.replace('T', ' ') + ':00');
+    return params;
+}
+
+// ========== 加载日志列表 ==========
+
+function loadLogs(page) {
+    logCurrentPage = page || 1;
+
+    const params = buildLogFilterParams();
+    params.set('page', logCurrentPage);
+    params.set('page_size', logPageSize);
 
     const bodyEl = document.getElementById('logTableBody');
     bodyEl.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-gray-400"><i class="fa fa-spinner fa-spin mr-2"></i>加载中...</td></tr>';
@@ -102,6 +110,64 @@ function loadLogs(page) {
             console.error('加载日志失败:', err);
             bodyEl.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-sm text-red-500">加载失败，请检查网络连接</td></tr>`;
         });
+}
+
+function exportLogs() {
+    const params = buildLogFilterParams();
+    window.open(`/api/logs/export?${params.toString()}`, '_blank');
+}
+
+function printLogDetail() {
+    if (!logCurrentDetailId) return;
+
+    const title = document.getElementById('logDetailTitle').textContent || '巡检日志详情';
+    const content = document.getElementById('logDetailContent').innerHTML;
+    const printWindow = window.open('', '_blank', 'width=1000,height=800');
+    if (!printWindow) {
+        showToast('打印窗口被浏览器拦截，请允许弹窗后重试', 'warning');
+        return;
+    }
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(title)}</title>
+<style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #1f2937; font-family: "Microsoft YaHei", "微软雅黑", sans-serif; font-size: 12px; line-height: 1.5; }
+    h1 { margin: 0 0 18px; font-size: 20px; }
+    h4 { margin: 0 0 10px; font-size: 14px; }
+    .bg-white, .bg-gray-50 { background: #fff !important; }
+    .border, .border-gray-100, .border-gray-200 { border: 1px solid #d1d5db !important; }
+    .rounded, .rounded-lg { border-radius: 4px; }
+    .p-2 { padding: 8px; } .p-3 { padding: 10px; } .p-4 { padding: 12px; }
+    .mb-2 { margin-bottom: 8px; } .mb-3 { margin-bottom: 10px; }
+    .space-y-2 > * + * { margin-top: 8px; } .space-y-4 > * + * { margin-top: 14px; }
+    .grid { display: grid; } .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gap-3 { gap: 10px; }
+    .flex { display: flex; } .items-center { align-items: center; } .items-start { align-items: flex-start; }
+    .justify-between { justify-content: space-between; }
+    .text-xs { font-size: 11px; } .text-sm { font-size: 12px; }
+    .font-semibold, .font-medium { font-weight: 600; }
+    .text-gray-400, .text-gray-500, .text-gray-600 { color: #4b5563; }
+    .text-red-700 { color: #b91c1c; } .text-green-700 { color: #15803d; } .text-yellow-700 { color: #a16207; }
+    .bg-red-50 { background: #fef2f2 !important; } .bg-green-50 { background: #f0fdf4 !important; } .bg-yellow-50 { background: #fefce8 !important; }
+    .break-all { overflow-wrap: anywhere; word-break: break-word; }
+    .overflow-x-auto { overflow: visible; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: normal !important; }
+    th { background: #f3f4f6; font-weight: 600; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .fa { display: none; }
+</style>
+</head>
+<body><h1>${escapeHtml(title)}</h1>${content}</body>
+</html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.onafterprint = () => printWindow.close();
 }
 
 // ========== 渲染日志列表 ==========
@@ -177,7 +243,10 @@ window.openLogDetail = function (logId) {
     const drawer = document.getElementById('logDetailDrawer');
     const content = document.getElementById('logDetailContent');
     const title = document.getElementById('logDetailTitle');
+    const detailPrintBtn = document.getElementById('logDetailPrintBtn');
     drawer.classList.remove('hidden');
+    logCurrentDetailId = null;
+    if (detailPrintBtn) detailPrintBtn.classList.add('hidden');
     title.textContent = '日志详情';
     content.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fa fa-spinner fa-spin mr-2"></i>加载中...</div>';
 
@@ -188,6 +257,8 @@ window.openLogDetail = function (logId) {
                 content.innerHTML = `<div class="text-center text-red-500 py-8">${data.error || '加载失败'}</div>`;
                 return;
             }
+            logCurrentDetailId = logId;
+            if (detailPrintBtn) detailPrintBtn.classList.remove('hidden');
             renderLogDetail(data.log, data.parsed);
         })
         .catch(err => {
@@ -294,6 +365,13 @@ function renderSection(section) {
     return html;
 }
 
+function closeLogDetail() {
+    logCurrentDetailId = null;
+    document.getElementById('logDetailDrawer').classList.add('hidden');
+    const detailPrintBtn = document.getElementById('logDetailPrintBtn');
+    if (detailPrintBtn) detailPrintBtn.classList.add('hidden');
+}
+
 // ========== 清理日志 ==========
 
 function openClearModal() {
@@ -363,12 +441,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchBtn = document.getElementById('logSearchBtn');
     const resetBtn = document.getElementById('logResetBtn');
     const clearBtn = document.getElementById('logClearBtn');
+    const exportBtn = document.getElementById('logExportBtn');
     const prevBtn = document.getElementById('logPrevBtn');
     const nextBtn = document.getElementById('logNextBtn');
     const pageSizeSelect = document.getElementById('logPageSizeSelect');
     const jumpInput = document.getElementById('logJumpInput');
     const jumpBtn = document.getElementById('logJumpBtn');
     const detailCloseBtn = document.getElementById('logDetailCloseBtn');
+    const detailPrintBtn = document.getElementById('logDetailPrintBtn');
     const detailOverlay = document.getElementById('logDetailOverlay');
     const clearCancelBtn = document.getElementById('logClearCancelBtn');
     const clearConfirmBtn = document.getElementById('logClearConfirmBtn');
@@ -385,6 +465,8 @@ document.addEventListener('DOMContentLoaded', function () {
         loadLogs(1);
     });
     if (clearBtn) clearBtn.addEventListener('click', openClearModal);
+    if (exportBtn) exportBtn.addEventListener('click', exportLogs);
+    if (detailPrintBtn) detailPrintBtn.addEventListener('click', printLogDetail);
     if (prevBtn) prevBtn.addEventListener('click', () => { if (logCurrentPage > 1) loadLogs(logCurrentPage - 1); });
     if (nextBtn) nextBtn.addEventListener('click', () => { if (logCurrentPage < logTotalPages) loadLogs(logCurrentPage + 1); });
 
@@ -406,12 +488,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Enter' && jumpBtn && !jumpBtn.disabled) jumpBtn.click();
     });
 
-    if (detailCloseBtn) detailCloseBtn.addEventListener('click', () => {
-        document.getElementById('logDetailDrawer').classList.add('hidden');
-    });
-    if (detailOverlay) detailOverlay.addEventListener('click', () => {
-        document.getElementById('logDetailDrawer').classList.add('hidden');
-    });
+    if (detailCloseBtn) detailCloseBtn.addEventListener('click', closeLogDetail);
+    if (detailOverlay) detailOverlay.addEventListener('click', closeLogDetail);
     if (clearCancelBtn) clearCancelBtn.addEventListener('click', closeClearModal);
     if (clearConfirmBtn) clearConfirmBtn.addEventListener('click', confirmClearLogs);
 
@@ -424,7 +502,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ESC 关闭抽屉/弹窗
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
-            document.getElementById('logDetailDrawer').classList.add('hidden');
+            closeLogDetail();
             document.getElementById('logClearModal').classList.add('hidden');
         }
     });

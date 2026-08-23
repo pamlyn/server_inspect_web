@@ -102,20 +102,56 @@ def save_scripts():
         print(f"保存脚本失败: {e}")
 
 
-def format_sql_value(var_type, var_value):
-    """根据变量类型格式化SQL值"""
+def _split_collection_values(value):
+    """将逗号、中文逗号或换行分隔的集合值规范化为非空元素列表。"""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw_values = value
+    else:
+        raw_values = str(value).replace('，', ',').replace('\r', '\n').split(',')
+    values = []
+    for raw_value in raw_values:
+        values.extend(part.strip() for part in str(raw_value).split('\n') if part.strip())
+    return values
+
+
+def format_sql_value(variable_or_type, var_value):
+    """根据变量配置格式化 SQL 值，支持集合变量安全展开。"""
+    if isinstance(variable_or_type, dict):
+        var_type = variable_or_type.get('type', 'text')
+        collection_item_type = variable_or_type.get('collection_item_type', 'text')
+    else:
+        var_type = variable_or_type
+        collection_item_type = 'text'
+
+    if var_type == 'collection':
+        values = _split_collection_values(var_value)
+        if not values:
+            return 'NULL'
+        if collection_item_type == 'number':
+            normalized_values = []
+            for value in values:
+                try:
+                    normalized_values.append(str(int(value)))
+                except ValueError:
+                    try:
+                        normalized_values.append(str(float(value)))
+                    except ValueError:
+                        raise ValueError(f'集合变量包含无效数字: {value}')
+            return ', '.join(normalized_values)
+        return ', '.join("'" + value.replace("'", "''") + "'" for value in values)
+
     if var_value is None or var_value == '':
         return 'NULL'
-
     if var_type == 'number':
         return str(var_value)
-    elif var_type == 'period':
+    if var_type == 'period':
         # 年月/周期变量主要用于表名等标识符（如 produce_mes_reporting_work_cache_2026_7），
         # 不做引号包装，原样插值；WHERE 等场景由用户在 SQL 中自行加引号。
         return str(var_value)
-    else:
-        escaped_value = str(var_value).replace("'", "''")
-        return f"'{escaped_value}'"
+    escaped_value = str(var_value).replace("'", "''")
+    return f"'{escaped_value}'"
 
 
 def resolve_period_value(period_type, period_format='yyyy-MM'):
@@ -256,7 +292,8 @@ def check_row_against_rules(row, columns, rules):
                 is_match = True
 
             if is_match:
-                reason = f"{column} {operator} {value} ({result})"
+                abnormal_description = str(rule.get('abnormal_description') or '').strip()
+                reason = abnormal_description if result == '异常' and abnormal_description else f"{column} {operator} {value} ({result})"
                 if result == '异常':
                     abnormal_reasons.append(reason)
                 else:
@@ -296,7 +333,7 @@ def _resolve_variables_for_scheduled(variables):
         elif var_type == 'time' and not var_value:
             var_value = today_start
 
-        resolved[var_name] = format_sql_value(var_type, var_value)
+        resolved[var_name] = format_sql_value(var, var_value)
     return resolved
 
 

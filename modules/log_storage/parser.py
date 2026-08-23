@@ -48,7 +48,7 @@ def _trigger_label(trigger):
 def _type_label(inspection_type):
     return {
         'system': '系统巡检', 'sql': 'SQL稽查', 'mes_hanging': 'MES吊挂稽核',
-        'custom_script': '自定义稽核',
+        'custom_script': '自定义SQL',
     }.get(inspection_type, inspection_type or '未知')
 
 

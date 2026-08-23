@@ -5,14 +5,16 @@
 record_inspection_log 调用，本模块仅负责读取与解析展示。
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 import datetime
 
 from modules.auth.helpers import login_required
 from modules.log_storage.helpers import (
-    _get_log_db_config, query_inspection_logs, get_inspection_log_detail, delete_inspection_logs,
+    _get_log_db_config, query_inspection_logs, export_inspection_logs,
+    get_inspection_log_detail, delete_inspection_logs,
 )
-from modules.log_storage.parser import parse_log_detail, _target_label
+from modules.log_storage.parser import parse_log_detail, _target_label, _type_label, _trigger_label, _status_label
+from modules.log_storage.exporter import build_log_list_excel, EXCEL_MIMETYPE
 
 log_bp = Blueprint('logs', __name__, url_prefix='/api/logs')
 
@@ -24,6 +26,38 @@ def _log_db_or_403():
         return None, (jsonify({'success': False, 'error': '日志数据库未启用，请在系统配置中开启日志库',
                                'logs': [], 'total': 0}), 200)
     return cfg, None
+
+
+def _get_log_filters():
+    """从请求参数提取列表和导出共用的筛选条件。"""
+    filters = {
+        'inspection_type': request.args.get('inspection_type'),
+        'trigger_source': request.args.get('trigger_source'),
+        'status': request.args.get('status'),
+        'operator': request.args.get('operator'),
+        'target': request.args.get('target'),
+        'keyword': request.args.get('keyword'),
+        'start_time': request.args.get('start_time'),
+        'end_time': request.args.get('end_time'),
+    }
+    return {key: value for key, value in filters.items() if value}
+
+
+def _serialize_log_datetimes(log):
+    """就地序列化日志中的时间对象。"""
+    for key, value in list(log.items()):
+        if isinstance(value, datetime.datetime):
+            log[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+    return log
+
+
+def _enrich_log_labels(log):
+    """补充导出和页面展示共用的中文标签。"""
+    log['target_label'] = _target_label(log.get('target'))
+    log['type_label'] = _type_label(log.get('inspection_type'))
+    log['source_label'] = _trigger_label(log.get('trigger_source'))
+    log['status_label'] = _status_label(log.get('status'))
+    return log
 
 
 @log_bp.route('', methods=['GET'])
@@ -43,27 +77,12 @@ def list_logs():
     except (ValueError, TypeError):
         page, page_size = 1, 20
 
-    filters = {
-        'inspection_type': request.args.get('inspection_type'),
-        'trigger_source': request.args.get('trigger_source'),
-        'status': request.args.get('status'),
-        'operator': request.args.get('operator'),
-        'target': request.args.get('target'),
-        'keyword': request.args.get('keyword'),
-        'start_time': request.args.get('start_time'),
-        'end_time': request.args.get('end_time'),
-    }
-    # 清理空值
-    filters = {k: v for k, v in filters.items() if v}
+    filters = _get_log_filters()
 
     try:
         logs, total = query_inspection_logs(db_type, db_config, filters, page, page_size)
-        # 序列化 datetime，并补充巡检对象中文标签
         for log in logs:
-            for k, v in list(log.items()):
-                if isinstance(v, datetime.datetime):
-                    log[k] = v.strftime('%Y-%m-%d %H:%M:%S')
-            log['target_label'] = _target_label(log.get('target'))
+            _enrich_log_labels(_serialize_log_datetimes(log))
         return jsonify({
             'success': True,
             'logs': logs,
@@ -76,6 +95,29 @@ def list_logs():
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'查询日志失败: {e}',
                         'logs': [], 'total': 0}), 500
+
+
+@log_bp.route('/export', methods=['GET'])
+@login_required
+def export_logs():
+    """按当前筛选条件导出巡检日志列表。"""
+    cfg, err = _log_db_or_403()
+    if err:
+        return err
+    db_type, db_config = cfg
+
+    try:
+        logs = export_inspection_logs(db_type, db_config, _get_log_filters())
+        for log in logs:
+            _enrich_log_labels(_serialize_log_datetimes(log))
+        output, filename = build_log_list_excel(logs)
+        return send_file(output, mimetype=EXCEL_MIMETYPE, as_attachment=True, download_name=filename)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'导出日志失败: {e}'}), 500
 
 
 @log_bp.route('/<int:log_id>', methods=['GET'])

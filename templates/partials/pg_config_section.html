@@ -1,14 +1,19 @@
-<div id="pgConfigContent" class="hidden">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+<div id="pgConfigContent" class="hidden workspace-page pg-workspace-page">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 page-surface">
+        <div class="page-heading">
+            <div>
+                <p class="page-kicker">DATABASE OPERATIONS</p>
+                <h2 class="text-lg font-bold text-gray-800 mb-2 flex items-center">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
                 style="background: var(--primary-light);">
                 <i class="fa fa-database text-sm" style="color: var(--primary-color);"></i>
             </div>
             PostgreSQL 容器配置
-        </h2>
-
-        <!-- 容器选择 -->
+                </h2>
+                <p>选择目标容器，维护 PostgreSQL 运行参数并快速执行受控配置操作。</p>
+            </div>
+        </div>
+        <div class="pg-workspace-grid">
         <div class="border border-gray-200 rounded-lg p-4 mb-4">
             <h3 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
                 <i class="fa fa-cube mr-2" style="color: var(--primary-color);"></i>
@@ -107,5 +112,6 @@
 
         <!-- 结果区 -->
         <div id="pgResult" class="mt-4"></div>
+        </div>
     </div>
 </div>

@@ -440,6 +440,19 @@ def query_inspection_logs(db_type, db_config, filters=None, page=1, page_size=20
             conn.close()
 
 
+def export_inspection_logs(db_type, db_config, filters=None, max_records=5000):
+    """查询全部匹配日志用于导出，并限制最大记录数保护日志数据库。"""
+    logs, total = query_inspection_logs(db_type, db_config, filters=filters, page=1, page_size=200)
+    if total > max_records:
+        raise ValueError(f'匹配日志超过 {max_records} 条，请缩小筛选范围后再导出')
+
+    all_logs = list(logs)
+    for page in range(2, (total + 199) // 200 + 1):
+        batch, _ = query_inspection_logs(db_type, db_config, filters=filters, page=page, page_size=200)
+        all_logs.extend(batch)
+    return all_logs
+
+
 def get_inspection_log_detail(db_type, db_config, log_id):
     """查询单条日志详情（含 result、error）。"""
     conn = None

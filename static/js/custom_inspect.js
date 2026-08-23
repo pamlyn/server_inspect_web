@@ -21,6 +21,80 @@ let highlightedIndex = -1;
 let currentVariables = [];
 let databaseOptions = [];
 
+function getScriptCategory(script) {
+    return (script?.category || '').trim() || '未分类';
+}
+
+function escapeCustomHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getFilteredScripts() {
+    const category = document.getElementById('customScriptCategoryFilter')?.value || '';
+    const searchText = document.getElementById('customScriptSearch')?.value.trim().toLowerCase() || '';
+    return allCustomScripts.filter(script =>
+        (!category || getScriptCategory(script) === category) &&
+        (!searchText || script.name.toLowerCase().includes(searchText))
+    );
+}
+
+function renderCategoryFilter() {
+    const filter = document.getElementById('customScriptCategoryFilter');
+    if (!filter) return;
+    const selectedCategory = filter.value;
+    const categories = [...new Set(allCustomScripts.map(getScriptCategory))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    filter.innerHTML = '<option value="">全部分类</option>';
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        filter.appendChild(option);
+    });
+    filter.value = categories.includes(selectedCategory) ? selectedCategory : '';
+}
+
+function renderCategoryOptions(scripts) {
+    const options = document.getElementById('customScriptCategoryOptions');
+    if (!options) return;
+    const categories = [...new Set((scripts || []).map(getScriptCategory))]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    options.innerHTML = '';
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        options.appendChild(option);
+    });
+}
+
+function refreshScriptOptions() {
+    renderScriptOptions(getFilteredScripts());
+}
+
+function clearSelectedScript() {
+    selectedScriptId = null;
+    currentSelectedScriptName = '';
+    highlightedIndex = -1;
+    customScriptColumns = [];
+    customScriptRows = [];
+
+    document.getElementById('customScriptSelect').value = '';
+    document.getElementById('customScriptSearch').value = '';
+    document.getElementById('selectedScriptInfo').classList.add('hidden');
+    document.getElementById('scriptParamsConfig').classList.add('hidden');
+    document.getElementById('scriptRulesConfig').classList.add('hidden');
+    document.getElementById('executeCustomScriptBtn').disabled = true;
+    document.getElementById('exportCustomScriptBtn').classList.add('hidden');
+    document.getElementById('customSqlHeaderColorWrap').classList.add('hidden');
+    document.getElementById('customScriptResult').classList.add('hidden');
+    document.getElementById('customScriptResultHeader').innerHTML = '';
+    document.getElementById('customScriptResultBody').innerHTML = '';
+}
+
 // ========== Date utility functions (exposed globally for template onclick handlers) ==========
 
 window.getTodayDate = function () {
@@ -104,11 +178,15 @@ window.PERIOD_FORMAT_OPTIONS = [
 // ========== showCustomInspect — overwrite the app.js placeholder ==========
 
 window.showCustomInspect = function () {
+    if (typeof setPageContext === 'function') {
+        setPageContext('自定义SQL', '从已授权的脚本库执行预设查询', 'SAVED QUERIES', '脚本工作区');
+    }
     hideAllContent();
     const results = document.getElementById('results');
     const customInspectContent = document.getElementById('customInspectContent');
     results.classList.remove('hidden');
     customInspectContent.classList.remove('hidden');
+    loadDatabaseOptions();
     loadCustomScripts();
 };
 
@@ -117,6 +195,7 @@ window.showCustomInspect = function () {
 function clearScriptForm() {
     document.getElementById('customScriptId').value = '';
     document.getElementById('customScriptName').value = '';
+    document.getElementById('customScriptCategory').value = '';
     document.getElementById('customScriptMode').value = 'single_db';
     document.getElementById('customScriptContent').value = '';
     document.getElementById('customScriptSourceSql').value = '';
@@ -124,7 +203,7 @@ function clearScriptForm() {
     document.getElementById('customScriptScheduled').checked = false;
     document.getElementById('customScriptDaily').checked = false;
     document.getElementById('customScriptRealTime').checked = false;
-    document.getElementById('scriptFormTitle').textContent = '自定义稽核脚本配置';
+    document.getElementById('scriptFormTitle').textContent = '自定义SQL脚本配置';
     const cancelEditScriptBtn = document.getElementById('cancelEditScriptBtn');
     cancelEditScriptBtn.classList.add('hidden');
 
@@ -164,11 +243,11 @@ function toggleCrossDbSections(mode) {
 }
 
 function loadDatabaseOptions() {
-    fetch('/api/config')
-        .then(response => response.json())
-        .then(data => {
-            const dbConfig = data.databaseConfig || {};
-            databaseOptions = Object.keys(dbConfig);
+    fetch('/api/config/database-options')
+        .then(response => response.json().then(data => ({ response, data })))
+        .then(({ response, data }) => {
+            if (!response.ok) throw new Error(data.error || '加载数据库选项失败');
+            databaseOptions = data.databases || [];
 
             const databaseSelect = document.getElementById('customScriptDatabase');
             const sourceDbSelect = document.getElementById('customScriptSourceDb');
@@ -401,14 +480,25 @@ function renderVariables() {
                     <span class="text-xs text-gray-500" id="periodPreview_${index}">解析值: ${periodPreview}</span>
                 </div>
             `;
+        } else if (variable.type === 'collection') {
+            const collectionItemType = variable.collection_item_type || 'text';
+            defaultValueInputHtml = `
+                <div class="space-y-1">
+                    <select class="w-full px-2 py-1 text-sm border rounded" data-index="${index}" data-field="collection_item_type">
+                        <option value="text" ${collectionItemType === 'text' ? 'selected' : ''}>文本元素</option>
+                        <option value="number" ${collectionItemType === 'number' ? 'selected' : ''}>数字元素</option>
+                    </select>
+                    <textarea class="w-full px-2 py-1 text-sm border rounded" rows="2" placeholder="默认集合值：逗号或换行分隔" data-index="${index}" data-field="default_value">${escapeCustomHtml(defaultValue)}</textarea>
+                </div>
+            `;
         } else if (variable.type === 'number') {
-            defaultValueInputHtml = `<input type="number" class="w-full px-2 py-1 text-sm border rounded" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">`;
+            defaultValueInputHtml = `<input type="number" step="any" class="w-full px-2 py-1 text-sm border rounded" placeholder="默认值" value="${escapeCustomHtml(defaultValue)}" data-index="${index}" data-field="default_value">`;
         } else {
             defaultValueInputHtml = `<input type="text" class="w-full px-2 py-1 text-sm border rounded" placeholder="默认值" value="${defaultValue}" data-index="${index}" data-field="default_value">`;
         }
 
         varDiv.innerHTML = `
-            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div>
                     <input type="text" class="w-full px-2 py-1 text-sm border rounded" placeholder="变量名" value="${variable.name}" data-index="${index}" data-field="name">
                 </div>
@@ -417,11 +507,15 @@ function renderVariables() {
                         <option value="date" ${variable.type === 'date' ? 'selected' : ''}>日期</option>
                         <option value="time" ${variable.type === 'time' ? 'selected' : ''}>时间</option>
                         <option value="number" ${variable.type === 'number' ? 'selected' : ''}>数字</option>
+                        <option value="collection" ${variable.type === 'collection' ? 'selected' : ''}>集合</option>
                         <option value="period" ${variable.type === 'period' ? 'selected' : ''}>年月</option>
                     </select>
                 </div>
                 <div id="defaultValueDiv_${index}">
                     ${defaultValueInputHtml}
+                </div>
+                <div>
+                    <input type="text" class="w-full px-2 py-1 text-sm border rounded" placeholder="变量描述（可选）" value="${escapeCustomHtml(variable.description)}" data-index="${index}" data-field="description">
                 </div>
             </div>
             <button type="button" class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-all" onclick="removeVariable(${index})">
@@ -452,7 +546,8 @@ window.addVariable = function () {
     const newVar = {
         name: `var${currentVariables.length + 1}`,
         type: 'text',
-        default_value: ''
+        default_value: '',
+        description: ''
     };
     currentVariables.push(newVar);
     renderVariables();
@@ -477,6 +572,9 @@ window.handleVariableTypeChange = function (index) {
             currentVariables[index].default_value = window.getTodayStartTime();
         } else if (newType === 'number') {
             currentVariables[index].default_value = '';
+        } else if (newType === 'collection') {
+            currentVariables[index].default_value = '';
+            currentVariables[index].collection_item_type = currentVariables[index].collection_item_type || 'text';
         } else if (newType === 'period') {
             currentVariables[index].default_value = '';
             if (!currentVariables[index].period_type) currentVariables[index].period_type = 'current_month';
@@ -707,21 +805,30 @@ function renderParamsInputs(variables) {
                     <span class="text-xs text-gray-500" id="periodPreview_param_${variable.name}">解析值: ${periodPreview}</span>
                 </div>
             `;
+        } else if (variable.type === 'collection') {
+            const collectionItemType = variable.collection_item_type || 'text';
+            inputHtml = `
+                <div class="space-y-1">
+                    <textarea class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" rows="3" placeholder="多个值用逗号、中文逗号或换行分隔">${escapeCustomHtml(variable.default_value || '')}</textarea>
+                    <span class="text-xs text-gray-500">集合元素类型：${collectionItemType === 'number' ? '数字' : '文本'}</span>
+                </div>
+            `;
         } else if (variable.type === 'number') {
-            inputHtml = `<input type="number" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${variable.default_value || ''}" placeholder="请输入数字">`;
+            inputHtml = `<input type="number" step="any" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--accent);" id="param_${variable.name}" value="${escapeCustomHtml(variable.default_value || '')}" placeholder="请输入数字">`;
         } else {
-            inputHtml = `<input type="text" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--primary-color);" id="param_${variable.name}" value="${variable.default_value || ''}" placeholder="请输入文本">`;
+            inputHtml = `<input type="text" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all" style="--tw-ring-color: var(--accent);" id="param_${variable.name}" value="${escapeCustomHtml(variable.default_value || '')}" placeholder="请输入文本">`;
         }
 
         paramDiv.innerHTML = `
-            <label class="block text-xs font-medium text-gray-600 mb-1">${variable.name}</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">${escapeCustomHtml(variable.name)}${variable.description ? `（${escapeCustomHtml(variable.description)}）` : ''}</label>
             ${inputHtml}
         `;
         paramsList.appendChild(paramDiv);
     });
 
-    // Add change event listeners for param inputs and preset selects
+    // Keep the SQL preview in sync while text, numeric, and collection parameters are edited.
     document.querySelectorAll('[id^="param_"]').forEach(input => {
+        input.addEventListener('input', updateSqlContent);
         input.addEventListener('change', updateSqlContent);
     });
 
@@ -836,12 +943,30 @@ function getParamsValues(variables) {
 
 // ========== Generate SQL content by replacing param placeholders ==========
 
-function generateSqlContent(scriptContent, params) {
+function formatCollectionParam(value, itemType) {
+    const values = String(value ?? '')
+        .replace(/，/g, ',')
+        .split(/[\n,]/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    if (values.length === 0) return 'NULL';
+    if (itemType === 'number') {
+        return values.map(item => Number(item)).join(', ');
+    }
+    return values.map(item => `'${item.replace(/'/g, "''")}'`).join(', ');
+}
+
+function generateSqlContent(scriptContent, params, variables = []) {
     if (!scriptContent) return '';
     let sqlContent = scriptContent;
+    const variablesByName = new Map((variables || []).map(variable => [variable.name, variable]));
     for (const [key, value] of Object.entries(params)) {
         const placeholder = `#{${key}}`;
-        sqlContent = sqlContent.replace(new RegExp(placeholder, 'g'), value);
+        const variable = variablesByName.get(key);
+        const formattedValue = variable?.type === 'collection'
+            ? formatCollectionParam(value, variable.collection_item_type || 'text')
+            : value;
+        sqlContent = sqlContent.replace(new RegExp(placeholder, 'g'), formattedValue);
     }
     return sqlContent;
 }
@@ -856,7 +981,7 @@ function updateSqlContent() {
     if (!currentScript) return;
 
     const params = getParamsValues(currentScript.variables);
-    const sqlContent = generateSqlContent(currentScript.content, params);
+    const sqlContent = generateSqlContent(currentScript.content, params, currentScript.variables);
     document.getElementById('selectedScriptSqlContent').textContent = sqlContent;
 }
 
@@ -871,8 +996,14 @@ function renderScriptOptions(scripts) {
     if (scripts && scripts.length > 0) {
         scripts.forEach((script, index) => {
             const option = document.createElement('div');
-            option.className = 'px-3 py-2 text-sm cursor-pointer hover:bg-gray-100';
-            option.textContent = script.name;
+            option.className = 'px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between';
+            const name = document.createElement('span');
+            name.textContent = script.name;
+            const category = document.createElement('span');
+            category.className = 'text-xs text-gray-500 ml-3';
+            category.textContent = getScriptCategory(script);
+            option.appendChild(name);
+            option.appendChild(category);
             option.dataset.id = script.id;
             option.dataset.index = index;
             option.addEventListener('click', function () {
@@ -952,7 +1083,13 @@ function loadCustomScripts() {
         .then(response => response.json())
         .then(data => {
             allCustomScripts = data.scripts || [];
-            renderScriptOptions(allCustomScripts);
+            renderCategoryFilter();
+            renderCategoryOptions(allCustomScripts);
+            refreshScriptOptions();
+            if (allCustomScripts.length === 0) {
+                const dropdownOptions = document.getElementById('customScriptDropdownOptions');
+                if (dropdownOptions) dropdownOptions.innerHTML = '<div class="px-3 py-2 text-sm text-gray-500">当前角色未获授权任何自定义SQL</div>';
+            }
         })
         .catch(error => {
             console.error('加载脚本列表失败:', error);
@@ -967,9 +1104,37 @@ function loadSavedScripts() {
     fetch('/api/custom_scripts')
         .then(response => response.json())
         .then(data => {
+            renderCategoryOptions(data.scripts || []);
             savedScriptsList.innerHTML = '';
             if (data.scripts && data.scripts.length > 0) {
-                data.scripts.forEach(function (script) {
+                const scriptsByCategory = new Map();
+                [...data.scripts]
+                    .sort((a, b) => getScriptCategory(a).localeCompare(getScriptCategory(b), 'zh-CN') || a.name.localeCompare(b.name, 'zh-CN'))
+                    .forEach(script => {
+                        const category = getScriptCategory(script);
+                        if (!scriptsByCategory.has(category)) scriptsByCategory.set(category, []);
+                        scriptsByCategory.get(category).push(script);
+                    });
+                scriptsByCategory.forEach((scripts, category) => {
+                    const categorySection = document.createElement('div');
+                    categorySection.className = 'border border-gray-200 rounded-lg overflow-hidden';
+                    const categoryToggle = document.createElement('button');
+                    categoryToggle.type = 'button';
+                    categoryToggle.className = 'w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all';
+                    categoryToggle.innerHTML = `<span>${category}<span class="ml-2 text-xs font-normal text-gray-400">${scripts.length} 个脚本</span></span><i class="fa fa-chevron-right text-xs text-gray-400 transition-transform"></i>`;
+                    const categoryScripts = document.createElement('div');
+                    categoryScripts.className = 'hidden space-y-2 p-2 border-t border-gray-100';
+                    categoryToggle.addEventListener('click', function () {
+                        const expanded = categoryScripts.classList.toggle('hidden');
+                        const icon = categoryToggle.querySelector('i');
+                        icon.classList.toggle('rotate-90', !expanded);
+                        categoryToggle.setAttribute('aria-expanded', String(!expanded));
+                    });
+                    categoryToggle.setAttribute('aria-expanded', 'false');
+                    categorySection.appendChild(categoryToggle);
+                    categorySection.appendChild(categoryScripts);
+                    savedScriptsList.appendChild(categorySection);
+                    scripts.forEach(function (script) {
                     const currentScriptId = script.id;
 
                     const scriptItem = document.createElement('div');
@@ -982,6 +1147,11 @@ function loadSavedScripts() {
                     nameDiv.className = 'font-medium text-sm';
                     nameDiv.textContent = script.name;
                     infoDiv.appendChild(nameDiv);
+
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'text-xs text-primary mb-1';
+                    categoryDiv.textContent = getScriptCategory(script);
+                    infoDiv.appendChild(categoryDiv);
 
                     const dbDiv = document.createElement('div');
                     dbDiv.className = 'text-xs text-gray-500 mb-1';
@@ -1019,7 +1189,7 @@ function loadSavedScripts() {
                     deleteBtn.className = 'text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-opacity-90 transition-all';
                     deleteBtn.textContent = '删除';
                     deleteBtn.addEventListener('click', async function () {
-                        const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
+                        const confirmed = await showConfirm('删除后无法恢复，确定要删除这个脚本吗？', '删除SQL脚本', { variant: 'danger', confirmText: '删除脚本' });
                         if (!confirmed) return;
                         fetch('/api/custom_scripts/' + currentScriptId, {
                             method: 'DELETE',
@@ -1053,7 +1223,8 @@ function loadSavedScripts() {
                     wrapper.appendChild(btnDiv);
 
                     scriptItem.appendChild(wrapper);
-                    savedScriptsList.appendChild(scriptItem);
+                    categoryScripts.appendChild(scriptItem);
+                    });
                 });
             } else {
                 savedScriptsList.innerHTML = '<p class="text-gray-500 text-sm">暂无已保存的脚本</p>';
@@ -1088,11 +1259,12 @@ window.editScript = function (scriptId) {
                 const script = data.script;
                 document.getElementById('customScriptId').value = script.id;
                 document.getElementById('customScriptName').value = script.name;
+                document.getElementById('customScriptCategory').value = getScriptCategory(script) === '未分类' ? '' : getScriptCategory(script);
                 document.getElementById('customScriptMode').value = script.mode || 'single_db';
                 document.getElementById('customScriptScheduled').checked = script.scheduled || false;
                 document.getElementById('customScriptDaily').checked = script.daily || false;
                 document.getElementById('customScriptRealTime').checked = script.realtime || false;
-                document.getElementById('scriptFormTitle').textContent = '编辑稽核脚本';
+                document.getElementById('scriptFormTitle').textContent = '编辑SQL脚本';
                 document.getElementById('cancelEditScriptBtn').classList.remove('hidden');
 
                 const mode = script.mode || 'single_db';
@@ -1139,7 +1311,7 @@ window.editScript = function (scriptId) {
 // ========== Delete script (global for onclick) ==========
 
 window.deleteScript = async function (scriptId) {
-    const confirmed = await showConfirm('确定要删除这个脚本吗？', '确认删除');
+    const confirmed = await showConfirm('删除后无法恢复，确定要删除这个脚本吗？', '删除SQL脚本', { variant: 'danger', confirmText: '删除脚本' });
     if (!confirmed) return;
     fetch(`/api/custom_scripts/${scriptId}`, {
         method: 'DELETE'
@@ -1202,10 +1374,10 @@ function showTestScriptResult(result, rules, mode) {
     // Render header
     let headerHtml = '<tr>';
     columns.forEach(col => {
-        headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col}</th>`;
+        headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 tracking-wider whitespace-nowrap">${col}</th>`;
     });
     if (!isCrossDb && rules && rules.length > 0) {
-        headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
+        headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 tracking-wider whitespace-nowrap">状态</th>';
     }
     headerHtml += '</tr>';
     headerEl.innerHTML = headerHtml;
@@ -1292,7 +1464,7 @@ function renderCustomScriptResult(columns, rows, mode, summary, isConsistent) {
         const conclusion = isConsistent
             ? `<span class="text-green-600"><i class="fa fa-check-circle mr-1"></i>跨库对比一致</span>`
             : `<span class="text-red-600"><i class="fa fa-exclamation-circle mr-1"></i>跨库对比存在差异</span>`;
-        resultHeader.innerHTML = `稽核结果 · ${conclusion}
+        resultHeader.innerHTML = `SQL结果 · ${conclusion}
             <span class="text-xs font-normal text-gray-500 ml-2">
             一致 ${s.consistent || 0} / 不一致 ${s.inconsistent || 0} / 仅源库 ${s.only_source || 0} / 仅目标库 ${s.only_target || 0}</span>`;
     }
@@ -1300,10 +1472,10 @@ function renderCustomScriptResult(columns, rows, mode, summary, isConsistent) {
     // Render header
     let headerHtml = '<tr>';
     columns.forEach(col => {
-        headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${col}</th>`;
+        headerHtml += `<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 tracking-wider whitespace-nowrap">${col}</th>`;
     });
     if (!isCrossDb) {
-        headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>';
+        headerHtml += '<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 tracking-wider whitespace-nowrap">状态</th>';
     }
     headerHtml += '</tr>';
     headerEl.innerHTML = headerHtml;
@@ -1345,7 +1517,7 @@ function renderCustomScriptResult(columns, rows, mode, summary, isConsistent) {
                 if (isCrossDb && col === '状态') {
                     bodyHtml += `<td class="px-4 py-2 text-sm whitespace-nowrap">${crossDbStatusBadge(value)}</td>`;
                 } else {
-                    bodyHtml += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">${value}</td>`;
+                    bodyHtml += `<td class="px-4 py-2 text-sm text-gray-900 whitespace-normal break-words max-w-md">${value}</td>`;
                 }
             });
             if (!isCrossDb) {
@@ -1378,7 +1550,7 @@ function renderRulesList(rules) {
                     <i class="fa fa-trash mr-1"></i>删除
                 </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">目标列</label>
                     <input type="text" class="rule-column w-full px-2 py-1 text-xs border border-gray-200 rounded" value="${rule.column}" placeholder="例如：报工次数">
@@ -1467,7 +1639,7 @@ function renderRulesConfig() {
 
         ruleDiv.innerHTML = `
             <div class="flex-1">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
                     <div>
                         <label class="block text-xs text-gray-500 mb-1">目标列</label>
                         <input type="text" placeholder="例如：报工次数" value="${rule.column || ''}" data-index="${index}" data-field="column" class="w-full px-2 py-1 text-sm border rounded">
@@ -1496,6 +1668,10 @@ function renderRulesConfig() {
                             <option value="异常" ${rule.result === '异常' ? 'selected' : ''}>异常</option>
                         </select>
                     </div>
+                    <div class="rule-abnormal-description ${rule.result === '异常' ? '' : 'hidden'}">
+                        <label class="block text-xs text-gray-500 mb-1">异常描述</label>
+                        <input type="text" placeholder="例如：报工次数超过允许范围" value="${escapeCustomHtml(rule.abnormal_description || '')}" data-index="${index}" data-field="abnormal_description" class="w-full px-2 py-1 text-sm border rounded">
+                    </div>
                 </div>
             </div>
             <button type="button" class="p-1 text-red-500 hover:bg-red-50 rounded" onclick="window.removeRule(${index})"><i class="fa fa-trash"></i></button>
@@ -1512,6 +1688,10 @@ function renderRulesConfig() {
             const value = this.value;
             if (currentRules[index]) {
                 currentRules[index][field] = value;
+                if (field === 'result') {
+                    const descriptionWrap = this.closest('.flex-1')?.querySelector('.rule-abnormal-description');
+                    if (descriptionWrap) descriptionWrap.classList.toggle('hidden', value !== '异常');
+                }
             }
         });
     });
@@ -1713,6 +1893,7 @@ document.addEventListener('DOMContentLoaded', function () {
         saveCustomScriptBtn.addEventListener('click', function () {
             const scriptId = document.getElementById('customScriptId').value;
             const scriptName = document.getElementById('customScriptName').value;
+            const category = document.getElementById('customScriptCategory').value.trim();
             const mode = document.getElementById('customScriptMode').value;
             const scheduled = document.getElementById('customScriptScheduled').checked;
             const daily = document.getElementById('customScriptDaily').checked;
@@ -1725,6 +1906,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const requestData = {
                 name: scriptName,
+                category: category,
                 mode: mode,
                 scheduled: scheduled,
                 daily: daily,
@@ -1898,6 +2080,14 @@ document.addEventListener('DOMContentLoaded', function () {
     // ========== Script search dropdown ==========
 
     const customScriptSearch = document.getElementById('customScriptSearch');
+    const customScriptCategoryFilter = document.getElementById('customScriptCategoryFilter');
+    if (customScriptCategoryFilter) {
+        customScriptCategoryFilter.addEventListener('change', function () {
+            clearSelectedScript();
+            refreshScriptOptions();
+            document.getElementById('customScriptDropdown').classList.remove('hidden');
+        });
+    }
     if (customScriptSearch) {
         // Focus shows dropdown
         customScriptSearch.addEventListener('focus', function () {
@@ -1906,10 +2096,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Search filtering
         customScriptSearch.addEventListener('input', function () {
-            const searchText = this.value.toLowerCase();
-            const filteredScripts = allCustomScripts.filter(script =>
-                script.name.toLowerCase().includes(searchText)
-            );
+            const filteredScripts = getFilteredScripts();
             renderScriptOptions(filteredScripts);
             document.getElementById('customScriptDropdown').classList.remove('hidden');
         });
@@ -1998,7 +2185,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: JSON.stringify(params)
             })
-                .then(response => response.json())
+                .then(async response => {
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(data.error || `请求失败（HTTP ${response.status}）`);
+                    }
+                    return data;
+                })
                 .then(data => {
                     if (data.columns && data.rows !== undefined) {
                         customScriptColumns = data.columns;
@@ -2008,6 +2201,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         renderCustomScriptResult(data.columns, data.rows, mode, data.summary, data.is_consistent);
 
                         document.getElementById('exportCustomScriptBtn').classList.remove('hidden');
+                        document.getElementById('customSqlHeaderColorWrap').classList.remove('hidden');
                         document.getElementById('customScriptResult').classList.remove('hidden');
                     } else {
                         showToast('执行失败: ' + (data.error || '未知错误'), 'error');
@@ -2015,11 +2209,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .catch(error => {
                     console.error('执行脚本失败:', error);
-                    showToast('执行失败，请检查网络连接', 'error');
+                    showToast('执行失败: ' + error.message, 'error');
                 })
                 .finally(() => {
                     this.disabled = false;
-                    this.innerHTML = '<i class="fa fa-play mr-2"></i>执行稽核';
+                    this.innerHTML = '<i class="fa fa-play mr-2"></i>执行SQL';
                 });
         });
     }
@@ -2055,42 +2249,42 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            // Generate CSV
-            let csv = customScriptColumns.join(',') + '\n';
-            customScriptRows.forEach(row => {
-                const values = customScriptColumns.map((col, colIndex) => {
-                    let value = '';
-                    if (Array.isArray(row)) {
-                        value = row[colIndex];
-                    } else {
-                        value = row[col];
+            this.disabled = true;
+            const originalHtml = this.innerHTML;
+            this.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>导出中...';
+            fetch('/api/custom_scripts/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    columns: customScriptColumns,
+                    rows: customScriptRows,
+                    script_name: currentSelectedScriptName || 'SQL结果',
+                    header_color: document.getElementById('customSqlHeaderColor')?.value || '#87CEEB'
+                })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => Promise.reject(new Error(data.error || '导出失败')));
                     }
-                    if (value === null || value === undefined) {
-                        value = '';
-                    } else if (typeof value === 'number') {
-                        if (Number.isInteger(value) && Math.abs(value).toString().length > 12) {
-                            value = value.toString();
-                        }
-                    }
-                    if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-                        value = '"' + value.replace(/"/g, '""') + '"';
-                    }
-                    return value;
+                    const disposition = response.headers.get('Content-Disposition') || '';
+                    const match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+                    return response.blob().then(blob => ({ blob, fileName: match ? decodeURIComponent(match[1]) : 'SQL结果.xlsx' }));
+                })
+                .then(({ blob, fileName }) => {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    URL.revokeObjectURL(url);
+                })
+                .catch(error => showToast('导出失败: ' + error.message, 'error'))
+                .finally(() => {
+                    this.disabled = false;
+                    this.innerHTML = originalHtml;
                 });
-                csv += values.join(',') + '\n';
-            });
-
-            // Download
-            const fileName = currentSelectedScriptName ? `${currentSelectedScriptName}_${new Date().toISOString().split('T')[0]}.csv` : `稽核结果_${new Date().toISOString().split('T')[0]}.csv`;
-            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
         });
     }
 
@@ -2104,23 +2298,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (addRuleBtnConfig) {
         addRuleBtnConfig.addEventListener('click', function () {
-            currentRules.push({ column: '', operator: '=', value: '', result: '异常' });
+            currentRules.push({ column: '', operator: '=', value: '', result: '异常', abnormal_description: '' });
             renderRulesConfig();
         });
     }
 
-    // ========== Load saved scripts on page load ==========
-
-    if (savedScriptsList) {
-        loadSavedScripts();
-    }
-
-    // ========== Load database options ==========
-
-    loadDatabaseOptions();
-
-    // ========== Initialize variable, rules and cross-db rendering ==========
-
+    // 脚本与数据库选项仅在用户打开“自定义SQL”页面时加载，避免无权限账号发起未授权请求。
     renderVariables();
     renderRulesConfig();
     // 预渲染跨库对比配置（默认隐藏）：否则新建脚本切换到跨库模式时

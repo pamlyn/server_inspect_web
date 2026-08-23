@@ -63,61 +63,140 @@ function showToast(message, type = 'info', duration = 3000) {
 
 // ========== Confirm Dialog ==========
 
-function showConfirm(message, title = '确认') {
+function showConfirm(message, title = '确认', options = {}) {
     return new Promise((resolve) => {
+        const variant = options.variant === 'danger' ? 'danger' : 'primary';
+        let settled = false;
         const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 fade-in';
-        overlay.onclick = () => resolve(false);
+        overlay.className = 'confirm-overlay';
+        const dialog = document.createElement('section');
+        dialog.className = `confirm-dialog confirm-dialog--${variant}`;
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
 
-        const dialog = document.createElement('div');
-        dialog.className = 'bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden fade-in';
-        dialog.onclick = (e) => e.stopPropagation();
+        const settle = value => {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener('keydown', onKeydown);
+            overlay.remove();
+            resolve(value);
+        };
+        const onKeydown = event => {
+            if (event.key === 'Escape') settle(false);
+        };
 
         const header = document.createElement('div');
-        header.className = 'px-6 py-4 border-b border-gray-100 bg-gray-50';
-        header.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">${title}</h3>`;
+        header.className = 'confirm-dialog__header';
+        const icon = document.createElement('span');
+        icon.className = 'confirm-dialog__icon';
+        icon.innerHTML = `<i class="fa ${variant === 'danger' ? 'fa-exclamation-triangle' : 'fa-sliders'}"></i>`;
+        const heading = document.createElement('h3');
+        heading.className = 'confirm-dialog__title';
+        heading.textContent = title;
+        header.append(icon, heading);
 
         const body = document.createElement('div');
-        body.className = 'px-6 py-5';
-        body.innerHTML = `<p class="text-gray-600 leading-relaxed">${message}</p>`;
+        body.className = 'confirm-dialog__body';
+        const text = document.createElement('p');
+        text.textContent = message;
+        body.appendChild(text);
 
         const footer = document.createElement('div');
-        footer.className = 'px-6 py-4 bg-gray-50 flex justify-end gap-3';
-
+        footer.className = 'confirm-dialog__footer';
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'px-5 py-2.5 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium';
-        cancelBtn.textContent = '取消';
-        cancelBtn.onclick = () => {
-            overlay.remove();
-            resolve(false);
-        };
-
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'confirm-dialog__button confirm-dialog__button--cancel';
+        cancelBtn.textContent = options.cancelText || '取消';
+        cancelBtn.onclick = () => settle(false);
         const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'px-5 py-2.5 text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-all text-sm font-medium shadow-sm';
-        confirmBtn.textContent = '确定';
-        confirmBtn.onclick = () => {
-            overlay.remove();
-            resolve(true);
-        };
-
-        footer.appendChild(cancelBtn);
-        footer.appendChild(confirmBtn);
-        dialog.appendChild(header);
-        dialog.appendChild(body);
-        dialog.appendChild(footer);
+        confirmBtn.type = 'button';
+        confirmBtn.className = 'confirm-dialog__button confirm-dialog__button--confirm';
+        confirmBtn.textContent = options.confirmText || '确定';
+        confirmBtn.onclick = () => settle(true);
+        footer.append(cancelBtn, confirmBtn);
+        dialog.append(header, body, footer);
         overlay.appendChild(dialog);
+        overlay.onclick = event => { if (event.target === overlay) settle(false); };
         document.body.appendChild(overlay);
+        document.addEventListener('keydown', onKeydown);
+        setTimeout(() => (variant === 'danger' ? cancelBtn : confirmBtn).focus(), 0);
     });
 }
 
 // ========== Theme Management ==========
 
+const WORKSPACE_PREFERENCE_KEY = 'serverInspectWorkspacePreferences';
+const DEFAULT_WORKSPACE_PREFERENCES = { layout: 'sidebar', style: 'mist', accent: 'blue' };
+
+function workspacePreferences() {
+    try {
+        const preferences = { ...DEFAULT_WORKSPACE_PREFERENCES, ...JSON.parse(localStorage.getItem(WORKSPACE_PREFERENCE_KEY) || '{}') };
+        return ['sidebar', 'topnav'].includes(preferences.layout)
+            ? preferences
+            : { ...preferences, layout: 'sidebar' };
+    } catch (_) {
+        return { ...DEFAULT_WORKSPACE_PREFERENCES };
+    }
+}
+
+function applyWorkspacePreferences(preferences = workspacePreferences()) {
+    const body = document.getElementById('appBody');
+    if (!body) return;
+    body.classList.remove('layout-sidebar', 'layout-topnav', 'style-mist', 'style-midnight', 'style-warm', 'accent-blue', 'accent-green', 'accent-purple', 'accent-orange', 'accent-red', 'accent-cyan');
+    body.classList.add(`layout-${preferences.layout}`, `style-${preferences.style}`, `accent-${preferences.accent}`);
+    document.querySelectorAll('[data-layout]').forEach(button => button.classList.toggle('is-active', button.dataset.layout === preferences.layout));
+    document.querySelectorAll('[data-style]').forEach(button => button.classList.toggle('is-active', button.dataset.style === preferences.style));
+    document.querySelectorAll('[data-accent]').forEach(button => button.classList.toggle('is-active', button.dataset.accent === preferences.accent));
+}
+
+function saveWorkspacePreferences(update) {
+    const preferences = workspacePreferences();
+    if (Object.prototype.hasOwnProperty.call(update, 'layout') && !['sidebar', 'topnav'].includes(update.layout)) return;
+    Object.assign(preferences, update);
+    localStorage.setItem(WORKSPACE_PREFERENCE_KEY, JSON.stringify(preferences));
+    applyWorkspacePreferences(preferences);
+}
+
+function setLayoutMode(layout) { saveWorkspacePreferences({ layout }); }
+function setVisualStyle(style) { saveWorkspacePreferences({ style }); }
+function setAccentTheme(accent) { saveWorkspacePreferences({ accent }); }
+function resetWorkspacePreferences() {
+    localStorage.removeItem(WORKSPACE_PREFERENCE_KEY);
+    applyWorkspacePreferences(DEFAULT_WORKSPACE_PREFERENCES);
+}
+
+// 兼容旧的内联调用方式。
 function setTheme(themeName) {
-    document.body.className = document.body.className.replace(/theme-\w+/, themeName);
-    localStorage.setItem('theme', themeName);
+    setAccentTheme(String(themeName || 'theme-blue').replace('theme-', ''));
+}
+
+function setPageContext(title, description = '', eyebrow = 'OPERATIONS CONSOLE', status = '实时监控已连接') {
+    const titleEl = document.getElementById('appPageTitle');
+    const descriptionEl = document.getElementById('appPageDescription');
+    const eyebrowEl = document.getElementById('appPageEyebrow');
+    const statusEl = document.getElementById('appPageStatus');
+    if (titleEl) titleEl.textContent = title;
+    if (descriptionEl) descriptionEl.textContent = description;
+    if (eyebrowEl) eyebrowEl.textContent = eyebrow;
+    if (statusEl) statusEl.textContent = status;
 }
 
 // ========== Button State Management ==========
+
+function setInspectionNavigationLocked(locked) {
+    document.body.classList.toggle('inspection-running', locked);
+    document.querySelectorAll('.inspect-btn, #clearLogsBtn').forEach(control => {
+        if (locked) {
+            control.dataset.inspectionWasDisabled = control.disabled ? 'true' : 'false';
+            control.disabled = true;
+            control.setAttribute('aria-disabled', 'true');
+        } else {
+            if (control.dataset.inspectionWasDisabled === 'false') control.disabled = false;
+            control.removeAttribute('aria-disabled');
+            delete control.dataset.inspectionWasDisabled;
+        }
+    });
+}
 
 function setActiveButton(activeBtn) {
     // Remove active state from all buttons
@@ -132,7 +211,7 @@ function setActiveButton(activeBtn) {
         if (icon) icon.style.color = '';
     });
 
-    if (activeBtn && activeBtn.id !== 'configBtn') {
+    if (activeBtn) {
         activeBtn.classList.add('bg-primary-light');
         const iconDiv = activeBtn.querySelector('div');
         const icon = activeBtn.querySelector('i');
@@ -156,9 +235,12 @@ function hideAllContent() {
     const logContent = document.getElementById('logContent');
     const arthasContent = document.getElementById('arthasContent');
     const pgConfigContent = document.getElementById('pgConfigContent');
+    const userPermissionContent = document.getElementById('userPermissionContent');
+    const homeContent = document.getElementById('homeContent');
 
     if (loading) loading.classList.add('hidden');
     if (results) results.classList.add('hidden');
+    if (homeContent) homeContent.classList.add('hidden');
     if (configContent) configContent.classList.add('hidden');
     if (inspectionContent) inspectionContent.classList.add('hidden');
     if (sqlInspectContent) sqlInspectContent.classList.add('hidden');
@@ -166,6 +248,7 @@ function hideAllContent() {
     if (logContent) logContent.classList.add('hidden');
     if (arthasContent) arthasContent.classList.add('hidden');
     if (pgConfigContent) pgConfigContent.classList.add('hidden');
+    if (userPermissionContent) userPermissionContent.classList.add('hidden');
 }
 
 // ========== DOMContentLoaded Setup ==========
@@ -181,23 +264,21 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 });
 
-// Load saved theme on page load
+// Load saved workspace preferences on page load
 document.addEventListener('DOMContentLoaded', function () {
-    const savedTheme = localStorage.getItem('theme') || 'theme-blue';
-    setTheme(savedTheme);
+    applyWorkspacePreferences();
 });
 
 // Main page initialization: navigation buttons, scheduler config, date config, etc.
 document.addEventListener('DOMContentLoaded', function () {
     const fullInspectBtn = document.getElementById('fullInspectBtn');
     const inspectBtns = document.querySelectorAll('.inspect-btn');
-    const configBtn = document.getElementById('configBtn');
 
-    // Default: show config page and set config button active
-    window.showConfig();
-    if (configBtn) {
-        setActiveButton(configBtn);
-    }
+    // Default: show neutral welcome page. Feature pages open only from an authorized menu click.
+    const homeContent = document.getElementById('homeContent');
+    if (homeContent) homeContent.classList.remove('hidden');
+    setActiveButton(null);
+    setPageContext('服务器巡检中心', '选择已授权的功能开始工作', 'OPERATIONS CONSOLE', '实时监控已连接');
 
     // Schedule type toggle (interval/fixed/cron)
     const scheduleType = document.getElementById('scheduleType');
@@ -282,6 +363,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.showLogs();
             } else if (type === 'arthas') {
                 window.showArthas();
+            } else if (type === 'user_permission') {
+                window.showUserPermission();
             } else if (type === 'pg_config') {
                 window.showPgConfig();
             } else {
@@ -326,6 +409,7 @@ document.addEventListener('DOMContentLoaded', function () {
 // They are assigned here as placeholders and will be overwritten by their
 // respective module JS files when those files load.
 window.showConfig = function () {
+    setPageContext('系统配置', '按权限管理巡检、告警、通知和数据连接配置', 'SYSTEM SETTINGS', '配置工作区');
     hideAllContent();
     const loading = document.getElementById('loading');
     const results = document.getElementById('results');
@@ -333,11 +417,11 @@ window.showConfig = function () {
     loading.classList.add('hidden');
     results.classList.remove('hidden');
     configContent.classList.remove('hidden');
-    if (typeof loadConfig === 'function') loadConfig();
-    if (typeof loadSavedScripts === 'function') loadSavedScripts();
+    if (typeof showAuthorizedConfig === 'function') showAuthorizedConfig();
 };
 
 window.showSqlInspect = function () {
+    setPageContext('数据稽查', '构建并执行专项数据一致性查询', 'DATA VALIDATION', '查询工作区');
     hideAllContent();
     const results = document.getElementById('results');
     const sqlInspectContent = document.getElementById('sqlInspectContent');
@@ -351,6 +435,7 @@ window.showSqlInspect = function () {
 };
 
 window.showCustomInspect = function () {
+    setPageContext('自定义SQL', '从已授权的脚本库执行预设查询', 'SAVED QUERIES', '脚本工作区');
     hideAllContent();
     const results = document.getElementById('results');
     const customInspectContent = document.getElementById('customInspectContent');
@@ -366,6 +451,7 @@ window.showArthas = function () {
 };
 
 window.showPgConfig = function () {
+    setPageContext('PG配置', '维护 PostgreSQL 容器参数与运行状态', 'DATABASE OPERATIONS', '容器配置');
     hideAllContent();
     const results = document.getElementById('results');
     const pgConfigContent = document.getElementById('pgConfigContent');
@@ -375,6 +461,7 @@ window.showPgConfig = function () {
 };
 
 window.showLogs = function () {
+    setPageContext('巡检日志', '筛选、导出和查看巡检运行记录', 'ACTIVITY & AUDIT', '审计工作区');
     hideAllContent();
     const results = document.getElementById('results');
     const logContent = document.getElementById('logContent');
@@ -383,7 +470,13 @@ window.showLogs = function () {
 };
 
 window.setActiveButton = setActiveButton;
+window.setInspectionNavigationLocked = setInspectionNavigationLocked;
 window.showToast = showToast;
 window.showConfirm = showConfirm;
 window.setTheme = setTheme;
+window.setLayoutMode = setLayoutMode;
+window.setVisualStyle = setVisualStyle;
+window.setAccentTheme = setAccentTheme;
+window.resetWorkspacePreferences = resetWorkspacePreferences;
+window.applyWorkspacePreferences = applyWorkspacePreferences;
 window.hideAllContent = hideAllContent;

@@ -30,7 +30,45 @@ function formatOutput(item) {
 
 // ========== Run Inspection ==========
 
+let activeInspection = null;
+let inspectionRunSequence = 0;
+
+function restoreInspectionHome() {
+    hideAllContent();
+    document.getElementById('homeContent')?.classList.remove('hidden');
+    setActiveButton(null);
+    if (typeof setPageContext === 'function') {
+        setPageContext('服务器巡检中心', '选择已授权的功能开始工作', 'OPERATIONS CONSOLE', '实时监控已连接');
+    }
+}
+
+function finishInspection(runId) {
+    if (!activeInspection || activeInspection.id !== runId) return false;
+    activeInspection = null;
+    if (typeof setInspectionNavigationLocked === 'function') setInspectionNavigationLocked(false);
+    return true;
+}
+
+function cancelActiveInspection() {
+    if (!activeInspection) return;
+    const { controller } = activeInspection;
+    activeInspection = null;
+    controller.abort();
+    if (typeof setInspectionNavigationLocked === 'function') setInspectionNavigationLocked(false);
+    restoreInspectionHome();
+    showToast('已取消巡检等待，后续返回的结果不会显示', 'info');
+}
+
 window.runInspection = function (type) {
+    if (activeInspection) {
+        showToast('当前巡检尚未结束，请等待或取消后再执行新的巡检', 'warning');
+        return;
+    }
+
+    if (typeof setPageContext === 'function') {
+        const label = type === 'full' ? '完整巡检' : '专项巡检';
+        setPageContext(label, '正在采集服务器运行状态与巡检结果', 'INSPECTION RUN', '巡检执行中');
+    }
     const fullInspectBtn = document.getElementById('fullInspectBtn');
     const activeBtn = type === 'full' ? fullInspectBtn : document.querySelector(`[data-type="${type}"]`);
     if (activeBtn) {
@@ -38,50 +76,53 @@ window.runInspection = function (type) {
         setTimeout(() => activeBtn.classList.remove('button-press'), 100);
     }
 
-    // Show/hide dedup option
     const deduplicateOption = document.getElementById('deduplicateOption');
-    if (deduplicateOption) {
-        if (type === 'full' || type === 'slow_sql') {
-            deduplicateOption.classList.remove('hidden');
-        } else {
-            deduplicateOption.classList.add('hidden');
-        }
-    }
+    if (deduplicateOption) deduplicateOption.classList.toggle('hidden', type !== 'slow_sql');
 
-    // 统一走 hideAllContent 隐藏所有面板，避免漏隐藏某面板
-    // （曾因漏隐藏 pgConfigContent/logContent，导致先看 PG配置/巡检日志
-    // 再跑完整巡检时，旧面板内容残留叠加在巡检结果上）
     hideAllContent();
     const loading = document.getElementById('loading');
     const results = document.getElementById('results');
     const inspectionContent = document.getElementById('inspectionContent');
-    loading.classList.remove('hidden');
-
     const deduplicateCheckbox = document.getElementById('deduplicateCheckbox');
     const deduplicate = deduplicateCheckbox ? deduplicateCheckbox.checked : true;
+    const controller = new AbortController();
+    const runId = ++inspectionRunSequence;
+    activeInspection = { id: runId, controller, type };
+    if (typeof setInspectionNavigationLocked === 'function') setInspectionNavigationLocked(true);
+    loading?.classList.remove('hidden');
 
     fetch('/api/inspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: type, deduplicate: deduplicate })
+        body: JSON.stringify({ type: type, deduplicate: deduplicate }),
+        signal: controller.signal
     })
         .then(response => response.json())
         .then(data => {
-            loading.classList.add('hidden');
-            // 结果就绪前再次隐藏所有面板，防止加载期间用户切到其它页面
-            // （如 PG配置）后，结果回调把巡检内容叠加显示出来
+            if (!finishInspection(runId)) return;
             hideAllContent();
-            results.classList.remove('hidden');
-            inspectionContent.classList.remove('hidden');
-            results.classList.add('fade-in');
-            // 单项巡检只展示当前结果，完整巡检展示汇总+详情
+            results?.classList.remove('hidden');
+            inspectionContent?.classList.remove('hidden');
+            document.getElementById('inspectionResultsHeading')?.classList.remove('hidden');
+            if (typeof setPageContext === 'function') {
+                setPageContext(type === 'full' ? '完整巡检结果' : '专项巡检结果', '已完成数据采集，可查看汇总与详细输出', 'INSPECTION RESULTS', '结果已就绪');
+            }
+            results?.classList.add('fade-in');
             displayResults(data, type === 'full');
         })
         .catch(error => {
-            loading.classList.add('hidden');
+            if (!finishInspection(runId)) return;
+            document.getElementById('loading')?.classList.add('hidden');
+            restoreInspectionHome();
             showToast('巡检失败: ' + error.message, 'error');
         });
 };
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('cancelInspectionBtn')?.addEventListener('click', cancelActiveInspection);
+});
+
+window.cancelActiveInspection = cancelActiveInspection;
 
 // ========== Display Results ==========
 

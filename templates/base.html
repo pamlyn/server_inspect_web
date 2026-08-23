@@ -6,31 +6,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ project_name | default('服务器巡检系统') }}</title>
     <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260822-pg-preset-button" rel="stylesheet">
     <!-- 外部JS模块（app.js必须最先加载，提供共享工具函数） -->
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260727d"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=20260822-confirm-dialog"></script>
 </head>
 
-<body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 font-sans theme-blue" id="appBody">
-    <!-- Toast 提示容器 -->
+<body class="min-h-screen font-sans layout-sidebar style-mist accent-blue" id="appBody">
     <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
-    <div class="flex h-screen overflow-hidden">
+    <div class="app-shell">
         {% include 'partials/sidebar.html' %}
-
-        <!-- 右侧主内容区 -->
-        <main class="flex-1 overflow-y-auto p-6">
-            {% block content %}{% endblock %}
+        <main class="app-main">
+            <header class="app-topbar">
+                <div class="app-page-context">
+                    <p id="appPageEyebrow" class="app-eyebrow">OPERATIONS CONSOLE</p>
+                    <h1 id="appPageTitle" class="app-page-title">服务器巡检中心</h1>
+                    <p id="appPageDescription" class="app-page-description">选择已授权的功能开始工作</p>
+                </div>
+                <div class="app-topbar-meta">
+                    <span class="app-live-dot"></span>
+                    <span id="appPageStatus">实时监控已连接</span>
+                </div>
+            </header>
+            <div class="app-content">
+                {% block content %}{% endblock %}
+            </div>
         </main>
     </div>
 
     <!-- 模块JS（按依赖顺序加载） -->
-    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260727a"></script>
+    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260822c"></script>
     <script src="{{ url_for('static', filename='js/sql_inspect.js') }}?v=20260724a"></script>
-    <script src="{{ url_for('static', filename='js/custom_inspect.js') }}?v=20260728a"></script>
-    <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260727a"></script>
-    <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260727b"></script>
-    <script src="{{ url_for('static', filename='js/pg_config.js') }}?v=20260727a"></script>
+    <script src="{{ url_for('static', filename='js/custom_inspect.js') }}?v=20260822-parameter-inputs"></script>
+    <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260822-inspection-cancel"></script>
+    <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260822a"></script>
+    <script src="{{ url_for('static', filename='js/pg_config.js') }}?v=20260822-pg-container"></script>
+    <script src="{{ url_for('static', filename='js/user_permission.js') }}?v=20260822-layout"></script>
     {# Arthas诊断模块已隐藏 - 使用Jinja2注释防止渲染 #}
 </body>
 

@@ -5,12 +5,22 @@
  * Depends on: app.js (showToast, showConfirm)
  */
 
+let activeConfigScope = null;
+const configScopePermissions = {
+    basic: 'config_basic_alert',
+    inspection: 'config_inspection_strategy',
+    data: 'config_data_notification',
+    'custom-sql': 'config_custom_sql',
+};
+
 // ========== Load Configuration ==========
 
-function loadConfig() {
-    fetch('/api/config')
-        .then(response => response.json())
-        .then(data => {
+function loadConfig(scope = activeConfigScope) {
+    if (!scope) return;
+    fetch(`/api/config?scope=${encodeURIComponent(scope)}`)
+        .then(response => response.json().then(data => ({ response, data })))
+        .then(({ response, data }) => {
+            if (!response.ok) throw new Error(data.error || '加载配置失败');
             document.getElementById('projectName').value = data.projectName || '';
             document.getElementById('schedulerEnabled').value = data.scheduler?.enabled ? 'true' : 'false';
             document.getElementById('schedulerCron').value = data.scheduler?.cron || '*/20 * * * *';
@@ -134,7 +144,6 @@ function loadConfig() {
             document.getElementById('dingtalkWebhook1').value = data.dingtalk?.webhooks?.[0] || data.dingtalk?.webhook || '';
             document.getElementById('dingtalkWebhook2').value = data.dingtalk?.webhooks?.[1] || '';
             document.getElementById('dingtalkWebhook3').value = data.dingtalk?.webhooks?.[2] || '';
-            document.getElementById('dingtalkSecret').value = data.dingtalk?.secret || '';
 
             // Database config - dynamic rendering
             renderDatabaseConfigs(data.databaseConfig || {});
@@ -343,7 +352,6 @@ function setupConfigFormSubmit() {
                         document.getElementById('dingtalkWebhook2').value,
                         document.getElementById('dingtalkWebhook3').value
                     ].filter(Boolean),
-                    secret: document.getElementById('dingtalkSecret').value,
                     show_details: document.getElementById('dingtalkShowDetails').value === 'true'
                 },
                 databaseConfig: collectDatabaseConfigs(),
@@ -375,7 +383,7 @@ function setupConfigFormSubmit() {
                 }
             };
 
-            fetch('/api/config', {
+            fetch(`/api/config?scope=${encodeURIComponent(activeConfigScope)}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
@@ -415,7 +423,16 @@ function renderDatabaseConfigs(databaseConfig) {
 
     container.innerHTML = '';
 
-    const dbIds = Object.keys(databaseConfig);
+    const priorityDbIds = ['mes', 'hanging'];
+    const dbIds = Object.keys(databaseConfig).sort((left, right) => {
+        const leftPriority = priorityDbIds.indexOf(left);
+        const rightPriority = priorityDbIds.indexOf(right);
+        if (leftPriority !== -1 || rightPriority !== -1) {
+            return (leftPriority === -1 ? priorityDbIds.length : leftPriority) -
+                (rightPriority === -1 ? priorityDbIds.length : rightPriority);
+        }
+        return left.localeCompare(right, 'zh-CN');
+    });
     if (dbIds.length === 0) {
         container.innerHTML = '<p class="text-gray-500 text-sm">暂无数据库配置，点击"新增数据库配置"开始添加</p>';
         return;
@@ -768,6 +785,62 @@ function testLogDatabaseConnection() {
         });
 }
 
+// ========== Configuration Tabs ==========
+
+function selectConfigTab(tabName) {
+    const selectedTab = document.querySelector(`.config-tab[data-config-tab="${tabName}"]`);
+    if (!selectedTab || selectedTab.classList.contains('hidden')) return;
+    activeConfigScope = tabName;
+    document.querySelectorAll('.config-tab').forEach(tab => {
+        const active = tab.dataset.configTab === tabName;
+        tab.classList.toggle('border-primary', active);
+        tab.classList.toggle('text-primary', active);
+        tab.classList.toggle('border-transparent', !active);
+        tab.classList.toggle('text-gray-500', !active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('.config-tab-panel').forEach(panel => {
+        panel.classList.toggle('hidden', panel.dataset.configPanel !== tabName);
+    });
+    const actions = document.getElementById('configFormActions');
+    if (actions) actions.classList.toggle('hidden', tabName === 'custom-sql');
+    if (tabName === 'custom-sql') {
+        if (typeof loadSavedScripts === 'function') loadSavedScripts();
+        if (typeof loadDatabaseOptions === 'function') loadDatabaseOptions();
+    } else {
+        loadConfig(tabName);
+    }
+}
+
+async function showAuthorizedConfig() {
+    let access = window.authAccess;
+    if (!access && typeof loadAccess === 'function') access = await loadAccess();
+    const permissions = access?.permissions || [];
+    const authorizedTabs = Object.entries(configScopePermissions)
+        .filter(([, permission]) => permissions.includes(permission))
+        .map(([tabName]) => tabName);
+    document.querySelectorAll('.config-tab').forEach(tab => {
+        tab.classList.toggle('hidden', !authorizedTabs.includes(tab.dataset.configTab));
+    });
+    if (!authorizedTabs.length) {
+        showToast('没有系统配置权限', 'warning');
+        return;
+    }
+    selectConfigTab(authorizedTabs[0]);
+}
+
+function setupConfigTabs() {
+    document.querySelectorAll('.config-tab').forEach(tab => {
+        tab.setAttribute('role', 'tab');
+        tab.addEventListener('click', function () {
+            selectConfigTab(this.dataset.configTab);
+        });
+    });
+}
+
+window.selectConfigTab = selectConfigTab;
+window.showAuthorizedConfig = showAuthorizedConfig;
+
 // ========== Init on DOMContentLoaded ==========
 
 function setupDateConfigToggle() {
@@ -796,6 +869,7 @@ function setupDateConfigToggle() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    setupConfigTabs();
     setupConfigFormSubmit();
     setupCancelConfigBtn();
     setupDateConfigToggle();

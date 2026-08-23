@@ -1,15 +1,21 @@
-<div id="logContent" class="hidden">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+<div id="logContent" class="hidden workspace-page log-workspace-page">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 page-surface">
+        <div class="page-heading">
+            <div>
+                <p class="page-kicker">ACTIVITY & AUDIT</p>
+                <h2 class="text-lg font-bold text-gray-800 mb-2 flex items-center">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
                 style="background: var(--primary-light);">
                 <i class="fa fa-history text-sm" style="color: var(--primary-color);"></i>
             </div>
             巡检日志
-        </h2>
+                </h2>
+                <p>按时间、来源、状态和操作人快速定位每一次巡检记录。</p>
+            </div>
+        </div>
 
         <!-- 查询条件 -->
-        <div class="space-y-3 mb-4">
+        <div class="log-filter-panel space-y-3 mb-4">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">巡检类型</label>
@@ -20,7 +26,7 @@
                         <option value="system">系统巡检</option>
                         <option value="sql">SQL稽查</option>
                         <option value="mes_hanging">MES吊挂稽核</option>
-                        <option value="custom_script">自定义稽核</option>
+                        <option value="custom_script">自定义SQL</option>
                     </select>
                 </div>
                 <div>
@@ -82,6 +88,10 @@
                 <button id="logResetBtn"
                     class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-all text-sm font-medium">
                     <i class="fa fa-undo mr-2"></i>重置
+                </button>
+                <button id="logExportBtn"
+                    class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-blue-50 transition-all text-sm font-medium">
+                    <i class="fa fa-download mr-2"></i>导出日志
                 </button>
                 <button id="logClearBtn"
                     class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-all text-sm font-medium ml-auto">
@@ -156,7 +166,12 @@
                 <i class="fa fa-file-text-o mr-2" style="color: var(--primary-color);"></i>
                 <span id="logDetailTitle">日志详情</span>
             </h3>
-            <button id="logDetailCloseBtn" class="text-gray-400 hover:text-gray-600 text-xl">
+            <div class="flex items-center space-x-3">
+                <button id="logDetailPrintBtn"
+                    class="hidden px-3 py-1.5 border border-primary text-primary rounded-lg hover:bg-blue-50 transition-all text-sm font-medium">
+                    <i class="fa fa-print mr-1"></i>打印详情
+                </button>
+                <button id="logDetailCloseBtn" class="text-gray-400 hover:text-gray-600 text-xl">
                 <i class="fa fa-times"></i>
             </button>
         </div>

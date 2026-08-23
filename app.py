@@ -3,7 +3,7 @@
 Flask app工厂 + Blueprint注册 + 配置加载 + scheduler启动
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 import datetime
 
 from modules.config_mgmt.helpers import load_config_from_file
@@ -41,14 +41,30 @@ from modules.pg_config.routes import pg_config_bp
 app.register_blueprint(pg_config_bp)
 
 # 注册test_custom_script路由（需要独立路径 /api/test_custom_script）
-from modules.auth.helpers import login_required
+from modules.auth.helpers import login_required, permission_required, get_user_permissions
 from modules.custom_scripts.helpers import format_sql_value, resolve_period_value, get_variable_value
 from modules.inspection.helpers import execute_sql
 from modules.config_mgmt.helpers import get_config
 
 
+@app.before_request
+def enforce_api_permissions():
+    """根据已登录人员的角色权限保护业务接口。"""
+    permission_prefixes = (
+        ('/api/pg', 'pg_config'), ('/api/custom_scripts', 'custom_sql'),
+        ('/api/logs', 'logs'), ('/api/arthas', 'diagnostics'),
+        ('/api/inspect', 'inspection'), ('/api/clear_slow_sql_logs', 'inspection'),
+        ('/api/test_custom_script', 'custom_sql'),
+    )
+    required_permission = next((permission for prefix, permission in permission_prefixes
+                                if request.path.startswith(prefix)), None)
+    if required_permission and session.get('username') and required_permission not in get_user_permissions(session.get('username', '')):
+        return jsonify({'error': '没有该功能权限'}), 403
+
+
 @app.route('/api/test_custom_script', methods=['POST'])
 @login_required
+@permission_required('custom_sql')
 def test_custom_script():
     """测试自定义脚本"""
     try:
@@ -71,7 +87,7 @@ def test_custom_script():
                 var_type = var.get('type', 'text')
                 # 与执行/通知路径共用变量解析口径，统一支持动态 today/yesterday/last_n_days
                 var_value = get_variable_value(var, params)
-                formatted_value = format_sql_value(var_type, var_value)
+                formatted_value = format_sql_value(var, var_value)
                 sql_content = sql_content.replace(f'#{{{var_name}}}', formatted_value)
 
             db_config = DATABASE_CONFIG.get(database)
@@ -97,7 +113,7 @@ def test_custom_script():
                 var_name = var.get('name', '')
                 var_type = var.get('type', 'text')
                 var_value = get_variable_value(var, params)
-                formatted_value = format_sql_value(var_type, var_value)
+                formatted_value = format_sql_value(var, var_value)
                 source_sql = source_sql.replace(f'#{{{var_name}}}', formatted_value)
                 target_sql = target_sql.replace(f'#{{{var_name}}}', formatted_value)
 

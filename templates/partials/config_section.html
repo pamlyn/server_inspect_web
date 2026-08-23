@@ -1,33 +1,66 @@
-<div id="configContent" class="hidden">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
-            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
-                style="background: var(--primary-light);">
+<div id="configContent" class="hidden workspace-page config-page">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 page-surface">
+        <div class="page-heading">
+            <div>
+                <p class="page-kicker">SYSTEM SETTINGS</p>
+                <h2 class="text-lg font-bold text-gray-800 flex items-center">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center mr-3" style="background: var(--primary-light);">
                 <i class="fa fa-cog text-sm" style="color: var(--primary-color);"></i>
             </div>
             系统配置
-        </h2>
+                </h2>
+                <p>按权限管理基础告警、巡检策略、数据通知与自定义 SQL 配置。</p>
+            </div>
+        </div>
+        <div class="config-tab-rail border-b border-gray-200 mb-6 overflow-x-auto">
+            <div class="flex min-w-max gap-2" role="tablist" aria-label="系统配置分类">
+                <button type="button" class="config-tab px-4 py-2 text-sm font-medium border-b-2" data-config-tab="basic" data-permission="config_basic_alert">基础与告警</button>
+                <button type="button" class="config-tab px-4 py-2 text-sm font-medium border-b-2" data-config-tab="inspection" data-permission="config_inspection_strategy">巡检策略</button>
+                <button type="button" class="config-tab px-4 py-2 text-sm font-medium border-b-2" data-config-tab="data" data-permission="config_data_notification">数据与通知</button>
+                <button type="button" class="config-tab px-4 py-2 text-sm font-medium border-b-2" data-config-tab="custom-sql" data-permission="config_custom_sql">自定义SQL</button>
+            </div>
+        </div>
         <form id="mainConfigForm" class="space-y-6">
-            {% include 'partials/config/project_and_scheduler.html' %}
-            {% include 'partials/config/daily_inspection.html' %}
-            {% include 'partials/config/realtime_monitor.html' %}
-            {% include 'partials/config/sql_date.html' %}
-            {% include 'partials/config/custom_script.html' %}
-            {% include 'partials/config/inspection_items.html' %}
-            {% include 'partials/config/database_and_dingtalk.html' %}
-            {% include 'partials/config/log_database.html' %}
-
-            <!-- 保存按钮 -->
-            <div class="flex justify-end space-x-3 pt-4">
-                <button type="button" id="cancelConfigBtn"
-                    class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">
-                    取消
-                </button>
-                <button type="submit"
-                    class="px-4 py-2 text-sm text-white rounded-lg transition-all hover:opacity-90"
-                    style="background: var(--primary-color);">
-                    保存配置
-                </button>
+            <div class="config-tab-panel space-y-6" data-config-panel="basic">
+                {% include 'partials/config/project_and_scheduler.html' %}
+            </div>
+            <div class="config-tab-panel space-y-6 hidden" data-config-panel="inspection">
+                <div class="border border-gray-200 rounded-lg p-4 space-y-5">
+                    <h3 class="text-sm font-semibold text-gray-700 flex items-center">
+                        <i class="fa fa-clock-o mr-2" style="color: var(--primary-color);"></i>
+                        定时巡检
+                    </h3>
+                    {% include 'partials/config/scheduled_inspection.html' %}
+                    <div class="pt-4 border-t border-gray-100">
+                        <h4 class="text-sm font-medium text-gray-600 mb-3">巡检项</h4>
+                        {% include 'partials/config/scheduled_inspection_items.html' %}
+                    </div>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4 space-y-5">
+                    <h3 class="text-sm font-semibold text-gray-700 flex items-center">
+                        <i class="fa fa-calendar mr-2" style="color: var(--primary-color);"></i>
+                        日常巡检
+                    </h3>
+                    {% include 'partials/config/daily_inspection.html' %}
+                    <div class="pt-4 border-t border-gray-100">
+                        <h4 class="text-sm font-medium text-gray-600 mb-3">巡检项</h4>
+                        {% include 'partials/config/daily_inspection_items.html' %}
+                    </div>
+                </div>
+                {% include 'partials/config/realtime_monitor.html' %}
+                {% include 'partials/config/full_inspection_items.html' %}
+                {% include 'partials/config/sql_date.html' %}
+            </div>
+            <div class="config-tab-panel space-y-6 hidden" data-config-panel="data">
+                {% include 'partials/config/database_and_dingtalk.html' %}
+                {% include 'partials/config/log_database.html' %}
+            </div>
+            <div class="config-tab-panel space-y-6 hidden" data-config-panel="custom-sql">
+                {% include 'partials/config/custom_script.html' %}
+            </div>
+            <div id="configFormActions" class="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                <button type="button" id="cancelConfigBtn" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all">取消</button>
+                <button type="submit" class="px-4 py-2 text-sm text-white rounded-lg transition-all hover:opacity-90" style="background: var(--primary-color);">保存配置</button>
             </div>
         </form>
     </div>

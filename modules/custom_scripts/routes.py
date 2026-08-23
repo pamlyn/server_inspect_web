@@ -2,11 +2,16 @@
 自定义脚本模块 - 路由定义
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file, session
 import datetime
+import io
+import re
 import time
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
-from modules.auth.helpers import login_required
+from modules.auth.helpers import ADMIN_USERNAME, can_access_custom_script, login_required
 from modules.custom_scripts.helpers import custom_scripts, script_id_counter, save_scripts, format_sql_value, resolve_period_value, get_variable_value, allocate_script_id
 from modules.custom_scripts.cross_db import compare_cross_db, cross_db_summary_text, cross_db_config_to_text
 from modules.inspection.helpers import execute_sql
@@ -15,14 +20,30 @@ from modules.config_mgmt.helpers import get_config
 custom_scripts_bp = Blueprint('custom_scripts', __name__, url_prefix='/api/custom_scripts')
 
 
+def _can_manage_scripts():
+    return session.get('username') == ADMIN_USERNAME
+
+
+def _can_access_script(script):
+    return can_access_custom_script(session.get('username', ''), script)
+
+
+def _forbidden(message='无权访问该自定义SQL'):
+    return jsonify({'error': message}), 403
+
+
 @custom_scripts_bp.route('', methods=['GET', 'POST'])
 @login_required
 def custom_scripts_api():
-    """自定义稽核脚本管理"""
+    """自定义SQL脚本管理"""
     global custom_scripts, script_id_counter
 
     if request.method == 'GET':
-        return jsonify({'scripts': custom_scripts})
+        scripts = [dict(script, category=(script.get('category') or '').strip() or '未分类')
+                   for script in custom_scripts if _can_access_script(script)]
+        return jsonify({'scripts': scripts})
+    if not _can_manage_scripts():
+        return _forbidden('仅管理员可新增或编辑自定义SQL脚本')
     elif request.method == 'POST':
         data = request.json
         script_id = data.get('id')
@@ -31,6 +52,7 @@ def custom_scripts_api():
         variables = data.get('variables', [])
         rules = data.get('rules', [])
         cross_db_config = data.get('cross_db_config', {})
+        category = (data.get('category') or '').strip() or '未分类'
 
         if not name:
             return jsonify({'error': '脚本名称不能为空'}), 400
@@ -41,6 +63,7 @@ def custom_scripts_api():
                 return jsonify({'error': '脚本不存在'}), 404
 
             script['name'] = name
+            script['category'] = category
             script['mode'] = mode
             script['variables'] = variables
             script['rules'] = rules
@@ -69,6 +92,7 @@ def custom_scripts_api():
             new_script = {
                 'id': allocate_script_id(),
                 'name': name,
+                'category': category,
                 'mode': mode,
                 'scheduled': data.get('scheduled', False),
                 'daily': data.get('daily', False),
@@ -107,9 +131,14 @@ def custom_script_api(script_id):
     script = next((s for s in custom_scripts if s['id'] == script_id), None)
     if not script:
         return jsonify({'error': '脚本不存在'}), 404
+    if not _can_access_script(script):
+        return _forbidden()
 
     if request.method == 'GET':
-        return jsonify({'script': script})
+        response_script = dict(script, category=(script.get('category') or '').strip() or '未分类')
+        return jsonify({'script': response_script})
+    if not _can_manage_scripts():
+        return _forbidden('仅管理员可编辑或删除自定义SQL脚本')
     elif request.method == 'DELETE':
         custom_scripts = [s for s in custom_scripts if s['id'] != script_id]
         save_scripts()
@@ -117,6 +146,7 @@ def custom_script_api(script_id):
     elif request.method == 'PUT':
         data = request.json
         script['name'] = data.get('name', script['name'])
+        script['category'] = (data.get('category') or script.get('category') or '未分类').strip() or '未分类'
         script['database'] = data.get('database', script['database'])
         script['content'] = data.get('content', script['content'])
         script['variables'] = data.get('variables', script.get('variables', []))
@@ -127,6 +157,59 @@ def custom_script_api(script_id):
         script['updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         save_scripts()
         return jsonify({'message': '脚本更新成功'})
+
+
+@custom_scripts_bp.route('/export', methods=['POST'])
+@login_required
+def export_custom_script_result():
+    """导出自定义SQL结果为列宽自适应的Excel文件。"""
+    data = request.get_json() or {}
+    columns = data.get('columns') or []
+    rows = data.get('rows') or []
+    script_name = data.get('script_name') or 'SQL结果'
+    header_color = str(data.get('header_color') or '#87CEEB').lstrip('#').upper()
+    if not re.fullmatch(r'[0-9A-F]{6}', header_color):
+        header_color = '87CEEB'
+    if not columns:
+        return jsonify({'error': '没有可导出的列'}), 400
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = 'SQL结果'
+    header_fill = PatternFill('solid', fgColor=header_color)
+    normal_font = Font(name='微软雅黑')
+    header_font = Font(name='微软雅黑', bold=True)
+    for col_index, column in enumerate(columns, start=1):
+        cell = worksheet.cell(row=1, column=col_index, value=str(column))
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    for row_index, row in enumerate(rows, start=2):
+        for col_index, column in enumerate(columns, start=1):
+            value = row[col_index - 1] if isinstance(row, list) and col_index <= len(row) else row.get(column) if isinstance(row, dict) else ''
+            if value is None:
+                value = ''
+            elif isinstance(value, str) and value.startswith(('=', '+', '-', '@')):
+                value = "'" + value
+            cell = worksheet.cell(row=row_index, column=col_index, value=value)
+            cell.font = normal_font
+            cell.alignment = Alignment(vertical='top', wrap_text=True)
+
+    for col_index, column in enumerate(columns, start=1):
+        max_length = len(str(column))
+        for row_index in range(2, worksheet.max_row + 1):
+            max_length = max(max_length, max(len(line) for line in str(worksheet.cell(row_index, col_index).value or '').splitlines()))
+        worksheet.column_dimensions[get_column_letter(col_index)].width = min(max(max_length + 2, 10), 50)
+    worksheet.freeze_panes = 'A2'
+
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    safe_name = re.sub(r'[\\/:*?"<>|]+', '_', str(script_name)).strip() or 'SQL结果'
+    filename = f'{safe_name}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=filename)
 
 
 @custom_scripts_bp.route('/<script_id>/execute', methods=['POST'])
@@ -143,6 +226,8 @@ def execute_custom_script(script_id):
     script = next((s for s in custom_scripts if s['id'] == script_id), None)
     if not script:
         return jsonify({'error': '脚本不存在'}), 404
+    if not _can_access_script(script):
+        return _forbidden()
 
     script_name = script.get('name', script_id)
     mode = script.get('mode', 'single_db')
@@ -159,7 +244,7 @@ def execute_custom_script(script_id):
                 var_name = var.get('name', '')
                 var_type = var.get('type', 'text')
                 var_value = get_variable_value(var, params)
-                formatted_value = format_sql_value(var_type, var_value)
+                formatted_value = format_sql_value(var, var_value)
                 sql_content = sql_content.replace(f'#{{{var_name}}}', formatted_value)
 
             database = script.get('database')
@@ -188,7 +273,7 @@ def execute_custom_script(script_id):
                 var_name = var.get('name', '')
                 var_type = var.get('type', 'text')
                 var_value = get_variable_value(var, params)
-                formatted_value = format_sql_value(var_type, var_value)
+                formatted_value = format_sql_value(var, var_value)
                 source_sql = source_sql.replace(f'#{{{var_name}}}', formatted_value)
                 target_sql = target_sql.replace(f'#{{{var_name}}}', formatted_value)
 
