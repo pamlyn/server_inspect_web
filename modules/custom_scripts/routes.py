@@ -220,7 +220,7 @@ def execute_custom_script(script_id):
     from flask import session
 
     start_time = datetime.datetime.now()
-    start_ts = time.time()
+    start_ts = time.perf_counter()
     operator = session.get('username')
 
     script = next((s for s in custom_scripts if s['id'] == script_id), None)
@@ -358,7 +358,7 @@ def _log_custom_script(start_time, start_ts, operator, script_name, mode, record
         inspection_type='custom_script', trigger_source='manual',
         target=script_name, operator=operator, status=status,
         start_time=start_time, end_time=end_time,
-        duration=f"{time.time() - start_ts:.3f}s",
+        duration=time.perf_counter() - start_ts,
         summary=summary_text, record_count=record_count,
         result=log_result, error=error,
     )

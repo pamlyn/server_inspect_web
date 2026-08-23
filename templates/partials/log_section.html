@@ -21,11 +21,7 @@
                     <h3 id="resourceHistoryTitle">CPU 与内存历史波动</h3>
                     <p id="resourceHistoryMeta">持续采集本机 CPU 与内存指标；旧巡检记录仅在没有连续样本时作为过渡回退。</p>
                 </div>
-                <div class="resource-history-ranges" role="group" aria-label="资源历史时间范围">
-                    <button type="button" class="resource-history-range is-active" data-range="24h">24小时</button>
-                    <button type="button" class="resource-history-range" data-range="7d">7天</button>
-                    <button type="button" class="resource-history-range" data-range="30d">30天</button>
-                </div>
+                <p class="resource-history-help"><i class="fa fa-search-plus" aria-hidden="true"></i> 在折线图内使用放大、缩小或滚轮查看不同时间范围</p>
             </div>
             <div id="resourceHistoryCharts" class="resource-history-charts">
                 <div class="resource-history-loading"><i class="fa fa-spinner fa-spin mr-2"></i>加载历史样本...</div>

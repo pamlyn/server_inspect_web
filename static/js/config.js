@@ -69,6 +69,11 @@ function loadConfig(scope = activeConfigScope) {
             document.getElementById('diskIoCriticalThreshold').value = data.thresholds?.disk_io?.critical || 25;
             document.getElementById('swapWarningThreshold').value = data.thresholds?.swap?.warning || 30;
             document.getElementById('swapCriticalThreshold').value = data.thresholds?.swap?.critical || 50;
+            const swapThresholds = data.thresholds?.swap || {};
+            const hasSwapActivityEnabled = Object.prototype.hasOwnProperty.call(swapThresholds, 'activity_enabled');
+            document.getElementById('swapActivityEnabled').checked = swapThresholds.activity_enabled === true;
+            document.getElementById('swapActivityWarningThreshold').value = hasSwapActivityEnabled ? (swapThresholds.activity_warning || 100) : 100;
+            document.getElementById('swapActivityCriticalThreshold').value = hasSwapActivityEnabled ? (swapThresholds.activity_critical || 500) : 500;
             document.getElementById('diskFreeWarningThreshold').value = data.thresholds?.disk_free?.warning || 10;
             document.getElementById('diskFreeCriticalThreshold').value = data.thresholds?.disk_free?.critical || 5;
             document.getElementById('slowSqlWarningThreshold').value = data.thresholds?.slow_sql?.warning || 5;
@@ -318,7 +323,10 @@ function setupConfigFormSubmit() {
                     },
                     swap: {
                         warning: parseInt(document.getElementById('swapWarningThreshold').value),
-                        critical: parseInt(document.getElementById('swapCriticalThreshold').value)
+                        critical: parseInt(document.getElementById('swapCriticalThreshold').value),
+                        activity_enabled: document.getElementById('swapActivityEnabled').checked,
+                        activity_warning: parseFloat(document.getElementById('swapActivityWarningThreshold').value),
+                        activity_critical: parseFloat(document.getElementById('swapActivityCriticalThreshold').value)
                     },
                     slow_sql: {
                         warning: parseInt(document.getElementById('slowSqlWarningThreshold').value),

@@ -61,8 +61,10 @@ THRESHOLDS = {
     "swap": {
         "warning": 30,  # 交换分区使用率警告阈值（%）
         "critical": 50,  # 交换分区使用率紧急阈值（%）
-        "activity_warning": 1,
-        "activity_critical": 10
+        # 偶发换页并不代表内存压力，默认关闭短窗口速率告警。
+        "activity_enabled": False,
+        "activity_warning": 100,  # 换页速率警告阈值（页/秒）
+        "activity_critical": 500  # 换页速率紧急阈值（页/秒）
     },
     "disk_io": {
         "warning": 10,

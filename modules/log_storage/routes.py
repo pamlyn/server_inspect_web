@@ -13,7 +13,7 @@ from modules.config_mgmt.helpers import get_config
 from modules.log_storage.helpers import (
     _get_log_db_config, query_inspection_logs, export_inspection_logs,
     get_inspection_log_detail, get_continuous_resource_history, get_resource_history,
-    delete_inspection_logs,
+    aggregate_resource_samples, delete_inspection_logs,
 )
 from modules.log_storage.parser import parse_log_detail, _target_label, _type_label, _trigger_label, _status_label
 from modules.log_storage.exporter import build_log_list_excel, EXCEL_MIMETYPE
@@ -102,39 +102,60 @@ def list_logs():
 @log_bp.route('/resource-history', methods=['GET'])
 @login_required
 def resource_history():
-    """返回持续采样；依次回退到本地时序库和旧巡检记录。"""
+    """返回按请求范围与时间桶聚合的资源历史，依次回退到本地时序库和旧巡检记录。"""
     hours_by_range = {'24h': 24, '7d': 24 * 7, '30d': 24 * 30}
-    range_key = request.args.get('range', '24h')
-    if range_key not in hours_by_range:
-        return jsonify({'success': False, 'error': '时间范围无效'}), 400
+    monitoring = get_config('resourceHistoryMonitoring', {}) or {}
+    max_hours = max(1, int(monitoring.get('retention_days', 90))) * 24
     try:
-        start_time = datetime.datetime.now() - datetime.timedelta(hours=hours_by_range[range_key])
+        range_seconds = request.args.get('range_seconds')
+        hours = int(request.args.get('hours', hours_by_range.get(request.args.get('range', '24h'), 24)))
+        requested_range_seconds = int(range_seconds) if range_seconds is not None else hours * 3600
+        requested_bucket_seconds = max(0, int(request.args.get('bucket_seconds', 0)))
+    except ValueError:
+        return jsonify({'success': False, 'error': '时间范围或数据间隔无效'}), 400
+    collection_interval_seconds = max(30, int(monitoring.get('interval_seconds', 60)))
+    if requested_range_seconds < collection_interval_seconds:
+        return jsonify({'success': False, 'error': f'查看范围不得小于采集间隔（{collection_interval_seconds} 秒）'}), 400
+    requested_range_seconds = min(requested_range_seconds, max_hours * 3600)
+    hours = max(1, (requested_range_seconds + 3599) // 3600)
+    if requested_bucket_seconds not in (0, 60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400):
+        return jsonify({'success': False, 'error': '数据间隔无效'}), 400
+
+    # 允许在 24 小时窗口内保留每分钟一个点；自动聚合绝不粗于实际采集间隔。
+    max_points = 1440
+    minimum_bucket_seconds = max(collection_interval_seconds, (requested_range_seconds + max_points - 1) // max_points)
+    effective_bucket_seconds = max(requested_bucket_seconds, minimum_bucket_seconds)
+    try:
+        start_time = datetime.datetime.now() - datetime.timedelta(seconds=requested_range_seconds)
         cfg = _get_log_db_config()
         samples = []
         source = 'none'
         if cfg is not None:
             db_type, db_config = cfg
             try:
-                samples = get_continuous_resource_history(db_type, db_config, start_time)
+                samples = get_continuous_resource_history(db_type, db_config, start_time, max_points=50000)
             except Exception as error:
                 print(f'连续资源历史数据库读取失败，回退本地存储: {error}')
-                samples = []
             if samples:
                 source = 'continuous_database'
         if not samples:
             from modules.resource_metrics.local_storage import get_resource_history as get_local_resource_history
-            samples = get_local_resource_history(start_time)
+            samples = get_local_resource_history(start_time, max_points=50000)
             if samples:
                 source = 'continuous_local'
         if not samples and cfg is not None:
-            samples = get_resource_history(db_type, db_config, start_time)
+            samples = get_resource_history(db_type, db_config, start_time, max_points=50000)
             if samples:
                 source = 'inspection_log_fallback'
+        raw_sample_count = len(samples)
+        samples = aggregate_resource_samples(samples, effective_bucket_seconds)
         return jsonify({
-            'success': True, 'range': range_key, 'samples': samples,
-            'source': source,
-            'collection_interval_seconds': (get_config('resourceHistoryMonitoring', {}) or {}).get('interval_seconds', 60)
-            if source.startswith('continuous') else None,
+            'success': True, 'hours': hours, 'range_seconds': requested_range_seconds,
+            'max_range_seconds': max_hours * 3600, 'samples': samples, 'source': source,
+            'raw_sample_count': raw_sample_count, 'sample_count': len(samples),
+            'requested_bucket_seconds': requested_bucket_seconds,
+            'effective_bucket_seconds': effective_bucket_seconds,
+            'collection_interval_seconds': collection_interval_seconds if source.startswith('continuous') else None,
         })
     except Exception as e:
         import traceback

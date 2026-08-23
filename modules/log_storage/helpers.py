@@ -253,6 +253,22 @@ def prune_resource_metrics(db_type, db_config, retention_days, now=None):
             conn.close()
 
 
+def format_inspection_duration(duration_seconds):
+    """将单调计时秒数格式化为统一、适合日志展示的耗时文本。"""
+    if duration_seconds is None:
+        return None
+    seconds = max(0.0, float(duration_seconds))
+    if seconds < 1:
+        return f'{round(seconds * 1000)}ms'
+    if seconds < 60:
+        return f'{seconds:.3f}s'
+    minutes, remainder = divmod(seconds, 60)
+    if minutes < 60:
+        return f'{int(minutes)}m {remainder:04.1f}s'
+    hours, minutes = divmod(int(minutes), 60)
+    return f'{hours}h {minutes:02d}m {remainder:04.1f}s'
+
+
 def save_inspection_log(db_type, db_config, *, inspection_type, trigger_source,
                         target='', operator=None, status='success',
                         start_time=None, end_time=None, duration=None,
@@ -287,7 +303,9 @@ def save_inspection_log(db_type, db_config, *, inspection_type, trigger_source,
         if isinstance(end_time, str):
             end_time = datetime.datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
         if duration is None and start_time and end_time:
-            duration = str(end_time - start_time)
+            duration = format_inspection_duration((end_time - start_time).total_seconds())
+        elif isinstance(duration, (int, float)):
+            duration = format_inspection_duration(duration)
 
         inspection_id = str(uuid.uuid4())
 
@@ -551,6 +569,33 @@ def _downsample_samples(samples, max_points):
     step = interior / (max_points - 2)
     indexes = [0] + [1 + min(int(index * step), interior - 1) for index in range(max_points - 2)] + [len(samples) - 1]
     return [samples[index] for index in indexes]
+
+
+def aggregate_resource_samples(samples, bucket_seconds):
+    """按时间桶平均资源指标，保留每个桶最后一个样本的时间。"""
+    if not samples or not bucket_seconds:
+        return samples
+    buckets = {}
+    for sample in samples:
+        try:
+            timestamp = datetime.datetime.fromisoformat(str(sample.get('time')).replace('Z', '+00:00'))
+        except (TypeError, ValueError):
+            continue
+        bucket = int(timestamp.timestamp()) // bucket_seconds
+        item = buckets.setdefault(bucket, {'time': sample.get('time'), 'cpu': [], 'memory': []})
+        item['time'] = sample.get('time')
+        for name in ('cpu', 'memory'):
+            value = sample.get(name)
+            if isinstance(value, (int, float)):
+                item[name].append(value)
+    result = []
+    for item in buckets.values():
+        result.append({
+            'time': item['time'],
+            'cpu': round(sum(item['cpu']) / len(item['cpu']), 2) if item['cpu'] else None,
+            'memory': round(sum(item['memory']) / len(item['memory']), 2) if item['memory'] else None,
+        })
+    return result
 
 
 def get_continuous_resource_history(db_type, db_config, start_time, max_records=50000, max_points=240):

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ project_name | default('服务器巡检系统') }}</title>
     <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260823-extra-wide-log-detail" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260823-chart-point-tooltips" rel="stylesheet">
     <!-- 外部JS模块（app.js必须最先加载，提供共享工具函数） -->
     <script src="{{ url_for('static', filename='js/app.js') }}?v=20260823-unified-select-controls"></script>
 </head>
@@ -40,11 +40,11 @@
     </div>
 
     <!-- 模块JS（按依赖顺序加载） -->
-    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260823-health-thresholds"></script>
+    <script src="{{ url_for('static', filename='js/config.js') }}?v=20260823-swap-activity-rates"></script>
     <script src="{{ url_for('static', filename='js/sql_inspect.js') }}?v=20260724a"></script>
     <script src="{{ url_for('static', filename='js/custom_inspect.js') }}?v=20260822-parameter-inputs"></script>
     <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260822-inspection-cancel"></script>
-    <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260823-log-detail-layout"></script>
+    <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260823-unified-inspection-duration"></script>
     <script src="{{ url_for('static', filename='js/pg_config.js') }}?v=20260822-pg-container"></script>
     <script src="{{ url_for('static', filename='js/user_permission.js') }}?v=20260822-layout"></script>
     {# Arthas诊断模块已隐藏 - 使用Jinja2注释防止渲染 #}

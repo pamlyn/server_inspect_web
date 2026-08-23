@@ -23,7 +23,7 @@ inspection_bp = Blueprint('inspection', __name__, url_prefix='/api')
 @login_required
 def inspect():
     start_time = datetime.datetime.now()
-    start_ts = time.time()
+    start_ts = time.perf_counter()
     operator = session.get('username')
     inspection_type_req = request.json.get('type', 'full') if request.json else 'full'
     target = 'full' if inspection_type_req in ('full', None) else inspection_type_req
@@ -49,7 +49,7 @@ def inspect():
                 return jsonify({'error': '无效的巡检类型'}), 400
 
         end_time = datetime.datetime.now()
-        duration = f"{time.time() - start_ts:.3f}s"
+        duration = time.perf_counter() - start_ts
 
         # 保存巡检日志到数据库（成功）
         record_inspection_log(
@@ -76,7 +76,7 @@ def inspect():
         import traceback
         traceback.print_exc()
         end_time = datetime.datetime.now()
-        duration = f"{time.time() - start_ts:.3f}s"
+        duration = time.perf_counter() - start_ts
         # 保存巡检日志到数据库（失败）
         record_inspection_log(
             inspection_type='system', trigger_source='manual',
@@ -103,7 +103,7 @@ def save_inspection_log_to_db(results, inspection_type):
 def inspect_sql():
     """数据稽查功能"""
     start_time = datetime.datetime.now()
-    start_ts = time.time()
+    start_ts = time.perf_counter()
     operator = session.get('username')
     data = request.json
     database = data.get('database')
@@ -132,7 +132,7 @@ def inspect_sql():
                 inspection_type='sql', trigger_source='manual',
                 target=target, operator=operator, status='error',
                 start_time=start_time, end_time=end_time,
-                duration=f"{time.time() - start_ts:.3f}s",
+                duration=time.perf_counter() - start_ts,
                 summary=f"SQL稽查失败: {target}",
                 record_count=0,
                 result={'database': database, 'sql': sql},
@@ -146,7 +146,7 @@ def inspect_sql():
             inspection_type='sql', trigger_source='manual',
             target=target, operator=operator, status='success',
             start_time=start_time, end_time=end_time,
-            duration=f"{time.time() - start_ts:.3f}s",
+            duration=time.perf_counter() - start_ts,
             summary=f"SQL稽查完成: {target}，{record_count} 条记录",
             record_count=record_count,
             result={'database': database, 'sql': sql, 'columns': columns, 'rows': rows},
@@ -161,7 +161,7 @@ def inspect_sql():
             inspection_type='sql', trigger_source='manual',
             target=target, operator=operator, status='error',
             start_time=start_time, end_time=end_time,
-            duration=f"{time.time() - start_ts:.3f}s",
+            duration=time.perf_counter() - start_ts,
             summary=f"SQL稽查失败: {target}",
             result={'database': database, 'sql': sql},
             error=str(e),
@@ -221,7 +221,7 @@ def export_sql_result():
 def inspect_mes_hanging():
     """MES报工明细与吊挂报工明细自动稽核"""
     start_time = datetime.datetime.now()
-    start_ts = time.time()
+    start_ts = time.perf_counter()
     operator = session.get('username')
     data = request.json or {}
     start_date = data.get('start_date')
@@ -321,7 +321,7 @@ def inspect_mes_hanging():
             target=target, operator=operator,
             status='success' if is_consistent else 'warning',
             start_time=start_time, end_time=end_time,
-            duration=f"{time.time() - start_ts:.3f}s",
+            duration=time.perf_counter() - start_ts,
             summary=f"MES吊挂稽核: {target} {'一致' if is_consistent else '不一致'}",
             record_count=1,
             result=result,
@@ -335,7 +335,7 @@ def inspect_mes_hanging():
             inspection_type='mes_hanging', trigger_source='manual',
             target=target, operator=operator, status='error',
             start_time=start_time, end_time=end_time,
-            duration=f"{time.time() - start_ts:.3f}s",
+            duration=time.perf_counter() - start_ts,
             summary=f"MES吊挂稽核失败: {target}",
             error=str(e),
         )

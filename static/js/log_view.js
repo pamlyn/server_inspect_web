@@ -15,7 +15,11 @@ let logPageSize = 20;
 let logTotalPages = 1;
 let logTotalCount = 0;
 let logCurrentDetailId = null;
-let resourceHistoryRange = '24h';
+let resourceHistoryRanges = [];
+let resourceHistoryRangeIndex = 0;
+let resourceHistoryZoomTimer = null;
+const resourceHistoryCache = new Map();
+let resourceHistoryCurrentMetadata = null;
 
 // ========== 类型/状态中文映射 ==========
 
@@ -64,21 +68,146 @@ window.showLogs = function () {
 
 // ========== 资源历史趋势 ==========
 
+function buildResourceHistoryRanges(collectionIntervalSeconds, maxRangeSeconds) {
+    const minimumSeconds = Math.max(collectionIntervalSeconds * 12, collectionIntervalSeconds);
+    const multipliers = [1, 2, 5, 10, 30, 60, 120, 360, 720, 1440, 2880, 4320, 8640, 21600, 43200, 86400, 129600];
+    const ranges = [...new Set(multipliers.map(multiplier => Math.min(maxRangeSeconds, minimumSeconds * multiplier)))].sort((left, right) => left - right);
+    if (!ranges.includes(maxRangeSeconds)) ranges.push(maxRangeSeconds);
+    return ranges.map(seconds => ({ seconds, label: formatResourceDuration(seconds) }));
+}
+
+function currentResourceHistoryRange() {
+    return resourceHistoryRanges[resourceHistoryRangeIndex] || { seconds: 24 * 3600, label: '24小时' };
+}
+
+function selectDefaultResourceHistoryRange() {
+    const target = 24 * 3600;
+    resourceHistoryRangeIndex = resourceHistoryRanges.reduce((closestIndex, range, index) =>
+        Math.abs(range.seconds - target) < Math.abs(resourceHistoryRanges[closestIndex].seconds - target) ? index : closestIndex, 0);
+}
+
+function formatResourceDuration(seconds) {
+    if (seconds >= 86400) return `${Math.round(seconds / 86400)}天`;
+    if (seconds >= 3600) return `${Math.round(seconds / 3600)}小时`;
+    return `${Math.max(1, Math.round(seconds / 60))}分钟`;
+}
+
+function setResourceHistoryZoom(nextIndex) {
+    const boundedIndex = Math.max(0, Math.min(resourceHistoryRanges.length - 1, nextIndex));
+    if (boundedIndex === resourceHistoryRangeIndex) return;
+    resourceHistoryRangeIndex = boundedIndex;
+    const range = currentResourceHistoryRange();
+    if ([...resourceHistoryCache.keys()].some(seconds => seconds >= range.seconds)) {
+        renderCachedResourceHistory();
+    } else {
+        loadResourceHistory();
+    }
+}
+
+function bindResourceHistoryZoomControls() {
+    document.querySelectorAll('[data-resource-history-zoom]').forEach(button => {
+        button.addEventListener('click', () => {
+            const action = button.dataset.resourceHistoryZoom;
+            if (action === 'in') setResourceHistoryZoom(resourceHistoryRangeIndex - 1);
+            if (action === 'out') setResourceHistoryZoom(resourceHistoryRangeIndex + 1);
+            if (action === 'reset') {
+                const target = 24 * 3600;
+                const defaultIndex = resourceHistoryRanges.reduce((closestIndex, range, index) =>
+                    Math.abs(range.seconds - target) < Math.abs(resourceHistoryRanges[closestIndex].seconds - target) ? index : closestIndex, 0);
+                setResourceHistoryZoom(defaultIndex);
+            }
+        });
+    });
+    document.querySelectorAll('.resource-trend-chart').forEach(chart => {
+        chart.addEventListener('wheel', event => {
+            event.preventDefault();
+            const nextIndex = resourceHistoryRangeIndex + (event.deltaY > 0 ? 1 : -1);
+            if (nextIndex === resourceHistoryRangeIndex) return;
+            clearTimeout(resourceHistoryZoomTimer);
+            resourceHistoryZoomTimer = setTimeout(() => setResourceHistoryZoom(nextIndex), 110);
+        }, { passive: false });
+    });
+}
+
+function bindResourceHistoryPointTooltips() {
+    document.querySelectorAll('.resource-trend-chart').forEach(chart => {
+        const points = JSON.parse(chart.dataset.points || '[]');
+        const focusLine = chart.querySelector('[data-resource-trend-focus-line]');
+        const focusPoint = chart.querySelector('[data-resource-trend-focus-point]');
+        const tooltip = chart.closest('.resource-trend-card')?.querySelector('[data-resource-trend-tooltip]');
+        if (!points.length || !focusLine || !focusPoint || !tooltip) return;
+
+        const hide = () => {
+            focusLine.classList.add('hidden');
+            focusPoint.classList.add('hidden');
+            tooltip.classList.add('hidden');
+        };
+        chart.addEventListener('pointermove', event => {
+            const rect = chart.getBoundingClientRect();
+            const x = (event.clientX - rect.left) * 520 / rect.width;
+            const point = points.reduce((closest, current) => Math.abs(current.x - x) < Math.abs(closest.x - x) ? current : closest);
+            focusLine.setAttribute('x1', point.x);
+            focusLine.setAttribute('x2', point.x);
+            focusPoint.setAttribute('cx', point.x);
+            focusPoint.setAttribute('cy', point.y);
+            focusLine.classList.remove('hidden');
+            focusPoint.classList.remove('hidden');
+            tooltip.querySelector('strong').textContent = chart.dataset.title || '资源指标';
+            tooltip.querySelector('span').textContent = `${formatLogTime(point.time)} · ${point.value.toFixed(1)}%`;
+            tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 12, event.clientX))}px`;
+            tooltip.style.top = `${Math.max(12, event.clientY - 12)}px`;
+            tooltip.classList.remove('hidden');
+        });
+        chart.addEventListener('pointerleave', hide);
+    });
+}
+
 function loadResourceHistory() {
+    const range = currentResourceHistoryRange();
+    if (resourceHistoryCache.has(range.seconds)) {
+        resourceHistoryCurrentMetadata = resourceHistoryCache.get(range.seconds).metadata;
+        renderCachedResourceHistory();
+        return;
+    }
     const charts = document.getElementById('resourceHistoryCharts');
-    const meta = document.getElementById('resourceHistoryMeta');
-    if (!charts || !meta) return;
-    charts.innerHTML = '<div class="resource-history-loading"><i class="fa fa-spinner fa-spin mr-2"></i>加载历史样本...</div>';
-    fetch(`/api/logs/resource-history?range=${encodeURIComponent(resourceHistoryRange)}`)
+    if (charts && !resourceHistoryCurrentMetadata) {
+        charts.innerHTML = '<div class="resource-history-loading"><i class="fa fa-spinner fa-spin mr-2"></i>加载历史样本...</div>';
+    }
+    fetch(`/api/logs/resource-history?range_seconds=${range.seconds}&bucket_seconds=0`)
         .then(response => response.json())
         .then(data => {
             if (!data.success) throw new Error(data.error || '加载失败');
-            renderResourceHistory(data.samples || [], data);
+            if (!resourceHistoryRanges.length) {
+                resourceHistoryRanges = buildResourceHistoryRanges(data.collection_interval_seconds || 60, data.max_range_seconds || 90 * 24 * 3600);
+                selectDefaultResourceHistoryRange();
+            }
+            resourceHistoryCache.set(data.range_seconds, { samples: data.samples || [], metadata: data });
+            resourceHistoryCurrentMetadata = data;
+            renderCachedResourceHistory();
         })
         .catch(error => {
-            meta.textContent = '无法加载资源历史，请确认日志库已启用。';
-            charts.innerHTML = `<div class="resource-history-empty"><i class="fa fa-line-chart"></i><span>${escapeHtml(error.message)}</span></div>`;
+            const meta = document.getElementById('resourceHistoryMeta');
+            if (meta) meta.textContent = '无法加载资源历史，请确认日志库已启用。';
+            if (!resourceHistoryCurrentMetadata && charts) {
+                charts.innerHTML = `<div class="resource-history-empty"><i class="fa fa-line-chart"></i><span>${escapeHtml(error.message)}</span></div>`;
+            }
         });
+}
+
+function renderCachedResourceHistory() {
+    const range = currentResourceHistoryRange();
+    const candidates = [...resourceHistoryCache.entries()].filter(([seconds]) => seconds >= range.seconds);
+    if (!candidates.length) {
+        loadResourceHistory();
+        return;
+    }
+    const [cachedSeconds, cached] = candidates.sort(([left], [right]) => left - right)[0];
+    const latestTime = new Date(String(cached.samples[cached.samples.length - 1]?.time || '').replace(' ', 'T')).getTime();
+    const cutoff = latestTime - range.seconds * 1000;
+    const samples = cachedSeconds === range.seconds
+        ? cached.samples
+        : cached.samples.filter(sample => new Date(String(sample.time).replace(' ', 'T')).getTime() >= cutoff);
+    renderResourceHistory(samples, { ...cached.metadata, range_seconds: range.seconds, cached: cachedSeconds !== range.seconds });
 }
 
 function renderResourceHistory(samples, metadata = {}) {
@@ -93,16 +222,21 @@ function renderResourceHistory(samples, metadata = {}) {
         return;
     }
     const latestTime = samples[samples.length - 1].time || '--';
+    const effectiveInterval = formatResourceDuration(metadata.effective_bucket_seconds || metadata.collection_interval_seconds || 60);
+    const rawCount = metadata.raw_sample_count || samples.length;
     if (String(metadata.source || '').startsWith('continuous')) {
-        const interval = metadata.collection_interval_seconds || 60;
-        meta.textContent = `连续监控样本 ${samples.length} 条，采集间隔约 ${interval} 秒，最新采样时间：${latestTime}`;
+        const collectionInterval = metadata.collection_interval_seconds || 60;
+        meta.textContent = `展示 ${samples.length} 个时间桶（原始样本 ${rawCount} 条），图表间隔 ${effectiveInterval}；采集间隔约 ${collectionInterval} 秒，最新采样：${latestTime}`;
     } else {
-        meta.textContent = `当前没有连续监控样本，正在展示 ${samples.length} 条旧巡检记录，最新时间：${latestTime}`;
+        meta.textContent = `展示 ${samples.length} 个时间桶（原始样本 ${rawCount} 条），图表间隔 ${effectiveInterval}；当前数据来自旧巡检记录，最新时间：${latestTime}`;
     }
-    charts.innerHTML = renderTrendChart('CPU 忙碌率', 'cpu', cpuSamples, '#5b6cff') + renderTrendChart('内存使用率', 'memory', memorySamples, '#0f9f75');
+    const rangeLabel = currentResourceHistoryRange().label;
+    charts.innerHTML = renderTrendChart('CPU 忙碌率', 'cpu', cpuSamples, '#5b6cff', rangeLabel, effectiveInterval) + renderTrendChart('内存使用率', 'memory', memorySamples, '#0f9f75', rangeLabel, effectiveInterval);
+    bindResourceHistoryZoomControls();
+    bindResourceHistoryPointTooltips();
 }
 
-function renderTrendChart(title, key, samples, color) {
+function renderTrendChart(title, key, samples, color, rangeLabel, effectiveInterval) {
     if (!samples.length) {
         return `<section class="resource-trend-card"><div class="resource-trend-title"><span>${title}</span><strong>暂无样本</strong></div><div class="resource-trend-no-data">该指标尚未被历史巡检采集。</div></section>`;
     }
@@ -114,23 +248,44 @@ function renderTrendChart(title, key, samples, color) {
     const peak = Math.max(...values);
     const plotWidth = width - padding.left - padding.right;
     const plotHeight = height - padding.top - padding.bottom;
-    const points = values.map((value, index) => {
-        const x = padding.left + (values.length === 1 ? plotWidth : (plotWidth * index / (values.length - 1)));
-        const y = padding.top + plotHeight - (value / 100 * plotHeight);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
+    const timestamps = samples.map(sample => new Date(String(sample.time).replace(' ', 'T')).getTime());
+    const firstTimestamp = timestamps[0];
+    const lastTimestamp = timestamps[timestamps.length - 1];
+    const timeSpan = Math.max(1, lastTimestamp - firstTimestamp);
+    const pointData = values.map((value, index) => {
+        const ratio = timestamps[index] && lastTimestamp !== firstTimestamp
+            ? (timestamps[index] - firstTimestamp) / timeSpan
+            : (values.length === 1 ? 1 : index / (values.length - 1));
+        return {
+            x: Number((padding.left + plotWidth * ratio).toFixed(1)),
+            y: Number((padding.top + plotHeight - (value / 100 * plotHeight)).toFixed(1)),
+            time: samples[index].time,
+            value,
+        };
+    });
+    const points = pointData.map(point => `${point.x},${point.y}`).join(' ');
     const labels = [0, 50, 100].map(value => {
         const y = padding.top + plotHeight - (value / 100 * plotHeight);
         return `<g><line x1="${padding.left}" x2="${width - padding.right}" y1="${y}" y2="${y}" class="resource-chart-grid"/><text x="2" y="${y + 4}" class="resource-chart-label">${value}%</text></g>`;
     }).join('');
     const firstTime = escapeHtml(formatLogTime(samples[0].time));
     const lastTime = escapeHtml(formatLogTime(samples[samples.length - 1].time));
+    const zoomControls = `<div class="resource-trend-tools" aria-label="${title}时间范围缩放">
+        <span class="resource-trend-window">${rangeLabel} · ${effectiveInterval}</span>
+        <button type="button" data-resource-history-zoom="in" aria-label="放大时间范围" title="放大：查看更短时间" ${resourceHistoryRangeIndex === 0 ? 'disabled' : ''}><i class="fa fa-search-plus" aria-hidden="true"></i></button>
+        <button type="button" data-resource-history-zoom="out" aria-label="缩小时间范围" title="缩小：查看更长时间" ${resourceHistoryRangeIndex === resourceHistoryRanges.length - 1 ? 'disabled' : ''}><i class="fa fa-search-minus" aria-hidden="true"></i></button>
+        <button type="button" data-resource-history-zoom="reset" aria-label="还原为24小时" title="还原为24小时" ${currentResourceHistoryRange().seconds === 24 * 3600 ? 'disabled' : ''}><i class="fa fa-undo" aria-hidden="true"></i></button>
+    </div>`;
     return `<section class="resource-trend-card">
         <div class="resource-trend-title"><span>${title}</span><strong style="color:${color}">${latest.toFixed(1)}%</strong></div>
-        <div class="resource-trend-summary"><span>峰值 ${peak.toFixed(1)}%</span><span>${samples.length} 个样本</span></div>
-        <svg class="resource-trend-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}历史趋势图">
+        <div class="resource-trend-summary"><span>峰值 ${peak.toFixed(1)}%</span><span>${samples.length} 个样本</span>${zoomControls}</div>
+        <div class="resource-trend-tooltip hidden" data-resource-trend-tooltip><strong></strong><span></span></div>
+        <svg class="resource-trend-chart" data-title="${escapeHtml(title)}" data-points="${escapeHtml(JSON.stringify(pointData))}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}历史趋势图；移动鼠标查看采样时间和百分比，可使用滚轮缩放时间范围">
             ${labels}<polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-            <circle cx="${points.split(' ').slice(-1)[0].split(',')[0]}" cy="${points.split(' ').slice(-1)[0].split(',')[1]}" r="4" fill="${color}" />
+            <line class="resource-chart-focus hidden" data-resource-trend-focus-line y1="${padding.top}" y2="${padding.top + plotHeight}" />
+            <circle class="resource-chart-focus-point hidden" data-resource-trend-focus-point r="5" fill="${color}" />
+            <rect class="resource-chart-hit-area" x="${padding.left}" y="${padding.top}" width="${plotWidth}" height="${plotHeight}" fill="transparent" />
+            <circle cx="${pointData[pointData.length - 1].x}" cy="${pointData[pointData.length - 1].y}" r="4" fill="${color}" />
             <text x="${padding.left}" y="${height - 7}" class="resource-chart-label">${firstTime}</text><text x="${width - padding.right}" y="${height - 7}" text-anchor="end" class="resource-chart-label">${lastTime}</text>
         </svg>
     </section>`;
@@ -515,13 +670,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearConfirmBtn = document.getElementById('logClearConfirmBtn');
 
     if (searchBtn) searchBtn.addEventListener('click', () => loadLogs(1));
-    document.querySelectorAll('.resource-history-range').forEach(button => {
-        button.addEventListener('click', () => {
-            resourceHistoryRange = button.dataset.range || '24h';
-            document.querySelectorAll('.resource-history-range').forEach(item => item.classList.toggle('is-active', item === button));
-            loadResourceHistory();
-        });
-    });
     if (resetBtn) resetBtn.addEventListener('click', () => {
         document.getElementById('logFilterType').value = '';
         document.getElementById('logFilterSource').value = '';

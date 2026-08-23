@@ -23,8 +23,9 @@ def check_swap():
     thresholds = get_config('thresholds', {}).get('swap', {})
     warning = float(thresholds.get('warning', 30))
     critical = float(thresholds.get('critical', 50))
-    activity_warning = float(thresholds.get('activity_warning', 1))
-    activity_critical = float(thresholds.get('activity_critical', 10))
+    activity_enabled = bool(thresholds.get('activity_enabled', False))
+    activity_warning = float(thresholds.get('activity_warning', 100))
+    activity_critical = float(thresholds.get('activity_critical', 500))
     values = {}
     try:
         with open('/proc/meminfo', encoding='utf-8') as file:
@@ -52,16 +53,26 @@ def check_swap():
     else:
         result.add_normal(f'交换分区使用率 {used_percent:.1f}%，正常')
 
+    if not activity_enabled:
+        result.add_info('短窗口换页速率告警未启用')
+        result.set_end_time()
+        return result
+
     before = _read_vmstat()
+    sample_start = time.perf_counter()
     time.sleep(0.5)
+    elapsed_seconds = max(time.perf_counter() - sample_start, 0.001)
     after = _read_vmstat()
     if before and after:
-        activity = (after.get('pswpin', 0) - before.get('pswpin', 0)) + (after.get('pswpout', 0) - before.get('pswpout', 0))
-        result.add_info(f'0.5秒采样换页活动: {activity} 页')
-        if activity >= activity_critical:
-            result.add_critical(f'短窗口换页活动 {activity} 页 >= {activity_critical} 页')
-        elif activity >= activity_warning:
-            result.add_warning(f'短窗口换页活动 {activity} 页 >= {activity_warning} 页')
+        activity = max(0, (after.get('pswpin', 0) - before.get('pswpin', 0)) + (
+            after.get('pswpout', 0) - before.get('pswpout', 0)
+        ))
+        activity_rate = activity / elapsed_seconds
+        result.add_info(f'{elapsed_seconds:.1f}秒采样换页活动: {activity} 页（{activity_rate:.1f} 页/秒）')
+        if activity_rate >= activity_critical:
+            result.add_critical(f'短窗口换页速率 {activity_rate:.1f} 页/秒 >= {activity_critical:.1f} 页/秒')
+        elif activity_rate >= activity_warning:
+            result.add_warning(f'短窗口换页速率 {activity_rate:.1f} 页/秒 >= {activity_warning:.1f} 页/秒')
         else:
             result.add_normal('短窗口无明显换页活动')
     result.set_end_time()
