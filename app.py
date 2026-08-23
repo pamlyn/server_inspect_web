@@ -51,6 +51,7 @@ from modules.config_mgmt.helpers import get_config
 def enforce_api_permissions():
     """根据已登录人员的角色权限保护业务接口。"""
     permission_prefixes = (
+        ('/api/logs/dashboard', 'dashboard'),
         ('/api/pg', 'pg_config'), ('/api/custom_scripts', 'custom_sql'),
         ('/api/logs', 'logs'), ('/api/arthas', 'diagnostics'),
         ('/api/inspect', 'inspection'), ('/api/clear_slow_sql_logs', 'inspection'),

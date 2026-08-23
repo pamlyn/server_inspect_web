@@ -9,6 +9,8 @@
         { permission: 'sql_inspect', type: 'sql_inspect', icon: 'fa-search', title: '数据稽查', text: '执行专项一致性检查' },
         { permission: 'custom_sql', type: 'custom_inspect', icon: 'fa-code', title: '自定义 SQL', text: '运行已授权脚本' },
         { permission: 'config_basic_alert', type: 'config', icon: 'fa-cog', title: '系统配置', text: '调整巡检与告警策略' },
+        { permission: 'pg_config', type: 'pg_config', icon: 'fa-database', title: 'PG 配置', text: '管理 PostgreSQL 连接' },
+        { adminOnly: true, type: 'user_permission', icon: 'fa-users', title: '人员与权限', text: '管理人员、角色与授权' },
     ];
 
     function byId(id) { return document.getElementById(id); }
@@ -34,25 +36,50 @@
     function renderResourceChart(samples) {
         const container = byId('homeResourceChart');
         if (!container) return;
-        if (!samples.length) { container.innerHTML = '<div class="home-empty"><i class="fa fa-line-chart"></i><span>暂无可用的资源历史数据</span></div>'; return; }
+        if (!samples.length) {
+            container.innerHTML = '<div class="home-empty"><i class="fa fa-line-chart"></i><span>暂无可用的资源历史数据</span></div>';
+            const insights = byId('homeResourceInsights');
+            if (insights) insights.innerHTML = '';
+            return;
+        }
         const width = 680, height = 210, padding = { top: 18, right: 12, bottom: 28, left: 34 };
         const points = key => samples.map((item, index) => ({ x: padding.left + index * (width - padding.left - padding.right) / Math.max(1, samples.length - 1), y: padding.top + (100 - Math.max(0, Math.min(100, Number(item[key]) || 0))) * (height - padding.top - padding.bottom) / 100 })).filter(point => Number.isFinite(point.y));
         const polyline = key => points(key).map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
         const ticks = [0, 50, 100].map(value => { const y = padding.top + (100 - value) * (height - padding.top - padding.bottom) / 100; return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/><text x="2" y="${y + 4}">${value}%</text>`; }).join('');
         const first = samples[0]?.time, last = samples[samples.length - 1]?.time;
-        container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="CPU 与内存使用率趋势"><g class="home-chart-grid">${ticks}</g><polyline class="home-chart-line home-chart-line--cpu" points="${polyline('cpu')}"></polyline><polyline class="home-chart-line home-chart-line--memory" points="${polyline('memory')}"></polyline><text class="home-chart-time" x="${padding.left}" y="${height - 7}">${escapeHtml(formatTime(first))}</text><text class="home-chart-time" text-anchor="end" x="${width - padding.right}" y="${height - 7}">${escapeHtml(formatTime(last))}</text></svg><div class="home-chart-legend"><span><b class="home-chart-legend__cpu"></b>CPU</span><span><b class="home-chart-legend__memory"></b>内存</span><span>${samples.length} 个样本</span></div>`;
+        const metricSamples = key => samples.map(sample => ({ value: Number(sample[key]), time: sample.time })).filter(sample => Number.isFinite(sample.value));
+        const cpuSamples = metricSamples('cpu'), memorySamples = metricSamples('memory');
+        const average = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+        const maximumSample = values => values.length ? values.reduce((highest, item) => item.value > highest.value ? item : highest) : null;
+        const minimumSample = values => values.length ? values.reduce((lowest, item) => item.value < lowest.value ? item : lowest) : null;
+        const metricText = value => value === null || value === undefined ? '--' : `${value.toFixed(1)}%`;
+        const insight = (title, icon, samplesForMetric, accent) => {
+            const values = samplesForMetric.map(item => item.value);
+            const current = samplesForMetric.at(-1), peak = maximumSample(samplesForMetric), low = minimumSample(samplesForMetric);
+            const mean = average(values), spread = peak && low ? peak.value - low.value : null;
+            const health = peak?.value >= 90 ? ['需要关注', 'is-critical'] : peak?.value >= 75 ? ['存在波动', 'is-warning'] : ['运行平稳', 'is-success'];
+            return `<article class="home-resource-insight home-resource-insight--${accent}"><header><span class="home-resource-insight__icon"><i class="fa ${icon}"></i></span><div><p>${title} 洞察</p><strong class="${health[1]}">${health[0]}</strong></div></header><div class="home-resource-insight__metrics"><div><span>当前</span><b>${metricText(current?.value)}</b></div><div><span>均值</span><b>${metricText(mean)}</b></div><div><span>峰值</span><b>${metricText(peak?.value)}</b></div><div><span>低值</span><b>${metricText(low?.value)}</b></div></div><footer><span>波动范围 ${metricText(spread)}</span><span>峰值于 ${escapeHtml(formatTime(peak?.time))}</span></footer></article>`;
+        };
+        container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="CPU 与内存使用率趋势"><g class="home-chart-grid">${ticks}</g><polyline class="home-chart-line home-chart-line--cpu" points="${polyline('cpu')}"></polyline><polyline class="home-chart-line home-chart-line--memory" points="${polyline('memory')}"></polyline><text class="home-chart-time" x="${padding.left}" y="${height - 7}">${escapeHtml(formatTime(first))}</text><text class="home-chart-time" text-anchor="end" x="${width - padding.right}" y="${height - 7}">${escapeHtml(formatTime(last))}</text></svg><div class="home-chart-legend"><span><b class="home-chart-legend__cpu"></b>CPU</span><span><b class="home-chart-legend__memory"></b>内存</span><span>${samples.length} 个样本</span><span class="home-chart-window">${escapeHtml(formatTime(first))} 至 ${escapeHtml(formatTime(last))}</span></div>`;
+        const insights = byId('homeResourceInsights');
+        if (insights) insights.innerHTML = `${insight('CPU', 'fa-microchip', cpuSamples, 'cpu')}${insight('内存', 'fa-braille', memorySamples, 'memory')}`;
     }
     function renderActions(permissions) {
         const container = byId('homeQuickActions');
         if (!container) return;
-        const actions = ACTIONS.filter(action => permissions.includes(action.permission));
-        container.innerHTML = actions.length ? actions.map(action => `<button type="button" data-home-open="${action.type}"><i class="fa ${action.icon}"></i><span><strong>${action.title}</strong><small>${action.text}</small></span><em class="fa fa-angle-right"></em></button>`).join('') : '<div class="home-empty home-empty--compact"><i class="fa fa-lock"></i><span>当前账号暂无可执行操作</span></div>';
+        const actions = ACTIONS.filter(action => action.adminOnly ? window.authAccess?.is_admin === true : permissions.includes(action.permission));
+        container.innerHTML = actions.length ? actions.map(action => `<button type="button" class="home-quick-action" data-home-open="${action.type}"><i class="fa ${action.icon}"></i><span><strong>${action.title}</strong><small>${action.text}</small></span></button>`).join('') : '<div class="home-empty home-empty--compact"><i class="fa fa-lock"></i><span>当前账号暂无可执行操作</span></div>';
     }
     function renderLogs(logs) {
         const container = byId('homeRecentLogs');
         if (!container) return;
         if (!logs.length) { container.innerHTML = '<div class="home-empty home-empty--compact"><i class="fa fa-clock-o"></i><span>暂无巡检记录</span></div>'; return; }
-        container.innerHTML = logs.map(log => { const meta = STATUS_META[log.status] || ['未知', 'home-status--unknown']; return `<button type="button" class="home-log-row" data-home-open="logs"><span class="home-log-status ${meta[1]}"></span><span><strong>${escapeHtml(log.type_label || log.inspection_type || '巡检')}</strong><small>${escapeHtml(log.target_label || '服务器')} · ${escapeHtml(formatTime(log.start_time))}</small></span><b>${meta[0]}</b></button>`; }).join('');
+        container.innerHTML = logs.map(log => {
+            const meta = STATUS_META[log.status] || ['未知', 'home-status--unknown'];
+            const source = log.source_label || log.trigger_source || '未知来源';
+            const operator = log.operator || '系统';
+            return `<button type="button" class="home-inspection-row" data-home-open="logs"><span class="home-inspection-row__status ${meta[1]}"><i></i>${meta[0]}</span><span><strong>${escapeHtml(log.type_label || log.inspection_type || '巡检')}</strong><small>${escapeHtml(log.target_label || log.target || '服务器')}</small></span><span><strong>${escapeHtml(source)}</strong><small>${escapeHtml(operator)}</small></span><span class="home-inspection-row__summary"><strong>${escapeHtml(log.target_label || log.target || '服务器')}</strong><small>${escapeHtml(log.summary || '无摘要信息')}</small></span><span><strong>${escapeHtml(formatTime(log.start_time))}</strong></span><span><strong>${escapeHtml(log.duration || '--')}</strong></span></button>`;
+        }).join('');
     }
     function renderSevenDaySummary(summary) {
         const counts = summary.counts || {};
@@ -106,14 +133,38 @@
         const permissions = access?.permissions || [];
         if (!permissions.includes('dashboard')) return;
         renderActions(permissions);
-        if (!permissions.includes('logs')) { setHealth('', '当前账号无日志查看权限'); showSevenDaySummaryUnavailable('当前账号无巡检统计查看权限'); setUpdated('已按权限加载'); return; }
         try {
-            const [samples, status] = await Promise.all([loadResource(), loadLogs(), loadSevenDaySummary()]);
-            setHealth(status === 'critical' || status === 'error' ? 'critical' : status === 'warning' ? 'warning' : samples ? 'success' : '', status ? '依据最近巡检与资源数据' : '等待首条巡检记录');
+            const response = await fetch('/api/logs/dashboard');
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || '运行总览数据加载失败');
+            const samples = data.resource?.samples || [];
+            const cpu = latestMetric(samples, 'cpu'), memory = latestMetric(samples, 'memory');
+            setText('homeCpuValue', cpu ? `${Number(cpu.cpu).toFixed(1)}%` : '--');
+            setText('homeCpuDetail', cpu ? `采样于 ${formatTime(cpu.time)}` : '暂无 CPU 样本');
+            setText('homeMemoryValue', memory ? `${Number(memory.memory).toFixed(1)}%` : '--');
+            setText('homeMemoryDetail', memory ? `采样于 ${formatTime(memory.time)}` : '暂无内存样本');
+            setText('homeResourceSource', data.resource?.source === 'continuous_database' ? '连续采集' : data.resource?.source === 'continuous_local' ? '本地采集' : '巡检记录');
+            renderResourceChart(samples);
+            const logs = data.logs || {};
+            const recent = logs.recent || [];
+            const status = recent[0]?.status;
+            const meta = STATUS_META[status] || ['暂无记录', ''];
+            setText('homeLatestStatus', meta[0]);
+            setText('homeLatestDetail', recent[0] ? `${recent[0].type_label || '巡检'} · ${formatTime(recent[0].start_time)}` : '暂无巡检记录');
+            renderLogs(recent);
+            if (logs.summary) renderSevenDaySummary(logs.summary);
+            else showSevenDaySummaryUnavailable('日志库未启用或暂无可用记录');
+            setHealth(status === 'critical' || status === 'error' ? 'critical' : status === 'warning' ? 'warning' : samples.length ? 'success' : '', status ? '依据最近巡检与资源数据' : '等待首条巡检记录');
             setUpdated(`更新于 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`);
         } catch (error) { setHealth('', error.message); showSevenDaySummaryUnavailable(error.message); setUpdated('数据暂不可用'); }
     }
-    function openHomeTarget(type) { if (type) window.openWorkspaceType?.(type); }
+    function openHomeTarget(type) {
+        if (type === 'logs' && !window.authAccess?.permissions?.includes('logs')) {
+            showToast('当前账号没有巡检日志权限', 'warning');
+            return;
+        }
+        if (type) window.openWorkspaceType?.(type);
+    }
     document.addEventListener('DOMContentLoaded', () => {
         byId('refreshHomeDashboard')?.addEventListener('click', loadHomeDashboard);
         document.addEventListener('click', event => { const button = event.target.closest('[data-home-open]'); if (button) openHomeTarget(button.dataset.homeOpen); });

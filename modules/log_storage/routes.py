@@ -8,7 +8,7 @@ record_inspection_log 调用，本模块仅负责读取与解析展示。
 from flask import Blueprint, jsonify, request, send_file
 import datetime
 
-from modules.auth.helpers import login_required
+from modules.auth.helpers import login_required, permission_required
 from modules.config_mgmt.helpers import get_config
 from modules.log_storage.helpers import (
     _get_log_db_config, query_inspection_logs, get_inspection_summary, export_inspection_logs,
@@ -98,6 +98,65 @@ def list_logs():
         return jsonify({'success': False, 'error': f'查询日志失败: {e}',
                         'logs': [], 'total': 0}), 500
 
+
+@log_bp.route('/dashboard', methods=['GET'])
+@login_required
+@permission_required('dashboard')
+def dashboard_data():
+    """返回运行总览所需的精简资源和巡检摘要，不开放完整日志内容。"""
+    monitoring = get_config('resourceHistoryMonitoring', {}) or {}
+    collection_interval_seconds = max(30, int(monitoring.get('interval_seconds', 60)))
+    start_time = datetime.datetime.now() - datetime.timedelta(hours=24)
+    resource_samples = []
+    resource_source = 'none'
+    log_cfg = _get_log_db_config()
+    try:
+        if log_cfg is not None:
+            db_type, db_config = log_cfg
+            try:
+                resource_samples = get_continuous_resource_history(db_type, db_config, start_time, max_points=50000)
+            except Exception as error:
+                print(f'运行总览连续资源数据库读取失败，回退本地存储: {error}')
+            if resource_samples:
+                resource_source = 'continuous_database'
+        if not resource_samples:
+            from modules.resource_metrics.local_storage import get_resource_history as get_local_resource_history
+            resource_samples = get_local_resource_history(start_time, max_points=50000)
+            if resource_samples:
+                resource_source = 'continuous_local'
+        if not resource_samples and log_cfg is not None:
+            resource_samples = get_resource_history(db_type, db_config, start_time, max_points=50000)
+            if resource_samples:
+                resource_source = 'inspection_log_fallback'
+        bucket_seconds = max(collection_interval_seconds, 60)
+        resource_samples = aggregate_resource_samples(resource_samples, bucket_seconds)
+    except Exception as error:
+        print(f'运行总览资源数据读取失败: {error}')
+        resource_samples = []
+        resource_source = 'none'
+
+    logs = {'available': False, 'recent': [], 'summary': None}
+    if log_cfg is not None:
+        try:
+            db_type, db_config = log_cfg
+            recent, _ = query_inspection_logs(db_type, db_config, page=1, page_size=5)
+            for log in recent:
+                _enrich_log_labels(_serialize_log_datetimes(log))
+            logs = {
+                'available': True,
+                'recent': recent,
+                'summary': get_inspection_summary(
+                    db_type, db_config, datetime.datetime.now() - datetime.timedelta(days=7)
+                ),
+            }
+        except Exception as error:
+            print(f'运行总览巡检摘要读取失败: {error}')
+
+    return jsonify({
+        'success': True,
+        'resource': {'samples': resource_samples, 'source': resource_source},
+        'logs': logs,
+    })
 
 @log_bp.route('/summary', methods=['GET'])
 @login_required

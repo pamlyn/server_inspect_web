@@ -26,15 +26,15 @@
         <article class="home-status-card"><span class="home-status-card__icon"><i class="fa fa-braille"></i></span><div><p>内存使用率</p><strong id="homeMemoryValue">--</strong><small id="homeMemoryDetail">等待资源样本</small></div></article>
         <article class="home-status-card"><span class="home-status-card__icon"><i class="fa fa-history"></i></span><div><p>最近巡检</p><strong id="homeLatestStatus">--</strong><small id="homeLatestDetail">等待巡检记录</small></div></article>
     </div>
+    <section id="homeResourceInsights" class="home-resource-insights" aria-label="资源洞察"></section>
     <section class="home-inspection-summary" aria-label="近七天巡检统计">
         <div class="home-inspection-summary__title"><div><p class="page-kicker">7 DAY INSPECTION SUMMARY</p><h3>近 7 天巡检统计</h3></div><button type="button" class="home-panel-link" data-home-open="logs">查看日志<i class="fa fa-arrow-right"></i></button></div>
         <div class="home-inspection-summary__metrics"><div><span>巡检次数</span><strong id="homeSevenDayTotal">--</strong><small>近 7 天已完成记录</small></div><div class="is-abnormal"><span>异常次数</span><strong id="homeSevenDayAbnormal">--</strong><small>告警、严重与失败</small></div><div><span>异常占比</span><strong id="homeSevenDayRate">--</strong><small>异常 / 巡检总数</small></div></div>
         <div id="homeSevenDayBreakdown" class="home-inspection-summary__breakdown" aria-live="polite"><span>正在加载状态分布</span></div>
     </section>
     <div class="home-dashboard-grid">
-        <article class="home-panel home-resource-panel"><header><div><p class="page-kicker">RESOURCE PULSE</p><h3>近 24 小时资源趋势</h3></div><span id="homeResourceSource" class="home-panel__meta">加载中</span></header><div id="homeResourceChart" class="home-resource-chart" aria-live="polite"><div class="home-empty"><i class="fa fa-line-chart"></i><span>正在加载资源趋势</span></div></div></article>
+        <article class="home-panel home-resource-panel"><header><div><p class="page-kicker">RESOURCE PULSE</p><h3>近 24 小时资源趋势</h3></div><span id="homeResourceSource" class="home-panel__meta">加载中</span></header><div id="homeResourceChart" class="home-resource-chart" aria-live="polite"><div class="home-empty"><i class="fa fa-line-chart"></i><span>正在加载资源趋势</span></div></div><section class="home-recent-inspections"><header><div><p class="page-kicker">RECENT ACTIVITY</p><h3>最近巡检</h3></div><button type="button" class="home-panel-link" data-home-open="logs">查看全部<i class="fa fa-arrow-right"></i></button></header><div class="home-recent-inspections__head"><span>状态</span><span>巡检内容</span><span>来源 / 执行人</span><span>目标与摘要</span><span>开始时间</span><span>耗时</span></div><div id="homeRecentLogs" class="home-recent-inspections__list"><div class="home-empty home-empty--compact"><i class="fa fa-clock-o"></i><span>正在加载巡检记录</span></div></div></section></article>
         <article class="home-panel home-actions-panel"><header><div><p class="page-kicker">QUICK ACTIONS</p><h3>快捷操作</h3></div></header><div id="homeQuickActions" class="home-quick-actions"></div></article>
-        <article class="home-panel home-recent-panel"><header><div><p class="page-kicker">RECENT ACTIVITY</p><h3>最近巡检</h3></div><button type="button" class="home-panel-link" data-home-open="logs">查看全部<i class="fa fa-arrow-right"></i></button></header><div id="homeRecentLogs" class="home-recent-logs"><div class="home-empty"><i class="fa fa-clock-o"></i><span>正在加载巡检记录</span></div></div></article>
     </div>
 </section>
 
