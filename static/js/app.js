@@ -17,19 +17,12 @@ function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
+    const toastType = ['success', 'warning', 'error'].includes(type) ? type : 'info';
     const toast = document.createElement('div');
-    toast.className = `flex items-center px-4 py-3 rounded-lg shadow-lg backdrop-blur-sm transform transition-all duration-300 fade-in min-w-[280px] max-w-[400px] ${type === 'success' ? 'bg-green-50 border border-green-200' :
-        type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
-            type === 'error' ? 'bg-red-50 border border-red-200' :
-                'bg-blue-50 border border-blue-200'
-        }`;
+    toast.className = `toast toast--${toastType} flex items-center px-4 py-3 rounded-lg shadow-lg backdrop-blur-sm transform transition-all duration-300 fade-in min-w-[280px] max-w-[400px]`;
 
     const icon = document.createElement('i');
-    icon.className = `mr-3 text-lg ${type === 'success' ? 'text-green-500' :
-        type === 'warning' ? 'text-yellow-500' :
-            type === 'error' ? 'text-red-500' :
-                'text-blue-500'
-        }`;
+    icon.className = 'toast__icon mr-3 text-lg';
     icon.className += ` fa ${type === 'success' ? 'fa-check-circle' :
         type === 'warning' ? 'fa-exclamation-circle' :
             type === 'error' ? 'fa-times-circle' :
@@ -37,15 +30,11 @@ function showToast(message, type = 'info', duration = 3000) {
         }`;
 
     const text = document.createElement('span');
-    text.className = `${type === 'success' ? 'text-green-800' :
-        type === 'warning' ? 'text-yellow-800' :
-            type === 'error' ? 'text-red-800' :
-                'text-blue-800'
-        } text-sm font-medium`;
+    text.className = 'toast__message text-sm font-medium';
     text.textContent = message;
 
     const closeBtn = document.createElement('button');
-    closeBtn.className = 'ml-auto text-gray-400 hover:text-gray-600 transition-colors';
+    closeBtn.className = 'toast__close ml-auto transition-colors';
     closeBtn.innerHTML = '<i class="fa fa-times"></i>';
     closeBtn.onclick = () => toast.remove();
 

@@ -430,7 +430,18 @@ tbody tr:hover { background:#fafbff; }
 .inspection-running .app-shell > aside .inspect-btn:disabled,
 .inspection-running #clearLogsBtn:disabled { pointer-events:none; opacity:.42; cursor:not-allowed; filter:saturate(.55); }
 .inspection-running .app-shell > aside .inspect-btn:disabled:hover { background:transparent !important; color:inherit !important; }
-#toastContainer > div { border-radius:12px; box-shadow:0 14px 30px rgba(15,23,42,.16); }
+/* 提示框使用独立状态类，避免深色主题覆盖 Tailwind 文本色后出现低对比度。 */
+#toastContainer > .toast { border:1px solid; border-radius:12px; box-shadow:0 14px 30px rgba(15,23,42,.16); }
+.toast__icon { flex:0 0 auto; }.toast__message { color:inherit; }.toast__close { flex:0 0 auto; margin-left:auto; color:currentColor; opacity:.68; }.toast__close:hover { opacity:1; }
+.toast--success { color:#166534; background:#f0fdf4; border-color:#bbf7d0; }.toast--success .toast__icon { color:#16a34a; }
+.toast--warning { color:#92400e; background:#fffbeb; border-color:#fde68a; }.toast--warning .toast__icon { color:#d97706; }
+.toast--error { color:#9f1239; background:#fff1f2; border-color:#fecdd3; }.toast--error .toast__icon { color:#e11d48; }
+.toast--info { color:#1e40af; background:#eff6ff; border-color:#bfdbfe; }.toast--info .toast__icon { color:#2563eb; }
+.style-midnight #toastContainer > .toast { box-shadow:0 14px 30px rgba(0,0,0,.46); }
+.style-midnight .toast--success { color:#bbf7d0; background:#173126; border-color:#2f7652; }.style-midnight .toast--success .toast__icon { color:#86efac; }
+.style-midnight .toast--warning { color:#fef3c7; background:#382d19; border-color:#856526; }.style-midnight .toast--warning .toast__icon { color:#fcd34d; }
+.style-midnight .toast--error { color:#fecdd3; background:#3b2530; border-color:#844253; }.style-midnight .toast--error .toast__icon { color:#fda4af; }
+.style-midnight .toast--info { color:#dbeafe; background:#1c304d; border-color:#38699a; }.style-midnight .toast--info .toast__icon { color:#93c5fd; }
 .shadow-lg { box-shadow:var(--shadow); }
 /* Login */
 .login-body { min-height:100vh; display:grid; place-items:center; position:relative; overflow:hidden; padding:28px; background:#121a2d; }
