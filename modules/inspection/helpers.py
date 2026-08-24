@@ -52,6 +52,15 @@ def execute_sql(database_type, config, sql):
 
         cursor = conn.cursor()
         cursor.execute(sql)
+
+        # UPDATE/INSERT/DELETE/DDL 不会生成结果集，cursor.description 为 None。
+        # 统一返回可供现有表格、导出及巡检调用方消费的结果，避免迭代 None，
+        # 并显式提交事务，确保手工执行的变更真正生效。
+        if cursor.description is None:
+            affected_rows = max(cursor.rowcount, 0)
+            conn.commit()
+            return ['受影响行数'], [[affected_rows]]
+
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()
 
