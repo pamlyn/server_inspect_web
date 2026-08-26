@@ -5,7 +5,7 @@ HARBOR_PROJECT="server_inspect"
 HARBOR_USER="jack"
 HARBOR_PASSWORD="Jack_2023"
 IMAGE_NAME="server_inspect_web"
-IMAGE_TAG="1.4.3"
+IMAGE_TAG="1.4.3.1"
 FULL_IMAGE_NAME="${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "===================================="
@@ -52,7 +52,35 @@ echo "      移除 --pull 以避免基础镜像源不可达时元数据拉取失
 # 目标架构：amd64（兼容 x86_64 Linux 服务器）
 TARGET_PLATFORM="linux/amd64"
 echo "目标架构: ${TARGET_PLATFORM}"
-docker build --platform ${TARGET_PLATFORM} --no-cache -t ${FULL_IMAGE_NAME} .
+
+# 基础镜像默认用本地标签，不联网查元数据（公共镜像源经常挂，挂了就卡在第一层）。
+# 想换源直接 BASE_IMAGE=xxx sh push_image.sh
+BASE_IMAGE="${BASE_IMAGE:-python-base:3.12.9-slim-amd64}"
+echo "基础镜像: ${BASE_IMAGE}"
+# 本地没有这个标签就先说清楚怎么补，别让用户去猜 BuildKit 那句 load metadata 报错。
+if ! docker image inspect "${BASE_IMAGE}" >/dev/null 2>&1; then
+    echo "错误: 本地找不到基础镜像 ${BASE_IMAGE}"
+    echo "      补齐办法（任选其一）："
+    echo "      1) 已有其他 tag 的 amd64 python:3.12.9-slim，直接改名："
+    echo "         docker tag <已有的镜像> ${BASE_IMAGE}"
+    echo "      2) 从能访问的源拉一份 amd64 的："
+    echo "         docker pull --platform linux/amd64 python:3.12.9-slim && \\"
+    echo "         docker tag python:3.12.9-slim ${BASE_IMAGE}"
+    echo "      3) 临时指定别的基础镜像：BASE_IMAGE=<镜像> sh push_image.sh"
+    exit 1
+fi
+# 基础镜像架构必须跟目标架构一致，否则构建出来的镜像在服务器上起不来（exec format error）。
+BASE_ARCH=$(docker image inspect "${BASE_IMAGE}" --format '{{.Os}}/{{.Architecture}}' 2>/dev/null)
+if [ "${BASE_ARCH}" != "${TARGET_PLATFORM}" ]; then
+    echo "错误: 基础镜像架构是 ${BASE_ARCH}，跟目标 ${TARGET_PLATFORM} 不一致"
+    echo "      拿它构建出来的镜像在 x86 服务器上会报 exec format error。"
+    echo "      请换一份 ${TARGET_PLATFORM} 的基础镜像（见上面第 2 条）。"
+    exit 1
+fi
+
+docker build --platform ${TARGET_PLATFORM} --no-cache \
+    --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+    -t ${FULL_IMAGE_NAME} .
 if [ $? -ne 0 ]; then
     echo "错误: 镜像构建失败"
     exit 1

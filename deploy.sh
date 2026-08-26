@@ -17,7 +17,7 @@
 set -e
 
 # -------------------- 配置 --------------------
-IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.4.3"
+IMAGE_NAME="harbor.chinajack.com:44330/server_inspect/server_inspect_web:1.4.3.1"
 CONTAINER_NAME="server_inspect_web"
 HOST_PORT="59496"
 
@@ -102,11 +102,42 @@ init_config() {
         fi
     fi
 
+    # 自定义看板：必须在宿主机先建出文件，才能按文件挂进容器。
+    # 不预建的话，容器只往自己的可写层写，docker rm 之后配好的看板就没了。
+    if [ ! -f "${CONFIG_DIR}/custom_dashboards.json" ]; then
+        if [ -f "${SCRIPT_DIR}/config/custom_dashboards.json.example" ]; then
+            cp "${SCRIPT_DIR}/config/custom_dashboards.json.example" "${CONFIG_DIR}/custom_dashboards.json"
+            log_success "已创建自定义看板配置: ${CONFIG_DIR}/custom_dashboards.json"
+        else
+            echo '{"dashboards": []}' > "${CONFIG_DIR}/custom_dashboards.json"
+            log_success "已创建自定义看板配置: ${CONFIG_DIR}/custom_dashboards.json"
+        fi
+    fi
+
+    # 看板背景图/视频存目录，不是单文件，所以挂目录。
+    # 空目录也要先建：docker -v 遇到宿主机不存在的路径会当目录自动建（root 属主），
+    # 但那样容器里的进程可能写不进去，不如这里按当前用户建好。
+    if [ ! -d "${CONFIG_DIR}/dashboard_assets" ]; then
+        mkdir -p "${CONFIG_DIR}/dashboard_assets"
+        log_success "已创建看板素材目录: ${CONFIG_DIR}/dashboard_assets/"
+    fi
+
+    # 用户与角色：没有 example，也不能预填内容——
+    # 应用首次启动时会自己按内置 admin 生成，这里塞个空 JSON 反而会被当成「已初始化、零用户」，
+    # 结果谁都登不进去。所以只建空文件占位，让挂载能成立，内容交给应用写。
+    if [ ! -f "${CONFIG_DIR}/auth_users.json" ]; then
+        : > "${CONFIG_DIR}/auth_users.json"
+        log_success "已创建用户角色文件: ${CONFIG_DIR}/auth_users.json（内容由系统首次启动时生成）"
+    fi
+
     log_success "配置文件初始化完成"
     echo ""
     echo "配置文件位置: ${CONFIG_DIR}/"
     echo "  - config.json: 主配置文件"
     echo "  - custom_scripts.json: 自定义脚本"
+    echo "  - custom_dashboards.json: 自定义看板"
+    echo "  - auth_users.json: 用户与角色"
+    echo "  - dashboard_assets/: 看板背景素材"
     echo ""
 }
 
@@ -354,6 +385,22 @@ start_container() {
             DOCKER_CMD="${DOCKER_CMD} \
                 -v ${CONFIG_DIR}/config.json:/app/config/config.json \
                 -v ${CONFIG_DIR}/custom_scripts.json:/app/config/custom_scripts.json"
+            # 看板与用户角色也要挂出来，否则只存在于容器可写层，docker rm 之后就没了
+            # （这就是「重新部署后配好的看板不见了」的原因）。
+            # 逐个判存在再挂：init_config 已经建好了，但老部署可能缺文件，
+            # 挂一个宿主机不存在的路径 docker 会当目录建出来，反而让应用读文件失败。
+            if [ -f "${CONFIG_DIR}/custom_dashboards.json" ]; then
+                DOCKER_CMD="${DOCKER_CMD} \
+                    -v ${CONFIG_DIR}/custom_dashboards.json:/app/config/custom_dashboards.json"
+            fi
+            if [ -f "${CONFIG_DIR}/auth_users.json" ]; then
+                DOCKER_CMD="${DOCKER_CMD} \
+                    -v ${CONFIG_DIR}/auth_users.json:/app/config/auth_users.json"
+            fi
+            if [ -d "${CONFIG_DIR}/dashboard_assets" ]; then
+                DOCKER_CMD="${DOCKER_CMD} \
+                    -v ${CONFIG_DIR}/dashboard_assets:/app/config/dashboard_assets"
+            fi
         fi
 
         # 添加 Cookies 文件（如果存在）

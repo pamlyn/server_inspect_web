@@ -22,13 +22,18 @@ script_id_counter = 1
 
 
 def load_scripts():
-    """从文件加载脚本"""
-    global custom_scripts, script_id_counter
+    """从文件加载脚本。
+
+    始终就地替换列表内容（`custom_scripts[:] = ...`）而不是重新赋值：
+    routes 层和自定义看板模块都用 `from helpers import custom_scripts`
+    持有同一个列表对象，重新赋值会让它们停留在旧列表上。
+    """
+    global script_id_counter
     if os.path.exists(SCRIPTS_FILE):
         try:
             with open(SCRIPTS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                custom_scripts = data.get('scripts', [])
+                custom_scripts[:] = data.get('scripts', [])
                 script_id_counter = data.get('next_id', 1)
         except Exception as e:
             print(f"加载脚本失败: {e}")

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if dashboard %}{{ dashboard.name }}{% else %}看板{% endif %} - {{ project_name or '服务器巡检系统' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260826-table-marquee" rel="stylesheet">
+</head>
+<body class="dash-standalone-body">
+{% if denied %}
+    <div class="dash-standalone-denied">
+        <div class="dash-empty-icon"><i class="fa fa-lock"></i></div>
+        <h1>{{ denied }}</h1>
+        <p>如果需要访问，请联系管理员开通「自定义看板」权限。</p>
+        <a href="{{ url_for('auth.index') }}" class="dash-hero-btn"><i class="fa fa-arrow-left mr-1.5"></i>返回主界面</a>
+    </div>
+{% else %}
+    {# 浅色主题下舞台文字要换成深色，加 is-light 让 CSS 里那组覆盖生效 #}
+    {# 看板名称的字号档挂在舞台上（CSS 变量要给标题继承）；手填像素和颜色走内联变量。
+       这些值都经过后端 normalize_dashboard 的白名单/正则，才敢拼进 class 和 style。 #}
+    <div id="standaloneRoot"
+         class="dash-stage dash-theme-{{ dashboard.theme or 'aurora' }}{% if dashboard.theme in light_themes %} is-light{% endif %}{% if dashboard.name_size and dashboard.name_size != 'md' %} is-name-{{ dashboard.name_size }}{% endif %}"
+         data-dashboard-id="{{ dashboard.id }}"
+         data-refresh="{{ dashboard.refresh_seconds or 0 }}"
+         style="{% if dashboard.bg_image %}--dash-bg-image:url('{{ url_for('custom_dashboards.serve_dashboard_asset', asset_id=dashboard.bg_image) }}');--dash-bg-blur:{{ dashboard.bg_blur or 0 }}px;--dash-dim:{{ (dashboard.bg_dim or 0) / 100 }};{% endif %}{% if dashboard.name_px %}--stage-name-px:{{ dashboard.name_px }}px;{% endif %}{% if dashboard.name_color %}--stage-name-color:{{ dashboard.name_color }};{% endif %}">
+        <!-- 背景层：网格渐变 + 光斑 + 细网格，纯 CSS，不额外请求。
+             传了背景图时再压一层图 + 黑纱（图太亮文字会看不清）。 -->
+        <div class="dash-stage-bg" aria-hidden="true">
+            <span class="dash-stage-mesh"></span>
+            <span class="dash-stage-orb dash-stage-orb-1"></span>
+            <span class="dash-stage-orb dash-stage-orb-2"></span>
+            {% if dashboard.bg_image %}
+            {% if bg_is_video %}
+            {# 动态背景：muted + playsinline 是自动播放的硬条件，带声音的视频浏览器一律拦下来。
+               loop 让它一直循环，preload=auto 避免第一圈播到一半才缓冲。
+               看板是挂着长时间不动的，所以不给控制条也不需要交互。 #}
+            <video class="dash-stage-video{% if dashboard.bg_fit == 'contain' %} is-contain{% endif %}"
+                   src="{{ url_for('custom_dashboards.serve_dashboard_asset', asset_id=dashboard.bg_image) }}"
+                   autoplay muted loop playsinline preload="auto" tabindex="-1" aria-hidden="true"></video>
+            {% else %}
+            <span class="dash-stage-photo{% if dashboard.bg_fit == 'contain' %} is-contain{% elif dashboard.bg_fit == 'tile' %} is-tile{% endif %}"></span>
+            {% endif %}
+            <span class="dash-stage-veil"></span>
+            {% endif %}
+        </div>
+
+        <header class="dash-stage-head">
+            {# 位置类挂在标题这一列上，不挂 h1：居中/靠右要先让这一列撑开，
+               只给 h1 加 text-align 是没用的（它的父列是自然宽度）。 #}
+            <div class="min-w-0 dash-stage-headline{% if dashboard.name_align and dashboard.name_align != 'left' %} is-name-{{ dashboard.name_align }}{% endif %}">
+                <div class="dash-stage-crumb">
+                    {% if is_anonymous %}
+                    <span>{{ project_name or '服务器巡检系统' }}</span>
+                    {% else %}
+                    <a href="{{ url_for('auth.index') }}">{{ project_name or '服务器巡检系统' }}</a>
+                    {% endif %}
+                    <i class="fa fa-angle-right"></i>
+                    <span>自定义看板</span>
+                </div>
+                <h1 class="dash-stage-title">{{ dashboard.name }}</h1>
+                {% if dashboard.description %}
+                <p class="dash-stage-desc">{{ dashboard.description }}</p>
+                {% endif %}
+            </div>
+            <div class="dash-stage-tools">
+                <span id="standaloneStamp" class="dash-stage-stamp"></span>
+                <button type="button" id="standaloneRefresh" class="dash-stage-btn" title="重新执行所有内容块">
+                    <i class="fa fa-refresh"></i><span>刷新</span>
+                </button>
+                <button type="button" id="standaloneCopy" class="dash-stage-btn" title="复制这个看板的地址">
+                    <i class="fa fa-link"></i><span>复制地址</span>
+                </button>
+                <button type="button" id="standaloneFull" class="dash-stage-btn" title="全屏展示（适合挂大屏）">
+                    <i class="fa fa-arrows-alt"></i><span>全屏</span>
+                </button>
+                {# 匿名访客没有主界面可回（点过去只会看到登录页），这个入口就别给了 #}
+                {% if not is_anonymous %}
+                <a href="{{ url_for('auth.index') }}" class="dash-stage-btn" title="返回主界面">
+                    <i class="fa fa-th-large"></i><span>全部看板</span>
+                </a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main id="standaloneGrid" class="dash-grid dash-stage-grid-area"></main>
+
+        <footer class="dash-stage-foot">
+            <span id="standaloneRefreshNote"></span>
+            {# 匿名访客没有账号，这一格显示看板是免登录公开的，提醒配置者别放敏感数据 #}
+            {% if is_anonymous %}
+            <span><i class="fa fa-globe mr-1"></i>免登录看板</span>
+            {% else %}
+            <span>{{ current_user.display_name or current_user.username }}</span>
+            {% endif %}
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/custom_dashboard.js') }}?v=20260826-table-marquee"></script>
+    <script src="{{ url_for('static', filename='js/dashboard_standalone.js') }}?v=20260826-table-marquee"></script>
+{% endif %}
+</body>
+</html>

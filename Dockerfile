@@ -1,4 +1,10 @@
-FROM docker.m.daocloud.io/library/python:3.12.9-slim
+# 基础镜像走 build arg，默认指向本地已缓存的标签。
+# 为何不直接写镜像源地址：原来写死 docker.m.daocloud.io，那个源已经停了（DNS 都不解析），
+# 于是每次构建都倒在第一行「load metadata」上——哪怕本地早就有可用的基础镜像。
+# 不带 registry 前缀的标签 BuildKit 只查本地镜像库，不联网，所以断网也能构建。
+# 换源或升级 Python 版本时不用改这里，构建时传 --build-arg BASE_IMAGE=... 即可。
+ARG BASE_IMAGE=python-base:3.12.9-slim-amd64
+FROM ${BASE_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1

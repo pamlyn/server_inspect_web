@@ -126,8 +126,6 @@ def custom_scripts_api():
 @login_required
 def custom_script_api(script_id):
     """单个自定义脚本管理"""
-    global custom_scripts
-
     script = next((s for s in custom_scripts if s['id'] == script_id), None)
     if not script:
         return jsonify({'error': '脚本不存在'}), 404
@@ -140,7 +138,10 @@ def custom_script_api(script_id):
     if not _can_manage_scripts():
         return _forbidden('仅管理员可编辑或删除自定义SQL脚本')
     elif request.method == 'DELETE':
-        custom_scripts = [s for s in custom_scripts if s['id'] != script_id]
+        # 必须就地删除。`from helpers import custom_scripts` 拿到的是同一个列表对象，
+        # 重新赋值只会改本模块的名字，helpers 和看板模块仍指向旧列表，
+        # 之后新增的脚本在看板里就选不到了。
+        custom_scripts[:] = [s for s in custom_scripts if s['id'] != script_id]
         save_scripts()
         return jsonify({'message': '脚本删除成功'})
     elif request.method == 'PUT':

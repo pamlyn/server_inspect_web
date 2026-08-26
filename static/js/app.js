@@ -305,6 +305,7 @@ function openWorkspaceType(type, button = navigationButtonForType(type)) {
     else if (type === 'config') window.showConfig();
     else if (type === 'sql_inspect') window.showSqlInspect();
     else if (type === 'custom_inspect') window.showCustomInspect();
+    else if (type === 'custom_dashboard') window.showCustomDashboard();
     else if (type === 'logs') window.showLogs();
     else if (type === 'arthas') window.showArthas();
     else if (type === 'user_permission') window.showUserPermission();
@@ -368,6 +369,7 @@ function hideAllContent() {
     const inspectionContent = document.getElementById('inspectionContent');
     const sqlInspectContent = document.getElementById('sqlInspectContent');
     const customInspectContent = document.getElementById('customInspectContent');
+    const customDashboardContent = document.getElementById('customDashboardContent');
     const logContent = document.getElementById('logContent');
     const arthasContent = document.getElementById('arthasContent');
     const pgConfigContent = document.getElementById('pgConfigContent');
@@ -381,6 +383,7 @@ function hideAllContent() {
     if (inspectionContent) inspectionContent.classList.add('hidden');
     if (sqlInspectContent) sqlInspectContent.classList.add('hidden');
     if (customInspectContent) customInspectContent.classList.add('hidden');
+    if (customDashboardContent) customDashboardContent.classList.add('hidden');
     if (logContent) logContent.classList.add('hidden');
     if (arthasContent) arthasContent.classList.add('hidden');
     if (pgConfigContent) pgConfigContent.classList.add('hidden');
@@ -676,3 +679,4 @@ window.setAccentTheme = setAccentTheme;
 window.resetWorkspacePreferences = resetWorkspacePreferences;
 window.applyWorkspacePreferences = applyWorkspacePreferences;
 window.hideAllContent = hideAllContent;
+window.setPageContext = setPageContext;

@@ -1,0 +1,229 @@
+<!-- 自定义看板：本页只做画廊（一个个看板小块）。
+     每个小块是 <a target="_blank">，指向独立地址 /dashboard/<id>，点开就是一个新浏览器窗口。
+     编辑器为向导式弹层，面向非开发人员 -->
+<div id="customDashboardContent" class="hidden workspace-page dashboard-workspace-page">
+
+    <!-- 画廊页：一个个看板小块 -->
+    <div id="dashboardGalleryView" class="dash-gallery-wrap">
+        <div class="dash-hero">
+            <div class="dash-hero-glow" aria-hidden="true"></div>
+            <div class="dash-hero-inner">
+                <div class="min-w-0">
+                    <p class="dash-hero-kicker"><i class="fa fa-th-large mr-1.5"></i>DASHBOARD</p>
+                    <h2 class="dash-hero-title">自定义看板</h2>
+                    <p class="dash-hero-sub">
+                        把已保存的自定义SQL摆成一块看板。选脚本、选列、选展示方式，三步配好，不用写代码。
+                        每个看板都有独立地址，点小块在新窗口打开，也能复制链接分享或收藏。
+                    </p>
+                </div>
+                <div class="dash-hero-actions">
+                    <span id="dashboardCount" class="dash-hero-count">0 个看板</span>
+                    <button type="button" id="dashboardRefreshBtn" class="dash-hero-btn is-ghost" title="重新加载看板列表">
+                        <i class="fa fa-refresh mr-1.5"></i>刷新
+                    </button>
+                    <button type="button" id="dashboardCreateBtn" data-permission="custom_dashboard_manage"
+                        class="dash-hero-btn hidden">
+                        <i class="fa fa-plus mr-1.5"></i>新建看板
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="dashboardCardGrid" class="dash-card-grid">
+            <p class="text-xs text-gray-400 py-6 text-center col-span-full">加载中…</p>
+        </div>
+
+        <div id="dashboardEmpty" class="dash-empty hidden">
+            <div class="dash-empty-icon"><i class="fa fa-th-large"></i></div>
+            <p class="text-sm font-semibold text-gray-600">还没有看板</p>
+            <p class="text-xs text-gray-500 mt-2 max-w-md mx-auto leading-relaxed">
+                看板的数据来自「自定义SQL」里已保存的脚本。先在自定义SQL里存好查询，再回到这里点「新建看板」把它摆上去。
+            </p>
+        </div>
+    </div>
+
+</div>
+
+<!-- 看板编辑器 -->
+<div id="dashboardEditorModal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+    <div class="dash-modal">
+        <div class="dash-modal-head">
+            <div>
+                <h3 id="dashboardEditorTitle" class="text-base font-bold text-gray-800">新建看板</h3>
+                <p class="text-xs text-gray-500 mt-1">按顺序填完就能用，每一项下面都有说明。</p>
+            </div>
+            <button type="button" id="dashboardEditorClose" class="dash-modal-close" aria-label="关闭">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+
+        <div class="dash-modal-body">
+            <!-- 第一步 -->
+            <div class="dash-step">
+                <div class="dash-step-head">
+                    <span class="dash-step-no">1</span>
+                    <span class="text-sm font-semibold text-gray-700">给看板起个名字</span>
+                </div>
+                <div class="dash-field-grid dash-step-fields">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">看板名称 <span class="text-red-400">*</span></label>
+                        <input type="text" id="dashboardNameInput" maxlength="60" placeholder="例如：生产日报总览"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                            style="--tw-ring-color: var(--primary-color);">
+                        <p class="dash-hint">显示在左侧清单里，取一个同事一眼能懂的名字。</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">一句话说明</label>
+                        <input type="text" id="dashboardDescInput" maxlength="120" placeholder="例如：每天早上看当日报工与异常数量"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                            style="--tw-ring-color: var(--primary-color);">
+                        <p class="dash-hint">选填。写清楚这块看板给谁看、看什么。</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">自动刷新</label>
+                        <select id="dashboardRefreshInput"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                            style="--tw-ring-color: var(--primary-color);">
+                            <option value="0">不自动刷新（手动点刷新）</option>
+                            <option value="60">每 1 分钟</option>
+                            <option value="300">每 5 分钟</option>
+                            <option value="900">每 15 分钟</option>
+                            <option value="1800">每 30 分钟</option>
+                            <option value="3600">每 1 小时</option>
+                        </select>
+                        <p class="dash-hint">挂大屏建议 5 分钟；SQL 比较重的看板选长一点，别把数据库压垮。</p>
+                    </div>
+                    <div class="dash-field-wide">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">免登录访问</label>
+                        <label class="dash-public-toggle">
+                            <input type="checkbox" id="dashboardPublicInput">
+                            <span>打开这个看板的地址不需要登录</span>
+                        </label>
+                        <!-- 这是对外开口子，措辞要说清后果，别让人顺手勾上 -->
+                        <p class="dash-hint dash-hint-warn"><i class="fa fa-exclamation-triangle mr-1"></i>勾了之后，任何能访问本系统地址的人都能看到这个看板里的数据，不需要账号。只给挂大屏的电视用，别放敏感数据。其他看板不受影响。</p>
+                        <p id="dashboardPublicUrl" class="dash-hint hidden"></p>
+                    </div>
+                    <div class="dash-field-wide">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">看板名称的样式</label>
+                        <div class="dash-field-grid">
+                            <div>
+                                <label class="dash-sub-label">字号</label>
+                                <select id="dashboardNameSizeInput" data-dash-field="name_size"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                                    style="--tw-ring-color: var(--primary-color);"></select>
+                            </div>
+                            <div>
+                                <label class="dash-sub-label">或直接填像素</label>
+                                <input type="number" id="dashboardNamePxInput" data-dash-field="name_px" min="0" max="200" placeholder="留空按左边的档位"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                                    style="--tw-ring-color: var(--primary-color);">
+                            </div>
+                            <div>
+                                <label class="dash-sub-label">位置</label>
+                                <select id="dashboardNameAlignInput" data-dash-field="name_align"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                                    style="--tw-ring-color: var(--primary-color);"></select>
+                            </div>
+                            <div>
+                                <label class="dash-sub-label">颜色</label>
+                                <!-- 颜色只收十六进制，前后端都过白名单：这个值会被拼进 style 属性 -->
+                                <div class="dash-name-color-row">
+                                    <input type="color" id="dashboardNameColorInput" data-dash-field="name_color" class="dash-name-color-chip" value="#ffffff">
+                                    <button type="button" id="dashboardNameColorClear" class="dash-color-reset">跟随主题</button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="dash-hint">挂大屏、名字要几米外看清就选「超大」或直接填像素。颜色留「跟随主题」时，深色背景用白字、浅色背景自动换深字。</p>
+                    </div>
+                    <div class="dash-field-wide">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">看板背景色</label>
+                        <div id="dashboardThemePicker" class="dash-theme-picker"></div>
+                        <p class="dash-hint">背景只影响看板打开后的样子。下面每一块的文字和数字还能单独换颜色。</p>
+                    </div>
+                    <div class="dash-field-wide">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">背景图（选填）</label>
+                        <!-- 只能选已上传到本机的图，不能填外部图片地址 -->
+                        <div id="dashboardBgPicker"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二步：先摆布局，再逐块配置。
+                 左边一直摆着布局条和预览，右边只显示"当前选中的那一块"的配置，
+                 这样每块的表单有整幅宽度可用，也不用在长列表里上下找。 -->
+            <div class="dash-step">
+                <div class="dash-step-head">
+                    <span class="dash-step-no">2</span>
+                    <span class="text-sm font-semibold text-gray-700">先摆布局，再逐块配置</span>
+                </div>
+                <p class="dash-hint mb-3">先点下面的按钮把要的块都摆上去（这一步不用填任何东西），拖成想要的排布；
+                    然后在布局条里点一块，右边就出它的配置。一块 = 一个自定义SQL脚本的一种展示方式，同一个脚本可以放多块。</p>
+
+                <div class="dash-build">
+                    <div class="dash-build-left">
+                        <div class="dash-add-bar">
+                            <span class="dash-add-label"><i class="fa fa-plus-circle mr-1"></i>添加一块</span>
+                            <div id="dashboardAddTypes" class="dash-add-types"></div>
+                        </div>
+
+                        <!-- 布局条：看板的真实排布缩略图，可拖动换位置、拖右边缘改宽度 -->
+                        <div id="dashboardLayoutBox" class="dash-layout-box hidden">
+                            <div class="dash-layout-head">
+                                <span class="dash-layout-title"><i class="fa fa-arrows mr-1.5"></i>拖动排布局</span>
+                                <span class="dash-layout-tip">按住方块拖动换位置，拖右边缘的竖条改宽度，点一下在右边配置它</span>
+                            </div>
+                            <div id="dashboardLayoutStrip" class="dash-layout-strip"></div>
+                        </div>
+
+                        <!-- 效果预览：用看板页同一套渲染代码 + 试跑拿到的样例数据画一遍 -->
+                        <details id="dashboardPreviewBox" class="dash-vp-box hidden" open>
+                            <summary class="dash-vp-summary">
+                                <i class="fa fa-eye mr-1.5"></i>效果预览
+                                <span class="dash-vp-note">按当前主题、底色、字号画一遍，数据是试跑取回的样例（最多 20 行）</span>
+                            </summary>
+                            <div class="dash-vp-frame">
+                                <div id="dashboardPreviewStage" class="dash-stage dash-vp-stage">
+                                    <div class="dash-stage-bg" aria-hidden="true">
+                                        <span class="dash-stage-mesh"></span>
+                                        <span class="dash-stage-orb dash-stage-orb-1"></span>
+                                        <span class="dash-stage-orb dash-stage-orb-2"></span>
+                                        <span id="dashboardPreviewPhoto" class="dash-stage-photo hidden"></span>
+                                        <!-- 视频背景的预览。和图片各占一个元素，JS 按素材类型只亮一个：
+                                             CSS 的 background-image 放不了视频，必须是真的 <video>。 -->
+                                        <video id="dashboardPreviewVideo" class="dash-stage-video hidden" muted loop autoplay playsinline preload="auto" tabindex="-1" aria-hidden="true"></video>
+                                        <span id="dashboardPreviewVeil" class="dash-stage-veil hidden"></span>
+                                    </div>
+                                    <!-- 必须带 dash-stage-grid-area：看板页的容器就是这个 class，
+                                         区块底色/文字色的兜底规则全挂在它下面。少一个 class
+                                         预览就会走另一套解析，预览和实际长得不一样（曾经的现象）。 -->
+                                    <!-- 预览里也放一行看板名称：名称的字号/颜色/位置是可配的，
+                                         预览里不画就等于配了看不见效果，只能保存后开一次看板才知道。 -->
+                                    <div id="dashboardPreviewHead" class="dash-stage-head dash-vp-head">
+                                        <div class="min-w-0 dash-stage-headline" id="dashboardPreviewHeadline">
+                                            <h1 class="dash-stage-title" id="dashboardPreviewTitle"></h1>
+                                        </div>
+                                    </div>
+                                    <div id="dashboardPreviewGrid" class="dash-grid dash-stage-grid-area dash-vp-grid"></div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="dash-build-right">
+                        <div id="dashboardBlockList">
+                            <p class="dash-build-empty">还没有内容块，点左边的按钮先摆上去。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dash-modal-foot">
+            <span id="dashboardEditorError" class="text-xs text-red-500 flex-1"></span>
+            <button type="button" id="dashboardEditorCancel"
+                class="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium">取消</button>
+            <button type="button" id="dashboardEditorSave"
+                class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium">保存看板</button>
+        </div>
+    </div>
+</div>

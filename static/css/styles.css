@@ -752,3 +752,607 @@ input:focus, select:focus, textarea:focus { box-shadow:0 0 0 3px var(--focus-rin
 .resource-history-panel { margin-bottom:16px; padding:18px; border:1px solid var(--line); border-radius:13px; background:linear-gradient(135deg,color-mix(in srgb,var(--accent-soft) 45%,var(--surface)),var(--surface) 58%); }.resource-history-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }.resource-history-header .page-kicker { margin-bottom:3px; }.resource-history-header h3 { color:var(--ink); font-size:15px; font-weight:700; }.resource-history-header p:last-child { margin-top:3px; color:var(--muted); font-size:12px; }.resource-history-help { display:flex; align-items:center; gap:6px; flex:0 0 auto; margin-top:2px; color:var(--muted); font-size:11px; }.resource-history-help i { color:var(--accent); }.resource-history-charts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }.resource-trend-card { position:relative; min-width:0; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }.resource-trend-title { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--ink); font-size:13px; font-weight:700; }.resource-trend-title strong { font-size:18px; }.resource-trend-summary { display:flex; align-items:center; flex-wrap:wrap; gap:7px 10px; margin-top:3px; color:var(--muted); font-size:11px; }.resource-trend-tools { display:flex; align-items:center; gap:4px; margin-left:auto; }.resource-trend-window { margin-right:2px; padding:3px 6px; border-radius:5px; color:var(--accent-dark); background:var(--accent-soft); font-size:10px; font-weight:750; }.resource-trend-tools button { display:grid; width:24px; height:24px; place-items:center; border:1px solid var(--line); border-radius:6px; color:var(--muted); background:var(--surface); font-size:10px; transition:background .16s,border-color .16s,color .16s; }.resource-trend-tools button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 38%,var(--line)); color:var(--accent-dark); background:var(--accent-soft); }.resource-trend-tools button:focus-visible { outline:0; box-shadow:0 0 0 3px var(--focus-ring); }.resource-trend-tools button:disabled { cursor:not-allowed; opacity:.4; }.resource-trend-chart { width:100%; height:auto; margin-top:8px; overflow:visible; cursor:crosshair; touch-action:none; }.resource-chart-grid { stroke:var(--line); stroke-width:1; stroke-dasharray:3 4; }.resource-chart-label { fill:var(--muted); font-size:9px; }.resource-chart-focus { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; pointer-events:none; }.resource-chart-focus-point { stroke:var(--surface); stroke-width:3; pointer-events:none; }.resource-chart-hit-area { cursor:crosshair; }.resource-trend-tooltip { position:fixed; z-index:95; display:grid; gap:2px; min-width:142px; padding:8px 10px; border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line)); border-radius:8px; color:var(--ink); background:color-mix(in srgb,var(--surface) 94%,var(--accent-soft)); box-shadow:0 8px 20px rgba(15,23,42,.16); font-size:11px; pointer-events:none; transform:translate(-50%,-100%); }.resource-trend-tooltip strong { color:var(--accent-dark); font-size:11px; }.resource-trend-tooltip span { color:var(--muted); white-space:nowrap; }.resource-trend-tooltip.hidden, .resource-chart-focus.hidden, .resource-chart-focus-point.hidden { display:none; }.resource-history-loading, .resource-history-empty, .resource-trend-no-data { display:flex; align-items:center; justify-content:center; min-height:138px; gap:8px; color:var(--muted); font-size:12px; text-align:center; }.resource-history-empty { grid-column:1 / -1; border:1px dashed var(--line); border-radius:10px; }.resource-history-empty i { color:var(--accent); font-size:18px; }
 .style-midnight .resource-history-panel, .style-midnight .resource-trend-card { background:#1a2537; border-color:var(--line); }.style-midnight .resource-trend-window { background:color-mix(in srgb,var(--accent) 18%,#1a2537); }.style-midnight .resource-trend-tools button { background:#202b3d; border-color:var(--line); }.style-midnight .resource-trend-tools button:hover:not(:disabled) { background:color-mix(in srgb,var(--accent) 18%,#1a2537); }.style-midnight .resource-chart-focus-point { stroke:#1a2537; }.style-midnight .resource-trend-tooltip { background:color-mix(in srgb,#202b3d 92%,var(--accent)); box-shadow:0 8px 20px rgba(0,0,0,.42); }
 @media (max-width:760px) { .resource-history-header { flex-direction:column; }.resource-history-help { flex-basis:auto; }.resource-history-charts { grid-template-columns:1fr; }.resource-trend-tools { width:100%; margin-left:0; } }
+/* 自定义看板：画廊页（看板小块）+ 详情页（12 栅格画布）。 */
+.dash-gallery-wrap { display:flex; flex-direction:column; gap:18px; }
+.dash-hero { position:relative; overflow:hidden; padding:26px 28px; border:1px solid color-mix(in srgb,var(--accent) 20%,var(--line)); border-radius:18px; background:radial-gradient(120% 150% at 8% 0%,color-mix(in srgb,var(--accent) 22%,var(--surface)) 0%,var(--surface) 58%),linear-gradient(135deg,color-mix(in srgb,var(--accent-soft) 70%,var(--surface)),var(--surface) 72%); box-shadow:0 10px 30px -18px color-mix(in srgb,var(--accent) 55%,transparent); }
+.dash-hero-glow { position:absolute; top:-90px; right:-70px; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle,color-mix(in srgb,var(--accent) 30%,transparent) 0%,transparent 68%); pointer-events:none; }
+.dash-hero-inner { position:relative; display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:18px; }
+.dash-hero-kicker { color:var(--accent-dark); font-size:11px; font-weight:800; letter-spacing:1.4px; }
+.dash-hero-title { margin-top:6px; color:var(--ink); font-size:24px; font-weight:800; letter-spacing:-.4px; }
+.dash-hero-sub { max-width:640px; margin-top:8px; color:var(--muted); font-size:12.5px; line-height:1.75; }
+.dash-hero-actions { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+.dash-hero-count { padding:5px 12px; border:1px solid color-mix(in srgb,var(--accent) 26%,var(--line)); border-radius:999px; color:var(--accent-dark); background:color-mix(in srgb,var(--surface) 72%,transparent); font-size:11.5px; font-weight:750; }
+.dash-hero-btn { padding:9px 18px; border-radius:11px; color:#fff; background:linear-gradient(135deg,var(--accent),var(--accent-dark)); font-size:13px; font-weight:700; box-shadow:0 8px 18px -10px color-mix(in srgb,var(--accent) 80%,transparent); transition:transform .16s,box-shadow .16s; }
+.dash-hero-btn:hover { transform:translateY(-1px); box-shadow:0 12px 22px -10px color-mix(in srgb,var(--accent) 85%,transparent); }
+.dash-hero-btn.is-ghost { color:var(--accent); background:var(--surface); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line)); box-shadow:none; }
+.dash-hero-btn.is-ghost:hover { background:color-mix(in srgb,var(--accent) 10%,var(--surface)); box-shadow:none; }
+.style-midnight .dash-hero-btn.is-ghost { background:#202b3d; }
+.dash-card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(252px,1fr)); gap:16px; }
+.dash-tile { display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--line); border-radius:16px; background:var(--surface); text-align:left; box-shadow:0 2px 6px -2px rgba(15,23,42,.08); transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
+.dash-tile:hover { transform:translateY(-3px); border-color:color-mix(in srgb,var(--tone) 55%,var(--line)); box-shadow:0 16px 30px -16px color-mix(in srgb,var(--tone) 70%,transparent); }
+.dash-tile-cover { position:relative; display:block; height:96px; overflow:hidden; background:linear-gradient(135deg,color-mix(in srgb,var(--tone) 88%,#000 0%),color-mix(in srgb,var(--tone-2) 92%,#000 0%)); }
+/* 有背景图的看板用图当封面，压暗一点让上面的图标还看得见 */
+.dash-tile-photo { position:absolute; inset:0; background-position:center; background-size:cover; opacity:.72; }
+/* 视频封面用同一个类名，只是多给一组尺寸：<video> 不吃 background-size，得用 object-fit。 */
+video.dash-tile-photo { width:100%; height:100%; object-fit:cover; }
+.dash-tile-orb { position:absolute; top:-42px; right:-30px; width:130px; height:130px; border-radius:50%; background:radial-gradient(circle,rgba(255,255,255,.34) 0%,transparent 66%); }
+.dash-tile-bars { position:absolute; bottom:0; left:16px; right:16px; display:flex; align-items:flex-end; gap:6px; height:52px; opacity:.62; }
+.dash-tile-bars i { flex:1; border-radius:3px 3px 0 0; background:rgba(255,255,255,.72); }
+.dash-tile-bars i:nth-child(1) { height:44%; }.dash-tile-bars i:nth-child(2) { height:72%; }.dash-tile-bars i:nth-child(3) { height:30%; }.dash-tile-bars i:nth-child(4) { height:88%; }.dash-tile-bars i:nth-child(5) { height:56%; }
+.dash-tile:hover .dash-tile-bars i { background:rgba(255,255,255,.9); }
+.dash-tile-icon { position:absolute; top:12px; left:14px; display:grid; width:32px; height:32px; place-items:center; border-radius:10px; color:#fff; background:rgba(255,255,255,.22); backdrop-filter:blur(2px); font-size:14px; }
+.dash-tile-body { display:flex; flex-direction:column; flex:1; gap:6px; padding:14px 16px 12px; }
+.dash-tile-name { color:var(--ink); font-size:14.5px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dash-tile-desc { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-height:32px; color:var(--muted); font-size:11.5px; line-height:1.65; }
+.dash-tile-meta { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:2px; color:var(--muted); font-size:10.5px; }
+.dash-tile-meta i { margin-right:4px; color:color-mix(in srgb,var(--tone) 70%,var(--muted)); }
+.dash-tile-foot { display:flex; align-items:center; padding:9px 16px; border-top:1px solid var(--line); color:color-mix(in srgb,var(--tone) 78%,var(--ink)); background:color-mix(in srgb,var(--tone) 8%,var(--surface)); font-size:11.5px; font-weight:700; }
+.dash-tile:hover .dash-tile-foot { background:color-mix(in srgb,var(--tone) 15%,var(--surface)); }
+.dash-tile:hover .dash-tile-foot .fa { transform:translateX(3px); }
+.dash-tile-foot .fa { transition:transform .18s ease; }
+.dash-tile { --tone:var(--st-1,var(--accent)); --tone-2:var(--st-2,var(--accent-dark)); text-decoration:none; color:inherit; }
+.dash-detail { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:radial-gradient(120% 120% at 100% 0%,color-mix(in srgb,var(--accent) 9%,var(--canvas)) 0%,var(--canvas) 60%); }
+.dash-detail-head { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:14px; padding:18px 20px; border-bottom:1px solid var(--line); background:linear-gradient(135deg,color-mix(in srgb,var(--accent-soft) 60%,var(--surface)),var(--surface) 70%); }
+.dash-detail-title-row { display:flex; align-items:center; gap:12px; min-width:0; }
+.dash-back-btn { display:grid; width:34px; height:34px; flex:0 0 auto; place-items:center; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface); font-size:13px; transition:color .16s,background .16s,border-color .16s; }
+.dash-back-btn:hover { border-color:color-mix(in srgb,var(--accent) 42%,var(--line)); color:var(--accent-dark); background:var(--accent-soft); }
+.dash-detail-title { color:var(--ink); font-size:17px; font-weight:780; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dash-detail-desc { margin-top:3px; color:var(--muted); font-size:11.5px; line-height:1.6; }
+.dash-detail-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.dash-detail-stamp { color:var(--muted); font-size:11px; }
+.dash-ghost-btn { padding:7px 13px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--surface); font-size:12px; font-weight:600; transition:color .16s,background .16s,border-color .16s; }
+.dash-ghost-btn:hover { border-color:color-mix(in srgb,var(--accent) 40%,var(--line)); color:var(--accent-dark); background:var(--accent-soft); }
+.dash-ghost-btn-danger { color:#dc2626; border-color:#fecaca; }
+.dash-ghost-btn-danger:hover { border-color:#f87171; color:#b91c1c; background:#fef2f2; }
+.dash-grid { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:14px; align-items:start; padding:18px 20px 22px; }
+.dash-empty { padding:56px 20px; border:1px dashed var(--line); border-radius:16px; background:var(--surface); text-align:center; }.dash-empty-icon { display:grid; width:46px; height:46px; margin:0 auto 12px; place-items:center; border-radius:13px; color:var(--accent); background:var(--accent-soft); font-size:19px; }
+.dash-block { display:flex; flex-direction:column; min-width:0; padding:15px; border:1px solid var(--line); border-radius:13px; background:var(--surface); box-shadow:0 1px 2px rgba(15,23,42,.04); }.dash-block-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:11px; }.dash-block-title { color:var(--block-title,var(--ink)); font-size:13px; font-weight:700; }.dash-block-desc { margin-top:2px; color:var(--muted); font-size:11px; line-height:1.5; }.dash-block-reload { display:grid; width:24px; height:24px; flex:0 0 auto; place-items:center; border:1px solid var(--line); border-radius:6px; color:var(--muted); background:var(--surface); font-size:10px; transition:background .16s,color .16s,border-color .16s; }.dash-block-reload:hover { border-color:color-mix(in srgb,var(--accent) 38%,var(--line)); color:var(--accent-dark); background:var(--accent-soft); }.dash-block-body { flex:1; min-width:0; }
+.dash-block-error { display:flex; align-items:center; gap:7px; padding:11px 12px; border:1px solid #fecaca; border-radius:9px; color:#b91c1c; background:#fef2f2; font-size:11px; line-height:1.5; }.dash-block-loading, .dash-block-nodata { display:flex; align-items:center; justify-content:center; min-height:74px; gap:7px; color:var(--muted); font-size:12px; }
+.dash-metric { display:flex; flex-direction:column; justify-content:center; min-height:74px; }.dash-metric-value { color:var(--block-value,var(--ink)); font-size:31px; font-weight:780; line-height:1.15; letter-spacing:-.5px; }.dash-metric-unit { margin-left:4px; color:var(--muted); font-size:14px; font-weight:600; }.dash-metric-foot { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px; color:var(--muted); font-size:11px; }.dash-metric-trend { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:999px; font-size:10px; font-weight:750; }.dash-trend--good { color:#0f766e; background:#ccfbf1; }.dash-trend--bad { color:#b91c1c; background:#fee2e2; }.dash-trend--flat { color:var(--muted); background:var(--nav-soft); }
+.dash-progress-row { margin-bottom:11px; }.dash-progress-row:last-child { margin-bottom:0; }.dash-progress-label { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:5px; color:var(--ink); font-size:12px; }.dash-progress-label span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.dash-progress-label strong { flex:0 0 auto; color:var(--block-value,var(--accent-dark)); font-size:12px; font-weight:750; }.dash-progress-track { height:7px; overflow:hidden; border-radius:999px; background:var(--nav-soft); }.dash-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--block-accent,var(--accent)),color-mix(in srgb,var(--block-accent,var(--accent-dark)) 82%,#000 8%)); transition:width .4s ease; }
+/* 表头是独立一张表（见 custom_dashboard.js 的 tableHead），所以边框/圆角挂在外层 box 上，
+   滚动框只负责滚。表头因此物理上在滚动区域之外，行不可能滚到它那一行。 */
+.dash-table-box { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+.dash-table-headbox { overflow:hidden; }
+/* 全局 table thead 有一层不透明底色且带 !important；看板表头必须把它清掉，
+   才能直接透出当前区块底色，与看板主题/毛玻璃/自定义底色保持同一套配色。 */
+.dash-table-headbox,.dash-table-head,.dash-table-head thead,.dash-table-head th { background:transparent !important; }
+.dash-table-wrap { max-height:288px; overflow:auto; }.dash-table { width:100%; border-collapse:collapse; font-size:11px; }.dash-table th { padding:7px 9px; border-bottom:1px solid var(--line); color:var(--block-head,var(--muted)) !important; background:var(--nav-soft); font-weight:700; text-align:left; white-space:nowrap; }.dash-table td { padding:6px 9px; border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent); color:var(--block-cell,var(--ink)); white-space:nowrap; }.dash-table tbody tr:last-child td { border-bottom:0; }.dash-table tbody tr:hover td { background:color-mix(in srgb,var(--accent-soft) 55%,transparent); }.dash-table-foot { margin-top:7px; color:var(--muted); font-size:10px; text-align:right; }
+.dash-chart { display:block; width:100%; height:auto; overflow:visible; }.dash-chart-grid { stroke:var(--line); stroke-width:1; stroke-dasharray:3 4; }.dash-chart-label { fill:var(--muted); font-size:9px; }.dash-chart-value { fill:var(--block-value,var(--accent-dark)); font-size:9px; font-weight:700; }.dash-chart-bar { fill:var(--block-accent,var(--accent)); rx:3; transition:fill .16s; }.dash-chart-bar:hover { fill:color-mix(in srgb,var(--block-accent,var(--accent-dark)) 78%,#000 12%); }.dash-chart-line { fill:none; stroke:var(--block-accent,var(--accent)); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }.dash-chart-area { fill:color-mix(in srgb,var(--block-accent,var(--accent)) 16%,transparent); }.dash-chart-dot { fill:var(--surface); stroke:var(--block-accent,var(--accent)); stroke-width:2; }.dash-chart-slice { stroke:var(--surface); stroke-width:2; }
+.dash-legend { display:flex; flex-wrap:wrap; gap:5px 13px; margin-top:10px; }.dash-legend-item { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:11px; }.dash-legend-dot { width:9px; height:9px; flex:0 0 auto; border-radius:3px; }.dash-legend-item strong { color:var(--ink); font-weight:700; }
+.dash-text-block { color:var(--block-value,var(--ink)); font-size:12px; line-height:1.75; white-space:pre-wrap; word-break:break-word; }
+/* 编辑器是左右两栏的工作区，920px 一栏只剩半幅宽度，日期/多选控件挤成一团。
+   1320px 让右栏的表单能整幅铺开，94vh 少切掉一截内容，少滚一屏。 */
+.dash-modal { display:flex; flex-direction:column; width:100%; max-width:1320px; max-height:94vh; overflow:hidden; border:1px solid var(--line); border-radius:15px; background:var(--surface); box-shadow:0 24px 60px rgba(15,23,42,.28); }.dash-modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:18px 20px; border-bottom:1px solid var(--line); background:linear-gradient(135deg,color-mix(in srgb,var(--accent-soft) 52%,var(--surface)),var(--surface) 68%); }.dash-modal-close { display:grid; width:28px; height:28px; flex:0 0 auto; place-items:center; border-radius:8px; color:var(--muted); font-size:14px; transition:background .16s,color .16s; }.dash-modal-close:hover { color:var(--ink); background:var(--nav-soft); }.dash-modal-body { flex:1; padding:20px; overflow-y:auto; }.dash-modal-foot { display:flex; align-items:center; gap:9px; padding:14px 20px; border-top:1px solid var(--line); background:var(--canvas); }
+.dash-step { margin-bottom:22px; }.dash-step:last-child { margin-bottom:0; }.dash-step-head { display:flex; align-items:center; gap:9px; margin-bottom:11px; }.dash-step-no { display:grid; width:22px; height:22px; flex:0 0 auto; place-items:center; border-radius:999px; color:#fff; background:var(--accent); font-size:11px; font-weight:750; }.dash-field-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:14px; }.dash-hint { margin-top:4px; color:var(--muted); font-size:11px; line-height:1.55; }
+.dash-block-editor { padding:15px; border:1px solid var(--line); border-radius:11px; background:linear-gradient(150deg,color-mix(in srgb,var(--accent-soft) 30%,var(--surface)),var(--surface) 58%); }.dash-block-editor-head { display:flex; align-items:center; gap:9px; margin-bottom:12px; }.dash-block-editor-no { display:grid; width:20px; height:20px; flex:0 0 auto; place-items:center; border-radius:6px; color:var(--accent-dark); background:var(--accent-soft); font-size:10px; font-weight:750; }.dash-block-editor-name { flex:1; min-width:0; color:var(--ink); font-size:12px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.dash-block-editor-tools { display:flex; align-items:center; gap:4px; flex:0 0 auto; }.dash-block-editor-tools button { display:grid; width:24px; height:24px; place-items:center; border:1px solid var(--line); border-radius:6px; color:var(--muted); background:var(--surface); font-size:10px; transition:background .16s,color .16s,border-color .16s; }.dash-block-editor-tools button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 38%,var(--line)); color:var(--accent-dark); background:var(--accent-soft); }.dash-block-editor-tools button:disabled { cursor:not-allowed; opacity:.35; }.dash-block-editor-tools .is-danger:hover { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; }
+.dash-type-picker { display:grid; grid-template-columns:repeat(auto-fit,minmax(94px,1fr)); gap:7px; }.dash-type-option { display:flex; flex-direction:column; align-items:center; gap:4px; padding:9px 6px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--surface); font-size:11px; transition:border-color .16s,color .16s,background .16s; }.dash-type-option i { font-size:14px; }.dash-type-option:hover { border-color:color-mix(in srgb,var(--accent) 40%,var(--line)); color:var(--accent-dark); }.dash-type-option.is-active { border-color:var(--accent); color:var(--accent-dark); background:var(--accent-soft); font-weight:700; }
+.dash-preview-note { display:flex; align-items:flex-start; gap:7px; margin-top:10px; padding:9px 11px; border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line)); border-radius:9px; color:var(--muted); background:color-mix(in srgb,var(--accent-soft) 62%,var(--surface)); font-size:11px; line-height:1.6; }.dash-preview-note i { margin-top:2px; color:var(--accent); }.dash-preview-note.is-error { border-color:#fecaca; color:#b91c1c; background:#fef2f2; }.dash-preview-note.is-error i { color:#dc2626; }
+.style-midnight .dash-tile, .style-midnight .dash-block, .style-midnight .dash-empty, .style-midnight .dash-modal, .style-midnight .dash-block-editor { background:#1a2537; border-color:var(--line); }.style-midnight .dash-metric-value { color:var(--block-value,var(--ink)); }.style-midnight .dash-block-title { color:var(--block-title,var(--ink)); }.style-midnight .dash-text-block { color:var(--block-value,var(--ink)); }.style-midnight .dash-table td { color:var(--block-cell,var(--ink)); }.style-midnight .dash-block-reload, .style-midnight .dash-block-editor-tools button, .style-midnight .dash-type-option { background:#202b3d; border-color:var(--line); }.style-midnight .dash-block-reload:hover, .style-midnight .dash-block-editor-tools button:hover:not(:disabled), .style-midnight .dash-type-option:hover { background:color-mix(in srgb,var(--accent) 18%,#1a2537); }.style-midnight .dash-type-option.is-active { background:color-mix(in srgb,var(--accent) 24%,#1a2537); }.style-midnight .dash-table th { background:#202b3d !important; }.style-midnight .dash-table tbody tr:hover td { background:color-mix(in srgb,var(--accent) 14%,#1a2537); }.style-midnight .dash-modal-head { background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,#1a2537),#1a2537 68%); }.style-midnight .dash-modal-foot { background:#141d2c; }.style-midnight .dash-modal-close:hover { background:#202b3d; }.style-midnight .dash-chart-dot { fill:#1a2537; }.style-midnight .dash-chart-slice { stroke:#1a2537; }.style-midnight .dash-block-error, .style-midnight .dash-preview-note.is-error { border-color:#6b3340; color:#fecdd3; background:#36222b; }.style-midnight .dash-preview-note { background:color-mix(in srgb,var(--accent) 15%,#1a2537); }.style-midnight .dash-trend--good { color:#5eead4; background:#134e4a; }.style-midnight .dash-trend--bad { color:#fecdd3; background:#36222b; }.style-midnight .dash-progress-track { background:#101827; }
+.style-midnight .dash-hero { background:radial-gradient(120% 150% at 8% 0%,color-mix(in srgb,var(--accent) 26%,#1a2537) 0%,#1a2537 58%); }.style-midnight .dash-detail { background:radial-gradient(120% 120% at 100% 0%,color-mix(in srgb,var(--accent) 14%,#141d2c) 0%,#141d2c 60%); }.style-midnight .dash-detail-head { background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,#1a2537),#1a2537 68%); }.style-midnight .dash-hero-count, .style-midnight .dash-back-btn, .style-midnight .dash-ghost-btn { background:#202b3d; border-color:var(--line); }.style-midnight .dash-back-btn:hover, .style-midnight .dash-ghost-btn:hover { background:color-mix(in srgb,var(--accent) 18%,#1a2537); }.style-midnight .dash-ghost-btn-danger { color:#fda4af; border-color:#6b3340; }.style-midnight .dash-ghost-btn-danger:hover { background:#36222b; color:#fecdd3; }.style-midnight .dash-tile-foot { background:color-mix(in srgb,var(--tone) 14%,#1a2537); border-color:var(--line); color:color-mix(in srgb,var(--tone-2) 70%,var(--ink)); }.style-midnight .dash-tile:hover .dash-tile-foot { background:color-mix(in srgb,var(--tone) 24%,#1a2537); }.style-midnight .dash-hero-title, .style-midnight .dash-tile-name, .style-midnight .dash-detail-title { color:var(--ink); }
+
+@media (max-width:1020px) { .dash-card-grid { grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }.dash-grid > .dash-block { grid-column:span 12 !important; } }
+@media (max-width:640px) { .dash-hero { padding:20px; }.dash-hero-title { font-size:20px; }.dash-card-grid { grid-template-columns:1fr; }.dash-detail-head { flex-direction:column; }.dash-metric-value { font-size:26px; }.dash-modal { max-height:94vh; }.dash-modal-body { padding:15px; }.dash-field-grid { grid-template-columns:1fr; } }
+
+/* 看板背景主题：每套给一组渐变色标，独立页背景与画廊小块封面共用。 */
+/* --st-tint 是从主题自己的中间色提亮出来的强调色，页头亮段和区块角标兜底都用它。
+   为何派生而不是每套主题手写一个：20 套主题手写容易漏、也容易配不准，
+   从 --st-2 提亮能保证跟当前背景同色系，换主题时自动跟着变。 */
+.dash-stage, .dash-tile { --st-tint:color-mix(in srgb,var(--st-2,#0ea5e9) 62%,#fff); }
+.dash-theme-aurora { --st-1:#4f46e5; --st-2:#0ea5e9; --st-3:#7c3aed; --st-ink:#eef2ff; }
+.dash-theme-midnight { --st-1:#0f172a; --st-2:#1e3a5f; --st-3:#312e81; --st-ink:#e2e8f0; }
+.dash-theme-ocean { --st-1:#0e7490; --st-2:#0891b2; --st-3:#0f766e; --st-ink:#ecfeff; }
+.dash-theme-ember { --st-1:#9a3412; --st-2:#c2410c; --st-3:#b91c5c; --st-ink:#fff7ed; }
+.dash-theme-forest { --st-1:#14532d; --st-2:#15803d; --st-3:#0f766e; --st-ink:#f0fdf4; }
+.dash-theme-plum { --st-1:#581c87; --st-2:#86198f; --st-3:#4c1d95; --st-ink:#fdf4ff; }
+.dash-theme-slate { --st-1:#1e293b; --st-2:#334155; --st-3:#475569; --st-ink:#f1f5f9; }
+.dash-theme-indigo { --st-1:#1e1b4b; --st-2:#3730a3; --st-3:#4338ca; --st-ink:#eef2ff; }
+.dash-theme-teal { --st-1:#042f2e; --st-2:#0f766e; --st-3:#155e75; --st-ink:#ecfeff; }
+.dash-theme-navy { --st-1:#0c1e3e; --st-2:#17356b; --st-3:#1e40af; --st-ink:#e0e7ff; }
+.dash-theme-olive { --st-1:#1c2a12; --st-2:#3f6212; --st-3:#4d7c0f; --st-ink:#f7fee7; }
+.dash-theme-maroon { --st-1:#450a0a; --st-2:#7f1d1d; --st-3:#9f1239; --st-ink:#fff1f2; }
+.dash-theme-cocoa { --st-1:#292018; --st-2:#4a3520; --st-3:#5b4423; --st-ink:#faf5ef; }
+.dash-theme-denim { --st-1:#172554; --st-2:#1d4ed8; --st-3:#2563eb; --st-ink:#eff6ff; }
+.dash-theme-jade { --st-1:#052e1b; --st-2:#047857; --st-3:#0e7490; --st-ink:#ecfdf5; }
+.dash-theme-rust { --st-1:#3b1106; --st-2:#9a3412; --st-3:#b45309; --st-ink:#fff7ed; }
+.dash-theme-iron { --st-1:#111827; --st-2:#374151; --st-3:#4b5563; --st-ink:#f9fafb; }
+.dash-theme-violet { --st-1:#2e1065; --st-2:#5b21b6; --st-3:#7e22ce; --st-ink:#f5f3ff; }
+.dash-theme-pine { --st-1:#022c22; --st-2:#065f46; --st-3:#134e4a; --st-ink:#ecfdf5; }
+.dash-theme-onyx { --st-1:#09090b; --st-2:#27272a; --st-3:#3f3f46; --st-ink:#fafafa; }
+.dash-theme-cobalt { --st-1:#082f49; --st-2:#0369a1; --st-3:#0284c7; --st-ink:#f0f9ff; }
+.dash-theme-amethyst { --st-1:#3b0764; --st-2:#6b21a8; --st-3:#86198f; --st-ink:#fdf4ff; }
+.dash-theme-brick { --st-1:#431407; --st-2:#9f1239; --st-3:#7c2d12; --st-ink:#fff1f2; }
+.dash-theme-lagoon { --st-1:#083344; --st-2:#155e75; --st-3:#0f766e; --st-ink:#ecfeff; }
+.dash-theme-moor { --st-1:#1c1917; --st-2:#44403c; --st-3:#57534e; --st-ink:#fafaf9; }
+.dash-theme-bronze { --st-1:#2b1b0e; --st-2:#78350f; --st-3:#854d0e; --st-ink:#fffbeb; }
+/* 深色渐变系：色差拉得比上面几套大，挂大屏时层次更明显。 */
+.dash-theme-nebula { --st-1:#1e1b4b; --st-2:#7e22ce; --st-3:#be185d; --st-ink:#f5f3ff; }
+.dash-theme-abyss { --st-1:#020617; --st-2:#0f2744; --st-3:#134e4a; --st-ink:#e2e8f0; }
+.dash-theme-aurora_borealis { --st-1:#042f2e; --st-2:#0d9488; --st-3:#4338ca; --st-ink:#ecfeff; }
+.dash-theme-sunset { --st-1:#7c2d12; --st-2:#db2777; --st-3:#6b21a8; --st-ink:#fff1f2; }
+.dash-theme-cyber { --st-1:#0b1120; --st-2:#0e7490; --st-3:#a21caf; --st-ink:#ecfeff; }
+.dash-theme-moss { --st-1:#1a2e05; --st-2:#3f6212; --st-3:#115e59; --st-ink:#f7fee7; }
+.dash-theme-graphite { --st-1:#18181b; --st-2:#3f3f46; --st-3:#1f2937; --st-ink:#f4f4f5; }
+.dash-theme-wine { --st-1:#4c0519; --st-2:#881337; --st-3:#3b0764; --st-ink:#fff1f2; }
+.dash-theme-tropic { --st-1:#064e3b; --st-2:#0891b2; --st-3:#4f46e5; --st-ink:#ecfeff; }
+.dash-theme-magma { --st-1:#450a0a; --st-2:#ea580c; --st-3:#a21caf; --st-ink:#fff7ed; }
+.dash-theme-galaxy { --st-1:#020617; --st-2:#4338ca; --st-3:#9333ea; --st-ink:#f5f3ff; }
+.dash-theme-peacock { --st-1:#0c4a6e; --st-2:#0d9488; --st-3:#65a30d; --st-ink:#f0fdfa; }
+.dash-theme-dusk { --st-1:#1e1b4b; --st-2:#9f1239; --st-3:#c2410c; --st-ink:#fff1f2; }
+.dash-theme-reef { --st-1:#134e4a; --st-2:#0284c7; --st-3:#7c3aed; --st-ink:#ecfeff; }
+.dash-theme-orchid { --st-1:#4a044e; --st-2:#c026d3; --st-3:#4f46e5; --st-ink:#fdf4ff; }
+.dash-theme-copper { --st-1:#431407; --st-2:#b45309; --st-3:#4d7c0f; --st-ink:#fffbeb; }
+.dash-theme-glacier { --st-1:#0f2744; --st-2:#0e7490; --st-3:#334155; --st-ink:#f0f9ff; }
+.dash-theme-twilight { --st-1:#0b1120; --st-2:#5b21b6; --st-3:#be185d; --st-ink:#f5f3ff; }
+.dash-theme-lava { --st-1:#18181b; --st-2:#b91c1c; --st-3:#ea580c; --st-ink:#fff7ed; }
+.dash-theme-jungle { --st-1:#022c22; --st-2:#15803d; --st-3:#a16207; --st-ink:#f7fee7; }
+.dash-theme-neonight { --st-1:#020617; --st-2:#a21caf; --st-3:#0e7490; --st-ink:#faf5ff; }
+.dash-theme-harbor { --st-1:#0c1e3e; --st-2:#0369a1; --st-3:#0f766e; --st-ink:#f0f9ff; }
+.dash-theme-blaze { --st-1:#7c2d12; --st-2:#dc2626; --st-3:#a16207; --st-ink:#fffbeb; }
+.dash-theme-iris { --st-1:#312e81; --st-2:#7c3aed; --st-3:#0891b2; --st-ink:#eef2ff; }
+.dash-theme-canyon { --st-1:#451a03; --st-2:#c2410c; --st-3:#881337; --st-ink:#fff7ed; }
+.dash-theme-spruce { --st-1:#052e1b; --st-2:#0f766e; --st-3:#1e40af; --st-ink:#ecfdf5; }
+.dash-theme-nightfall { --st-1:#111827; --st-2:#1e3a5f; --st-3:#6b21a8; --st-ink:#e2e8f0; }
+.dash-theme-punch { --st-1:#500724; --st-2:#db2777; --st-3:#ea580c; --st-ink:#fff1f2; }
+.dash-theme-tide { --st-1:#083344; --st-2:#0891b2; --st-3:#65a30d; --st-ink:#ecfeff; }
+.dash-theme-nebula2 { --st-1:#2e1065; --st-2:#4f46e5; --st-3:#be123c; --st-ink:#f5f3ff; }
+.dash-theme-verdant { --st-1:#14532d; --st-2:#4d7c0f; --st-3:#0e7490; --st-ink:#f0fdf4; }
+/* 浅色系：白天在办公室看不刺眼。--st-ink 是深色，配合下面 .is-light 的一组覆盖生效。 */
+.dash-theme-daylight { --st-1:#e0e7ff; --st-2:#f0f9ff; --st-3:#dbeafe; --st-ink:#1e293b; }
+.dash-theme-linen { --st-1:#faf5ef; --st-2:#f1e7d8; --st-3:#e7ddd0; --st-ink:#44403c; }
+.dash-theme-mint { --st-1:#d1fae5; --st-2:#f0fdfa; --st-3:#cffafe; --st-ink:#134e4a; }
+.dash-theme-sakura { --st-1:#fce7f3; --st-2:#fff1f2; --st-3:#ede9fe; --st-ink:#831843; }
+.dash-theme-sand { --st-1:#fef3c7; --st-2:#fffbeb; --st-3:#fee9d5; --st-ink:#78350f; }
+.dash-theme-seafoam { --st-1:#ccfbf1; --st-2:#ecfeff; --st-3:#d1fae5; --st-ink:#115e59; }
+.dash-theme-pearl { --st-1:#f1f5f9; --st-2:#fff; --st-3:#e2e8f0; --st-ink:#334155; }
+.dash-theme-blossom { --st-1:#fae8ff; --st-2:#fdf4ff; --st-3:#e0e7ff; --st-ink:#6b21a8; }
+.dash-theme-celadon { --st-1:#dcfce7; --st-2:#f7fee7; --st-3:#ecfccb; --st-ink:#3f6212; }
+.dash-theme-ivory { --st-1:#fefce8; --st-2:#fffbeb; --st-3:#fef3c7; --st-ink:#713f12; }
+.dash-theme-porcelain { --st-1:#e0f2fe; --st-2:#f8fafc; --st-3:#dbeafe; --st-ink:#0c4a6e; }
+.dash-theme-peach { --st-1:#ffedd5; --st-2:#fff7ed; --st-3:#fee2e2; --st-ink:#9a3412; }
+.dash-theme-lilac { --st-1:#ede9fe; --st-2:#f5f3ff; --st-3:#fae8ff; --st-ink:#5b21b6; }
+.dash-theme-sky { --st-1:#dbeafe; --st-2:#f0f9ff; --st-3:#e0f2fe; --st-ink:#1e40af; }
+.dash-theme-oat { --st-1:#f5f5f4; --st-2:#fafaf9; --st-3:#e7e5e4; --st-ink:#44403c; }
+.dash-theme-lemonade { --st-1:#fef9c3; --st-2:#fefce8; --st-3:#ecfccb; --st-ink:#4d7c0f; }
+.dash-theme-rosewater { --st-1:#ffe4e6; --st-2:#fff1f2; --st-3:#fce7f3; --st-ink:#9f1239; }
+.dash-theme-aqua { --st-1:#cffafe; --st-2:#f0fdfa; --st-3:#e0f2fe; --st-ink:#155e75; }
+.dash-theme-cloud { --st-1:#e2e8f0; --st-2:#f8fafc; --st-3:#eef2ff; --st-ink:#1e293b; }
+.dash-theme-honey { --st-1:#fde68a; --st-2:#fffbeb; --st-3:#fed7aa; --st-ink:#854d0e; }
+.dash-theme-fresco { --st-1:#e0f2fe; --st-2:#fdf4ff; --st-3:#ede9fe; --st-ink:#4338ca; }
+.dash-theme-basil { --st-1:#d9f99d; --st-2:#f7fee7; --st-3:#ccfbf1; --st-ink:#365314; }
+.dash-theme-parchment { --st-1:#f0e7d8; --st-2:#faf5ef; --st-3:#fef3c7; --st-ink:#57534e; }
+.dash-theme-glaze { --st-1:#ecfeff; --st-2:#fff; --st-3:#f0f9ff; --st-ink:#0e7490; }
+.dash-theme-coral { --st-1:#fecdd3; --st-2:#fff1f2; --st-3:#ffedd5; --st-ink:#be123c; }
+.dash-theme-frost { --st-1:#eef2ff; --st-2:#f8fafc; --st-3:#cffafe; --st-ink:#3730a3; }
+
+/* 浅色主题下舞台上的文字要反过来：原来的规则写死了白字，在浅底上会看不见。
+   由模板按主题名加 .is-light 类，不用 JS 判断颜色深浅。 */
+/* 浅色主题的强调色要往深里调，不能沿用深色那套「中间色提亮」——
+   浅底主题的 --st-2 本来就接近白（如 #f0f9ff），再提亮出来的角标在白底上等于看不见。 */
+.dash-stage.is-light { --st-tint:color-mix(in srgb,var(--st-ink) 62%,var(--st-2,#0ea5e9)); }
+/* 浅色主题把标题换成深字，但用户自己配了颜色就得听用户的——所以走 --stage-name-color 兜底，
+   而不是直接写死 var(--st-ink)。写死的话浅色主题下配色永远不生效。 */
+.dash-stage.is-light .dash-stage-title { color:var(--stage-name-color,var(--st-ink)); text-shadow:none; }
+.dash-stage.is-light .dash-stage-desc { color:color-mix(in srgb,var(--st-ink) 74%,transparent); }
+.dash-stage.is-light .dash-stage-crumb { color:color-mix(in srgb,var(--st-ink) 62%,transparent); }
+.dash-stage.is-light .dash-stage-crumb a { color:color-mix(in srgb,var(--st-ink) 80%,transparent); }
+.dash-stage.is-light .dash-stage-crumb a:hover { color:var(--st-ink); }
+.dash-stage.is-light .dash-stage-btn { border-color:color-mix(in srgb,var(--st-ink) 22%,transparent); color:var(--st-ink); background:rgba(255,255,255,.62); }
+.dash-stage.is-light .dash-stage-btn:hover { border-color:color-mix(in srgb,var(--st-ink) 38%,transparent); background:#fff; }
+.dash-stage.is-light .dash-stage-stamp { color:color-mix(in srgb,var(--st-ink) 60%,transparent); }
+.dash-stage.is-light .dash-stage-foot { border-color:color-mix(in srgb,var(--st-ink) 16%,transparent); color:color-mix(in srgb,var(--st-ink) 58%,transparent); }
+.dash-stage.is-light .dash-stage-notice { border-color:color-mix(in srgb,var(--st-ink) 26%,transparent); color:var(--st-ink); background:rgba(255,255,255,.6); }
+.dash-stage.is-light .dash-stage-mesh { background:radial-gradient(58% 44% at 12% 6%,rgba(255,255,255,.6) 0%,transparent 62%),radial-gradient(46% 40% at 88% 12%,rgba(255,255,255,.42) 0%,transparent 60%),radial-gradient(70% 56% at 50% 104%,rgba(0,0,0,.07) 0%,transparent 66%); }
+.dash-stage.is-light .dash-stage-orb { opacity:.34; }
+
+/* 用户上传的背景图。压在渐变之上、内容之下，图的地址走 CSS 变量传进来。
+   叠一层黑纱（--dash-dim）是为了图太亮时文字还能看清。 */
+.dash-stage-photo { position:absolute; inset:0; background-image:var(--dash-bg-image); background-position:center; background-repeat:no-repeat; background-size:cover; filter:blur(var(--dash-bg-blur,0px)); transform:scale(1.04); }
+.dash-stage-photo.is-contain { background-size:contain; }
+.dash-stage-photo.is-tile { background-size:auto; background-repeat:repeat; transform:none; }
+/* 视频背景（MP4 / WEBM）。为何不能沿用上面那条：CSS 的 background-image 放不了视频，
+   必须是真的 <video> 元素。其余表现刻意和图片对齐——同样铺满、同样吃模糊和黑纱，
+   所以压暗/模糊两个配置项对视频一样生效。
+   object-fit 对应「怎么铺」：cover 铺满裁边、contain 完整显示；平铺对视频没意义，
+   传了平铺就按 cover 处理。 */
+.dash-stage-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:blur(var(--dash-bg-blur,0px)); transform:scale(1.04); }
+.dash-stage-video.is-contain { object-fit:contain; transform:none; }
+.dash-stage-veil { position:absolute; inset:0; background:rgba(2,6,23,var(--dash-dim,.35)); }
+.dash-stage.is-light .dash-stage-veil { background:rgba(255,255,255,var(--dash-dim,.35)); }
+
+/* ---- 区块底色预设 ---- */
+/* 都用半透明叠在舞台背景上，这样换主题或换背景图时区块不用改配置。
+   --block-bg-a 是区块自己的透明度（bg_opacity），custom 时 --block-bg 是自定义色。 */
+.dash-block.is-bg-glass { border-color:rgba(255,255,255,.3); background:rgba(255,255,255,calc(var(--block-bg-a,1) * .16)); backdrop-filter:blur(14px); color:#fff; }
+.dash-block.is-bg-solid { border-color:rgba(255,255,255,.14); background:rgba(255,255,255,var(--block-bg-a,1)); }
+.dash-block.is-bg-frost { border-color:rgba(255,255,255,.5); background:rgba(255,255,255,calc(var(--block-bg-a,1) * .74)); backdrop-filter:blur(10px); }
+.dash-block.is-bg-outline { border-color:rgba(255,255,255,.42); background:transparent; box-shadow:none; color:#fff; }
+.dash-block.is-bg-shadow { border-color:rgba(255,255,255,.08); background:rgba(6,11,25,calc(var(--block-bg-a,1) * .58)); backdrop-filter:blur(12px); color:#fff; }
+.dash-block.is-bg-custom { border-color:color-mix(in srgb,var(--block-bg,#fff) 62%,transparent); background:color-mix(in srgb,var(--block-bg,#fff) calc(var(--block-bg-a,1) * 100%),transparent); }
+/* 深底预设上的文字要跟着变亮，否则默认的深灰字看不见。
+   只在没自定义颜色时兜底：var(--block-title) 有值时以用户选的为准。 */
+.dash-block.is-bg-glass .dash-block-title,.dash-block.is-bg-outline .dash-block-title,.dash-block.is-bg-shadow .dash-block-title { color:var(--block-title,#fff); }
+.dash-block.is-bg-glass .dash-block-desc,.dash-block.is-bg-outline .dash-block-desc,.dash-block.is-bg-shadow .dash-block-desc { color:rgba(255,255,255,.7); }
+.dash-block.is-bg-glass .dash-metric-value,.dash-block.is-bg-outline .dash-metric-value,.dash-block.is-bg-shadow .dash-metric-value { color:var(--block-value,#fff); }
+.dash-block.is-bg-glass .dash-table th,.dash-block.is-bg-outline .dash-table th,.dash-block.is-bg-shadow .dash-table th { color:var(--block-head,rgba(255,255,255,.82)) !important; background:transparent !important; border-color:rgba(255,255,255,.16); }
+.dash-block.is-bg-glass .dash-table td,.dash-block.is-bg-outline .dash-table td,.dash-block.is-bg-shadow .dash-table td { color:var(--block-cell,rgba(255,255,255,.9)); border-color:rgba(255,255,255,.1); }
+.dash-block.is-bg-glass .dash-table tbody tr:hover,.dash-block.is-bg-outline .dash-table tbody tr:hover,.dash-block.is-bg-shadow .dash-table tbody tr:hover { background:rgba(255,255,255,.07); }
+.dash-block.is-bg-glass .dash-table-foot,.dash-block.is-bg-outline .dash-table-foot,.dash-block.is-bg-shadow .dash-table-foot { color:rgba(255,255,255,.62); }
+.dash-block.is-bg-glass .dash-list-row,.dash-block.is-bg-outline .dash-list-row,.dash-block.is-bg-shadow .dash-list-row { border-color:rgba(255,255,255,.12); }
+.dash-block.is-bg-glass .dash-list-label,.dash-block.is-bg-outline .dash-list-label,.dash-block.is-bg-shadow .dash-list-label { color:rgba(255,255,255,.84); }
+.dash-block.is-bg-glass .dash-empty,.dash-block.is-bg-outline .dash-empty,.dash-block.is-bg-shadow .dash-empty { color:rgba(255,255,255,.6); }
+
+/* ---- 文字位置 ---- */
+.dash-block .dash-block-head.is-align-center { text-align:center; }
+.dash-block .dash-block-head.is-align-right { text-align:right; }
+.dash-block-body.is-align-center { text-align:center; }
+.dash-block-body.is-align-center .dash-metric-row,.dash-block-body.is-align-center .dash-metric-main { justify-content:center; }
+.dash-block-body.is-align-right { text-align:right; }
+.dash-block-body.is-align-right .dash-metric-row,.dash-block-body.is-align-right .dash-metric-main { justify-content:flex-end; }
+
+/* ---- 字号档位 ---- */
+/* 用档位不用 px：让人填数字迟早会填出 200 号字把布局撑坏，档位天然有上下界。 */
+/* 字号：预设类只负责把尺寸写进 --*-fs 变量，真正的 font-size 由下面四条统一取值。
+   为何绕一层变量：这样「自己输入字号」只要在区块上内联一个 --block-*-px 就能盖掉预设，
+   不用再为自定义值单独加一套类，也不用比拼特异度（同一条规则里 var() 依次兜底）。 */
+.dash-block.is-title-xs { --title-fs:12px; }
+.dash-block.is-title-sm { --title-fs:14px; }
+.dash-block.is-title-md { --title-fs:17px; }
+.dash-block.is-title-lg { --title-fs:20px; }
+.dash-block.is-title-xl { --title-fs:25px; }
+.dash-block.is-value-sm { --value-fs:24px; }
+.dash-block.is-value-md { --value-fs:32px; }
+.dash-block.is-value-lg { --value-fs:42px; }
+.dash-block.is-value-xl { --value-fs:54px; }
+.dash-block.is-value-xxl { --value-fs:68px; }
+.dash-block.is-value-huge { --value-fs:86px; }
+/* 表格字号的档位拉到 26px：原来最大只到 17px，挂大屏站远了照样看不清
+   （用户反馈"表头的列的字体还是很小"）。手输 px 仍然可以突破这个档位。 */
+.dash-block.is-head-xs { --head-fs:12px; }
+.dash-block.is-head-sm { --head-fs:14px; }
+.dash-block.is-head-md { --head-fs:16px; }
+.dash-block.is-head-lg { --head-fs:19px; }
+.dash-block.is-head-xl { --head-fs:22px; }
+.dash-block.is-head-xxl { --head-fs:26px; }
+.dash-block.is-cell-xs { --cell-fs:12px; }
+.dash-block.is-cell-sm { --cell-fs:14px; }
+.dash-block.is-cell-md { --cell-fs:16px; }
+.dash-block.is-cell-lg { --cell-fs:19px; }
+.dash-block.is-cell-xl { --cell-fs:22px; }
+.dash-block.is-cell-xxl { --cell-fs:26px; }
+/* --block-*-px 是用户手输的字号（只在填了的时候才内联），优先级最高。 */
+.dash-block .dash-block-title { font-size:var(--block-title-px,var(--title-fs,17px)); }
+.dash-block .dash-metric-value { font-size:var(--block-value-px,var(--value-fs,54px)); line-height:1.08; }
+/* 这三个 !important 不是偷懒，是被迫的：全局有条裸 th 规则（本文件 393 行）写着
+   font-size:11px !important + color:#64748b !important + text-transform:uppercase，
+   给全站后台表格用的。!important 不看选择器权重，所以看板表头的字号和颜色
+   全被它钉死——表现就是「表头字号怎么选怎么填都不变、颜色怎么配都是那个灰」。
+   实测：is-head-xxl 期望 26px、量到 11px；--block-head 配了红色、量到 rgb(100,116,139)。
+   同一条规则里 td 只对 color 加了 !important，没对 font-size 加，
+   这正是「表格文字字号能生效、表头不能」的原因。
+   要么收窄那条全局规则（得用 :not() 带后代选择器，老 webview 认不出会整条失效，
+   后台表格样式全掉），要么在这边也标 !important。选后者，本文件 824 行早有同样先例。
+   text-transform / letter-spacing 那条全局规则没标 !important，靠权重就能压过，
+   顺手复位——大写加字距是后台小标签的排版，套到看板列名上又挤又难认。 */
+.dash-block .dash-table th { font-size:var(--block-head-px,var(--head-fs,15px)) !important; text-transform:none; letter-spacing:normal; }
+.dash-block .dash-table td { font-size:var(--block-cell-px,var(--cell-fs,15px)); }
+.dash-block.is-cell-xs .dash-table td { padding-top:5px; padding-bottom:5px; }
+
+/* ---- 表格显示方式 ---- */
+/* 滚动条自己藏起来（用户说"看板上有滚动条就很难看"），滚动能力保留。 */
+.dash-table-box.is-mode-scroll .dash-table-wrap,.dash-table-box.is-mode-lazy .dash-table-wrap { overflow-y:auto; scrollbar-width:none; }
+.dash-table-box.is-mode-scroll .dash-table-wrap::-webkit-scrollbar,.dash-table-box.is-mode-lazy .dash-table-wrap::-webkit-scrollbar { width:0; height:0; }
+/* 匀速滚动：整个 tbody 上移一半高度。内容渲染两遍，滚到底正好和开头接上，看着是无缝循环。 */
+/* 匀速滚动由 JS 逐帧改 scrollTop（见 custom_dashboard.js 的 bindMarquee），
+   所以容器要真的可滚；滚动条藏起来，挂大屏时不好看。 */
+.dash-table-box.is-mode-marquee .dash-table-wrap { overflow-y:auto; scrollbar-width:none; }
+.dash-table-box.is-mode-marquee .dash-table-wrap::-webkit-scrollbar { display:none; }
+.dash-lazy-hint { display:flex; align-items:center; justify-content:center; gap:6px; padding:7px; color:var(--muted); font-size:11px; opacity:.75; }
+
+/* 独立页舞台：多层网格渐变 + 两个柔光斑 + 细网格纹理，纯 CSS 不额外请求资源。 */
+.dash-standalone-body { margin:0; min-height:100vh; background:#0b1120; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; -webkit-font-smoothing:antialiased; }
+.dash-stage { position:relative; display:flex; flex-direction:column; min-height:100vh; padding:26px 30px 18px; overflow:hidden; background:linear-gradient(160deg,var(--st-1) 0%,var(--st-2) 46%,var(--st-3) 100%); }
+.dash-stage-bg { position:absolute; inset:0; pointer-events:none; }
+.dash-stage-mesh { position:absolute; inset:0; background:radial-gradient(58% 44% at 12% 6%,rgba(255,255,255,.20) 0%,transparent 62%),radial-gradient(46% 40% at 88% 12%,rgba(255,255,255,.13) 0%,transparent 60%),radial-gradient(70% 56% at 50% 104%,rgba(0,0,0,.34) 0%,transparent 66%); }
+.dash-stage-orb { position:absolute; border-radius:50%; filter:blur(46px); opacity:.5; }
+.dash-stage-orb-1 { top:-120px; right:-90px; width:420px; height:420px; background:radial-gradient(circle,rgba(255,255,255,.44) 0%,transparent 66%); }
+.dash-stage-orb-2 { bottom:-150px; left:-110px; width:460px; height:460px; background:radial-gradient(circle,color-mix(in srgb,var(--st-3) 70%,#fff) 0%,transparent 68%); opacity:.42; }
+.dash-stage-head { position:relative; display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:20px; }
+.dash-stage-crumb { display:flex; align-items:center; gap:7px; color:rgba(255,255,255,.66); font-size:11.5px; }
+.dash-stage-crumb a { color:rgba(255,255,255,.82); text-decoration:none; transition:color .16s; }
+.dash-stage-crumb a:hover { color:#fff; text-decoration:underline; }
+/* 看板名称：字号/颜色/位置都能配。没配时 --stage-name-* 不存在，走原来的 27px + 白字。
+   --stage-name-px 是手填像素，只在填了的时候内联，优先级压过档位。 */
+.dash-stage-title { margin:7px 0 0; color:var(--stage-name-color,#fff); font-size:var(--stage-name-px,var(--stage-name-fs,27px)); font-weight:800; letter-spacing:-.5px; text-shadow:0 2px 14px rgba(0,0,0,.22); }
+/* 默认档 md 故意不定义 --stage-name-fs：留空才能让下面那条窄屏规则的 21px 继续管事。
+   一旦这里写死 27px，手机上就永远是 27px 了。 */
+.dash-stage.is-name-xs { --stage-name-fs:18px; }
+.dash-stage.is-name-sm { --stage-name-fs:22px; }
+.dash-stage.is-name-lg { --stage-name-fs:34px; }
+.dash-stage.is-name-xl { --stage-name-fs:42px; }
+.dash-stage.is-name-xxl { --stage-name-fs:54px; }
+/* 位置：标题所在的那一列本来是 min-width:0 的自然宽，不撑满就没有「居中/靠右」可言，
+   所以居中和靠右时让它占满剩余空间。左对齐保持原样，免得把右边工具按钮挤走。 */
+.dash-stage-headline.is-name-center,.dash-stage-headline.is-name-right { flex:1 1 auto; }
+.dash-stage-headline.is-name-center { text-align:center; }
+.dash-stage-headline.is-name-right { text-align:right; }
+.dash-stage-headline.is-name-center .dash-stage-crumb { justify-content:center; }
+.dash-stage-headline.is-name-right .dash-stage-crumb { justify-content:flex-end; }
+.dash-stage-headline.is-name-center .dash-stage-desc,.dash-stage-headline.is-name-right .dash-stage-desc { max-width:none; }
+.dash-stage-desc { max-width:720px; margin:7px 0 0; color:rgba(255,255,255,.76); font-size:12.5px; line-height:1.7; }
+.dash-stage-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.dash-stage-stamp { margin-right:4px; color:rgba(255,255,255,.66); font-size:11px; }
+.dash-stage-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border:1px solid rgba(255,255,255,.24); border-radius:10px; color:#fff; background:rgba(255,255,255,.13); backdrop-filter:blur(8px); font-size:12px; font-weight:600; text-decoration:none; cursor:pointer; transition:background .16s,border-color .16s,transform .16s; }
+.dash-stage-btn:hover { border-color:rgba(255,255,255,.42); background:rgba(255,255,255,.22); transform:translateY(-1px); }
+/* 页头底部的分隔线 + 左端一小段亮色（参考图里那个装饰缺口的做法）。
+   ::before 是贯穿的暗线，::after 是压在它左端的亮段，两层叠出"缺口"的观感，
+   不加 DOM 也不用图片。线画在页头下沿，把标题区和内容区分开。 */
+.dash-stage-head::before { position:absolute; right:0; bottom:-10px; left:0; height:1px; background:rgba(255,255,255,.14); content:''; }
+.dash-stage-head::after { position:absolute; bottom:-11px; left:0; width:86px; height:3px; background:linear-gradient(90deg,var(--st-tint),transparent); content:''; }
+.dash-stage.is-light .dash-stage-head::before { background:color-mix(in srgb,var(--st-ink) 14%,transparent); }
+/* 舞台上的按钮也收成近直角，跟区块的直角保持一套语言（原来 10px 圆角）。 */
+.dash-stage-btn { border-radius:3px; }
+.dash-stage-grid-area { position:relative; flex:1; align-content:start; padding:0; }
+/* 舞台上"没选底色"（bg_preset=theme）时区块长什么样。
+   :not() 三连很关键：这条和 .dash-block.is-bg-glass 那批是同一个特异度(0,2,0)，
+   但它在文件里更靠后，不排除掉就会把用户明确选的底色顶掉——顶掉之后底色变白、
+   而文字颜色规则(0,3,0)仍然是白的，于是白底白字整块看不见（曾经的线上现象）。
+   默认改成压在舞台上的深色薄板：细亮边 + 半透明深底，不再是一张贴上去的白卡片。 */
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) {
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:6px;
+    background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(4,10,24,.28));
+    box-shadow:none;
+    backdrop-filter:blur(6px);
+    color:#fff;
+}
+/* 深底上文字要跟着变亮；有自定义色时以用户选的为准（var 兜底）。 */
+/* 表头那一行不再单独配底色，直接透明 = 跟着这一块的底色。
+   为何要 !important：后台皮肤 .style-midnight .dash-table th 带 !important 会把横带画回来，
+   编辑器里预览时就和独立页对不上（用户反馈过"预览跟实际差太多"）。
+   吸顶那两条靠更高特异度 + 同样的 !important 盖回不透明，见下面注释。 */
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-block-title { color:var(--block-title,#fff); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-block-desc { color:rgba(255,255,255,.68); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-metric-value { color:var(--block-value,#fff); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-table th { color:var(--block-head,rgba(255,255,255,.8)) !important; background:transparent !important; border-color:rgba(255,255,255,.12); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-table td { color:var(--block-cell,rgba(255,255,255,.9)); border-color:rgba(255,255,255,.09); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-table tbody tr:hover { background:rgba(255,255,255,.06); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-table-foot { color:rgba(255,255,255,.6); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-list-row { border-color:rgba(255,255,255,.1); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-list-label { color:rgba(255,255,255,.84); }
+.dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-empty { color:rgba(255,255,255,.58); }
+/* 浅色主题下反过来：舞台是亮的，薄板压深一点点、文字回到深色。 */
+.dash-stage.is-light .dash-stage-grid-area .dash-block:not([class*="is-bg-"]) {
+    border-color:rgba(15,23,42,.12);
+    background:rgba(255,255,255,.62);
+    color:var(--ink);
+}
+.dash-stage.is-light .dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-block-title { color:var(--block-title,var(--ink)); }
+.dash-stage.is-light .dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-block-desc { color:var(--muted); }
+.dash-stage.is-light .dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-metric-value { color:var(--block-value,var(--ink)); }
+.dash-stage.is-light .dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-table th { color:var(--block-head,var(--muted)) !important; background:transparent !important; border-color:rgba(15,23,42,.08); }
+.dash-stage.is-light .dash-stage-grid-area .dash-block:not([class*="is-bg-"]) .dash-table td { color:var(--block-cell,var(--ink)); border-color:rgba(15,23,42,.07); }
+
+/* ---- 舞台上区块的统一质感（含所有底色预设）----
+   为何统一在这里改：.dash-block 基类是给编辑器里的小卡片用的（13px 圆角 + 投影，
+   放在白底表单里合适）；但舞台上一堆圆角厚投影的板子叠在深色背景上，就是用户说的
+   "像贴纸贴上去"。舞台上一律收成近直角、去掉投影，改用细亮边描形。
+   选择器带 .dash-stage-grid-area 前缀 => 特异度(0,2,0) 且位置靠后，能盖住预设里的
+   border-radius/box-shadow，同时不碰它们的 background/border-color（那些不在这条里写）。 */
+.dash-stage-grid-area .dash-block { position:relative; border-radius:3px; box-shadow:none; }
+/* 四角的角标：只画两条边，靠 ::before/::after 定左上和右下，不额外加 DOM。
+   颜色跟 --block-accent 走，用户改区块强调色时角标一起变。 */
+.dash-stage-grid-area .dash-block::before,
+.dash-stage-grid-area .dash-block::after { position:absolute; width:9px; height:9px; content:''; pointer-events:none; opacity:.75; }
+.dash-stage-grid-area .dash-block::before { top:-1px; left:-1px; border-top:2px solid var(--block-accent,var(--st-tint)); border-left:2px solid var(--block-accent,var(--st-tint)); }
+.dash-stage-grid-area .dash-block::after { right:-1px; bottom:-1px; border-right:2px solid var(--block-accent,var(--st-tint)); border-bottom:2px solid var(--block-accent,var(--st-tint)); }
+/* 标题前的小竖条：参考图里标题都带前导标记，比纯文字更有层次。
+   用 border-left 而不是 ::before，避开上面两个伪元素。 */
+.dash-stage-grid-area .dash-block-title { padding-left:8px; border-left:3px solid var(--block-accent,var(--st-tint)); letter-spacing:.3px; line-height:1.35; }
+/* 居中/右对齐时竖条会跟着跑到文字左边很远的地方，那种情况下去掉。 */
+.dash-stage-grid-area .dash-block-head.is-align-center .dash-block-title,
+.dash-stage-grid-area .dash-block-head.is-align-right .dash-block-title { padding-left:0; border-left:0; }
+/* 表格也退掉圆角，边框收细，跟薄板的直角对齐。 */
+.dash-stage-grid-area .dash-table-wrap { border-radius:2px; }
+.dash-stage-foot { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,.16); color:rgba(255,255,255,.6); font-size:11px; }
+.dash-stage-notice { display:flex; align-items:center; justify-content:center; gap:9px; padding:44px 20px; border:1px dashed rgba(255,255,255,.3); border-radius:14px; color:#fff; background:rgba(255,255,255,.1); font-size:13px; }
+.dash-standalone-denied { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:24px; gap:10px; background:linear-gradient(160deg,#1e293b,#0f172a); text-align:center; }
+.dash-standalone-denied h1 { margin:6px 0 0; color:#fff; font-size:19px; font-weight:750; }
+.dash-standalone-denied p { margin:0 0 8px; color:rgba(255,255,255,.66); font-size:12.5px; }
+.dash-standalone-denied .dash-hero-btn { display:inline-flex; align-items:center; text-decoration:none; }
+@media (max-width:760px) { .dash-stage { padding:18px 16px 14px; }/* 窄屏缩到 21px 只针对「没配过字号」的看板；配过就按配的来（挂竖屏大屏时也会命中这条宽度）。 */
+.dash-stage-title { font-size:var(--stage-name-px,var(--stage-name-fs,21px)); }.dash-stage-btn span { display:none; }.dash-stage-btn { padding:8px 11px; } }
+
+/* 小块底栏：左边「在新窗口打开」，右边复制/编辑/删除小按钮。
+   小按钮是叠在 <a> 上的 <span>，点击由 JS 拦掉默认跳转。 */
+.dash-tile-foot-main { display:inline-flex; align-items:center; }
+.dash-tile-acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .18s ease; }
+.dash-tile:hover .dash-tile-acts, .dash-tile:focus-within .dash-tile-acts { opacity:1; }
+.dash-tile-act { display:grid; width:26px; height:26px; place-items:center; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:var(--surface); font-size:11px; cursor:pointer; transition:all .16s ease; }
+.dash-tile-act:hover { color:var(--accent); border-color:color-mix(in srgb,var(--accent) 45%,var(--line)); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); }
+.dash-tile-act.is-danger:hover { color:#dc2626; border-color:#fca5a5; background:#fef2f2; }
+.style-midnight .dash-tile-act { background:#202b3d; }
+.style-midnight .dash-tile-act.is-danger:hover { color:#fda4af; border-color:#6b3340; background:#36222b; }
+
+/* 背景主题选择器：直接用主题色画小样
+   千万别再加 flex-wrap:wrap。它是早先「一套一个带名字的胶囊」那版留下的，
+   跟 flex-direction:column 一起就成了「按列换行」的多行容器：弹窗给了确定高度，
+   那一列会被拉满整个高度，每组之间撑出 800+px 空白（实测 row 高 28px -> 878px）。
+   纵向堆叠不需要 wrap。 */
+.dash-theme-picker { display:flex; flex-direction:column; gap:10px; }
+/* 每组 20+ 套，选择器只画色块不写名字（名字在 title 里）：
+   带文字的胶囊一行放不下五个，83 套铺开会把编辑器挤满。 */
+.dash-theme-opt { display:block; padding:2px; border:1px solid var(--line); border-radius:8px; background:var(--surface); cursor:pointer; transition:all .16s ease; }
+.dash-theme-opt:hover { border-color:color-mix(in srgb,var(--accent) 45%,var(--line)); transform:translateY(-1px); }
+.dash-theme-opt.is-on { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent); }
+.dash-theme-swatch { display:block; width:34px; height:22px; border-radius:6px; background:linear-gradient(135deg,var(--st-1),var(--st-2) 58%,var(--st-3)); box-shadow:inset 0 0 0 1px rgba(255,255,255,.22); }
+.dash-theme-name { color:var(--ink); font-size:11.5px; font-weight:650; }
+.dash-theme-count { margin-left:6px; color:var(--muted); font-size:10.5px; font-weight:500; }
+.dash-theme-picked { margin-left:6px; color:var(--accent); font-size:11px; font-weight:650; font-style:normal; }
+.style-midnight .dash-theme-opt { background:#202b3d; }
+/* 主题按深浅分组：83 套平铺出来挑不动，分了组能先按"白天/晚上"缩小范围 */
+.dash-theme-group { display:flex; flex-direction:column; gap:5px; }
+.dash-theme-group-name { display:flex; align-items:center; color:var(--muted); font-size:11px; font-weight:600; }
+/* auto-fill 而不是固定列数：编辑器窗口宽窄不一，让它自己排满一行 */
+.dash-theme-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(40px,1fr)); gap:6px; }
+
+/* 背景图选择器：图块点选 + 上传入口 */
+.dash-bg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:8px; }
+.dash-bg-opt { position:relative; display:flex; align-items:center; justify-content:center; height:66px; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:var(--surface); cursor:pointer; transition:border-color .16s,box-shadow .16s; }
+.dash-bg-opt:hover { border-color:color-mix(in srgb,var(--accent) 45%,var(--line)); }
+.dash-bg-opt.is-on { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent); }
+.dash-bg-opt img,.dash-bg-opt video { width:100%; height:100%; object-fit:cover; }
+/* 「动态」角标：缩略图在动就能看出来，但没播起来（还在缓冲/被省电策略拦了）时
+   也得让人知道这个素材是视频，不然会以为传坏了。 */
+/* 免登录开关：这是对外开口子的选项，用琥珀色而不是主题色，让人在一排字段里先看到它。 */
+.dash-public-toggle { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid #f5d9a8; border-radius:8px; background:#fffaf0; color:#7c4a03; font-size:13px; cursor:pointer; }
+.dash-public-toggle input { width:15px; height:15px; accent-color:#d97706; cursor:pointer; }
+.dash-hint-warn { color:#b45309; }
+.dash-tile-public { color:#fbbf24; }
+.dash-bg-opt-tag { position:absolute; top:4px; left:4px; padding:1px 5px; border-radius:6px; color:#fff; background:rgba(2,6,23,.72); font-size:9px; letter-spacing:.5px; }
+.dash-bg-opt-name { position:absolute; left:0; right:0; bottom:0; padding:3px 6px; overflow:hidden; color:#fff; background:linear-gradient(transparent,rgba(0,0,0,.72)); font-size:10px; white-space:nowrap; text-overflow:ellipsis; }
+.dash-bg-none { display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--muted); font-size:11px; }
+.dash-bg-none i { font-size:16px; }
+.dash-bg-opt.is-upload { border-style:dashed; }
+.dash-bg-opt.is-upload:hover .dash-bg-none { color:var(--accent); }
+/* 删除按钮平时不显示：图块本身是"选中"用的，删除是低频动作，别让人误点 */
+.dash-bg-del { position:absolute; top:4px; right:4px; display:none; width:20px; height:20px; border:none; border-radius:6px; color:#fff; background:rgba(190,24,60,.86); font-size:10px; cursor:pointer; }
+.dash-bg-opt:hover .dash-bg-del { display:block; }
+.dash-bg-del:hover { background:#be123c; }
+.style-midnight .dash-bg-opt { background:#202b3d; }
+
+/* 区块配色：折叠面板 + 色块点选 + 手填色值 */
+.dash-color-box { margin-top:10px; border:1px dashed var(--line); border-radius:12px; background:color-mix(in srgb,var(--accent) 4%,var(--surface)); }
+.dash-color-summary { padding:8px 12px; color:var(--ink); font-size:12px; font-weight:650; cursor:pointer; list-style:none; }
+.dash-color-summary::-webkit-details-marker { display:none; }
+.dash-color-summary::after { content:'\f107'; float:right; font-family:FontAwesome; color:var(--muted); }
+.dash-color-box[open] .dash-color-summary::after { content:'\f106'; }
+.dash-color-summary-note { margin-left:6px; color:var(--muted); font-size:10.5px; font-weight:500; }
+.dash-color-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; padding:2px 12px 12px; }
+.dash-color-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.dash-color-label { color:var(--ink); font-size:11.5px; font-weight:650; }
+/* 看板名称那组四个小控件的行内标签和颜色行。字段本身是 <div class="dash-field-grid"> 排的。
+   类名带 name 前缀：dash-color-row 已经被区块配色的 colorPicker() 用着（它本来没有 CSS 规则，
+   是个纯 block 容器），撞名会把每个区块配色字段变成 flex 横排——现象是整组挤成一行、
+   文字一个字一行竖着排。 */
+.dash-sub-label { display:block; margin-bottom:4px; color:var(--muted); font-size:11px; font-weight:600; }
+.dash-name-color-row { display:flex; align-items:center; gap:8px; min-height:38px; }
+.dash-color-reset { margin-left:auto; padding:2px 8px; border:1px solid var(--line); border-radius:999px; color:var(--muted); background:var(--surface); font-size:10px; cursor:pointer; transition:all .16s ease; }
+.dash-color-reset.is-on { color:var(--accent); border-color:color-mix(in srgb,var(--accent) 50%,var(--line)); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); }
+.dash-swatch-row { display:grid; grid-template-columns:repeat(12,1fr); gap:4px; }
+.dash-swatch { height:18px; border:1px solid var(--line); border-radius:5px; cursor:pointer; transition:transform .14s ease,box-shadow .14s ease; }
+.dash-swatch:hover { transform:scale(1.18); }
+.dash-swatch.is-on { box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent); }
+.dash-color-custom { display:flex; align-items:center; gap:6px; margin-top:7px; }
+/* 看板名称的取色器。不复用 dash-color-chip：那个是区块配色用的 22px 棋盘格预览 <span>，
+   套到 <input type="color"> 上棋盘格会透出来，而且 22px 太小不好点。
+   各浏览器给 color 输入框的默认内边距差别很大，清掉才能让色块铺满。 */
+.dash-name-color-chip { flex:none; width:44px; height:30px; padding:0; border:1px solid var(--line); border-radius:7px; background:none; cursor:pointer; }
+.dash-name-color-chip::-webkit-color-swatch-wrapper { padding:0; }
+.dash-name-color-chip::-webkit-color-swatch { border:0; border-radius:6px; }
+.dash-color-chip { flex:none; width:22px; height:22px; border:1px solid var(--line); border-radius:6px; background-image:linear-gradient(45deg,#e5e7eb 25%,transparent 25%,transparent 75%,#e5e7eb 75%),linear-gradient(45deg,#e5e7eb 25%,transparent 25%,transparent 75%,#e5e7eb 75%); background-size:8px 8px; background-position:0 0,4px 4px; }
+.style-midnight .dash-color-box { background:#202b3d; }
+.style-midnight .dash-color-reset { background:#1a2537; }
+
+/* 布局条：看板排布的缩略图，可拖动换位、拖右边缘改宽 */
+/* ---------- 编辑器里的效果预览 ---------- */
+.dash-vp-box { margin-bottom:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface); overflow:hidden; }
+.dash-vp-summary { padding:9px 12px; color:var(--ink); cursor:pointer; font-size:12px; font-weight:700; list-style:none; }
+.dash-vp-summary::-webkit-details-marker { display:none; }
+.dash-vp-note { margin-left:8px; color:var(--muted); font-weight:400; font-size:10.5px; }
+/* 预览高度按视口给，不写死像素：固定 460px 在大屏上白瞎一大片，在小屏上又溢出。
+   68vh 是「看得清整块布局」和「下面配置表单还露得出来」之间的折中；
+   min-height 保证屏幕很矮时也别缩成一条缝。 */
+.dash-vp-frame { min-height:320px; max-height:68vh; border-top:1px solid var(--line); overflow:auto; }
+/* 预览舞台不能撑满视口高：它在弹窗里，撑满就把配置表单挤走了。 */
+.dash-vp-stage { min-height:0; padding:0; }
+/* 预览里的名称行：舞台是 padding:0，得自己补内边距；下面那条装饰线在小预览里太抢，去掉。
+   名称本身的字号/颜色/位置仍然走看板页同一套规则，才能保证预览和实际一致。 */
+.dash-vp-head { margin:0; padding:16px 16px 0; }
+.dash-vp-head::before,.dash-vp-head::after { display:none; }
+.dash-vp-head .dash-stage-title { margin:0; }
+.dash-vp-grid { gap:12px; padding:16px; }
+/* 预览里的单块刷新按钮点了也没用（数据是试跑样例），干脆藏掉别误导。 */
+.dash-vp-grid .dash-block-reload { display:none; }
+
+/* ---------- 区块的脚本变量面板 ---------- */
+/* 变量面板横跨整行：日期输入框挤在半栏里看不清占位提示。 */
+.dash-param-box { grid-column:1/-1; border:1px solid color-mix(in srgb,var(--accent) 26%,var(--line)); border-radius:10px; background:color-mix(in srgb,var(--accent) 4%,var(--surface)); }
+.dash-param-box > summary { padding:8px 12px; color:var(--ink); cursor:pointer; font-size:11.5px; font-weight:650; list-style:none; }
+.dash-param-box > summary::-webkit-details-marker { display:none; }
+.dash-param-sum { margin-left:8px; color:var(--muted); font-weight:400; font-size:10.5px; }
+.dash-param-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; padding:0 12px 12px; }
+.dash-param-head { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.dash-param-name { color:var(--ink); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; font-weight:650; }
+.dash-param-auto { padding:1px 6px; border-radius:6px; background:color-mix(in srgb,#22c55e 16%,transparent); color:#15803d; font-size:9.5px; }
+.dash-param-warn { margin-top:4px; color:#b45309; font-size:10px; line-height:1.5; }
+.style-midnight .dash-param-box { background:#202b3d; }
+.style-midnight .dash-param-auto { color:#86efac; }
+.style-midnight .dash-param-warn { color:#fbbf24; }
+
+.dash-layout-box { margin-bottom:12px; padding:10px 12px 12px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--accent) 5%,var(--surface)); }
+.dash-layout-head { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; }
+.dash-layout-title { color:var(--ink); font-size:12px; font-weight:700; }
+.dash-layout-tip { color:var(--muted); font-size:10.5px; }
+.dash-layout-strip { display:grid; grid-template-columns:repeat(12,1fr); gap:6px; }
+.dash-layout-cell { position:relative; display:flex; flex-direction:column; justify-content:center; gap:2px; overflow:hidden; padding:6px 14px 6px 22px; border:1px solid color-mix(in srgb,var(--cell-accent,var(--accent)) 34%,var(--line)); border-radius:9px; background:color-mix(in srgb,var(--cell-accent,var(--accent)) 11%,var(--surface)); cursor:pointer; transition:box-shadow .15s ease,transform .15s ease; }
+.dash-layout-cell:hover { box-shadow:0 6px 14px -8px color-mix(in srgb,var(--cell-accent,var(--accent)) 75%,transparent); }
+/* 让位动画由 JS 逐块设 transform，这里只给它一条曲线；.22s 够看清、又不拖沓。 */
+.dash-layout-cell { transition:box-shadow .15s ease,transform .22s cubic-bezier(.2,.7,.3,1); }
+/* 拖动中：抬起来跟着指针走，自己不吃 transform 过渡（否则会追不上手）。 */
+.dash-layout-cell.is-dragging { z-index:5; transition:box-shadow .15s ease; box-shadow:0 16px 30px -14px rgba(15,23,42,.55); cursor:grabbing; }
+.dash-layout-strip.is-sorting { cursor:grabbing; }
+.dash-layout-strip.is-sorting .dash-layout-cell:not(.is-dragging) { opacity:.82; }
+.dash-layout-strip.is-sorting .dash-layout-cell:hover { box-shadow:none; }
+.dash-layout-grip { position:absolute; top:0; bottom:0; left:0; display:grid; width:16px; place-items:center; color:color-mix(in srgb,var(--cell-accent,var(--accent)) 70%,var(--muted)); background:color-mix(in srgb,var(--cell-accent,var(--accent)) 14%,transparent); cursor:grab; font-size:9px; touch-action:none; }
+.dash-layout-grip:active { cursor:grabbing; }
+.dash-layout-cell-name { color:var(--ink); font-size:11px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dash-layout-cell-meta { color:var(--muted); font-size:9.5px; }
+.dash-layout-resize { position:absolute; top:4px; right:0; bottom:4px; width:9px; cursor:col-resize; touch-action:none; }
+.dash-layout-resize::after { content:''; position:absolute; top:20%; bottom:20%; right:3px; width:2px; border-radius:1px; background:color-mix(in srgb,var(--cell-accent,var(--accent)) 55%,var(--line)); }
+.dash-layout-resize:hover::after { top:8%; bottom:8%; background:var(--accent); }
+/* 从布局条跳到卡片时闪一下，指明落点 */
+.dash-block-editor.is-flash { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 32%,transparent); transition:box-shadow .3s ease; }
+.style-midnight .dash-layout-box { background:#202b3d; }
+.style-midnight .dash-layout-cell { background:color-mix(in srgb,var(--cell-accent,var(--accent)) 20%,#1a2537); }
+
+/* 「先摆布局、再逐块配置」的两栏工作区。
+   左栏（添加按钮 + 布局条 + 效果预览）常驻并 sticky，右栏只放当前选中那一块的表单：
+   摆布局时视线在左，配置时视线在右，两边互不遮挡，也不用在长列表里上下找。
+   420px 是布局条的下限——再窄 12 栏里的单栏就细到点不准了。 */
+.dash-build { display:grid; grid-template-columns:minmax(420px,5fr) 6fr; gap:16px; align-items:start; }
+.dash-build-left { position:sticky; top:0; }
+.dash-build-right { min-width:0; }
+.dash-build-empty { padding:26px 16px; border:1px dashed var(--line); border-radius:11px; color:var(--muted); background:var(--canvas); font-size:13px; text-align:center; }
+
+/* 添加区：按展示方式直接摆，省掉"先加一块再改类型"这一步。 */
+.dash-add-bar { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; padding:11px 12px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.dash-add-label { color:var(--muted); font-size:12px; font-weight:600; }
+.dash-add-types { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:7px; }
+.dash-add-type { display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 6px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:var(--canvas); font-size:12px; transition:border-color .16s,background .16s,transform .12s; }
+.dash-add-type:hover { border-color:var(--accent); background:var(--accent-soft); transform:translateY(-1px); }
+.dash-add-type i { color:var(--accent); }
+
+/* 选中的那一格：右栏正在配置它，靠描边和轻微抬起把这层对应关系点明。 */
+.dash-layout-cell.is-active { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft),0 6px 14px -10px rgba(15,23,42,.4); }
+.dash-block-editor-pos { color:var(--muted); font-size:12px; font-weight:600; }
+
+.style-midnight .dash-add-bar, .style-midnight .dash-build-empty { background:#202b3d; }
+.style-midnight .dash-add-type { background:#1a2537; }
+
+/* 第一步的字段栅格固定 3 栏。
+   为何要固定：dash-field-grid 用的是 auto-fit minmax(232px)，弹窗放宽到 1320px 后
+   它会排到 5 栏——3 个输入框只占前 3 栏，背景色/背景图那两行写的又是 col-span-2，
+   在 5 栏里也只占 2 栏，于是右侧空出一大片。3 栏正好把一行填满。
+   包在 min-width 里是为了不去覆盖 640px 以下的单栏规则（那条在本文件更靠前）。 */
+@media (min-width:641px) { .dash-step-fields { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+/* 整行铺开：色板和背景图缩略图自己就是会换行的网格，给它整行才不会缩成一小条。 */
+.dash-field-wide { grid-column:1/-1; }
+/* 字号字段：档位下拉 + 手输 px 一行摆开，px 框固定 84px（够放三位数 + 步进箭头）。 */
+.dash-size-row { display:flex; gap:8px; }
+.dash-size-row select { min-width:0; flex:1; }
+.dash-size-row .dash-size-px { width:84px; flex:0 0 auto; }
+
+/* 窄屏（含笔记本小窗）退回单栏竖排：两栏各自都低于可用宽度时，硬挤只会两边都不好用。
+   顺序还是「布局条在上、配置在下」，和两栏时的左→右一致。 */
+@media (max-width:1100px) { .dash-build { grid-template-columns:1fr; }.dash-build-left { position:static; } }

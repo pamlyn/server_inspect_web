@@ -26,7 +26,15 @@ cookies.txt
 *.log
 config.json
 custom_scripts.json
-# 运行时配置不打包进镜像：由 deploy.sh init 生成并通过卷挂载覆盖
+# 运行时配置与运行时状态都不打包进镜像：由 deploy.sh init 生成，
+# 并通过挂载整个 config 目录持久化到宿主机。
+# 打进镜像的后果：容器重建后这些文件会被镜像里的旧副本盖回去，
+# 表现为「重新部署后看板/账号/历史数据回到打包时的样子」。
 config/config.json
 config/custom_scripts.json
+config/custom_dashboards.json
+config/auth_users.json
 config/cookies.txt
+config/known_hosts
+config/*.sqlite3
+config/dashboard_assets/

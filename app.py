@@ -40,6 +40,12 @@ app.register_blueprint(log_bp)
 from modules.pg_config.routes import pg_config_bp
 app.register_blueprint(pg_config_bp)
 
+from modules.custom_dashboards.routes import custom_dashboards_bp
+app.register_blueprint(custom_dashboards_bp)
+# 看板独立页（/dashboard/<id>）单独注册：它是页面路由，不能带 /api 前缀。
+from modules.custom_dashboards.pages import dashboard_pages_bp
+app.register_blueprint(dashboard_pages_bp)
+
 # 注册test_custom_script路由（需要独立路径 /api/test_custom_script）
 from modules.auth.helpers import login_required, permission_required, get_user_permissions
 from modules.custom_scripts.helpers import format_sql_value, resolve_period_value, get_variable_value
@@ -53,6 +59,7 @@ def enforce_api_permissions():
     permission_prefixes = (
         ('/api/logs/dashboard', 'dashboard'),
         ('/api/pg', 'pg_config'), ('/api/custom_scripts', 'custom_sql'),
+        ('/api/custom_dashboards', 'custom_dashboard'),
         ('/api/logs', 'logs'), ('/api/arthas', 'diagnostics'),
         ('/api/inspect', 'inspection'), ('/api/clear_slow_sql_logs', 'inspection'),
         ('/api/test_custom_script', 'custom_sql'),

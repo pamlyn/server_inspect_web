@@ -31,6 +31,8 @@ ALL_PERMISSIONS = {
     'dashboard': '运行总览',
     'inspection': '巡检执行', 'sql_inspect': '数据稽查',
     'custom_sql': '自定义SQL', 'logs': '巡检日志', 'pg_config': 'PG配置', 'diagnostics': '诊断工具',
+    # 看板查看与看板配置分开：业务人员只给查看，配置权可单独授予（含非开发人员）。
+    'custom_dashboard': '自定义看板', 'custom_dashboard_manage': '自定义看板：配置',
 }
 password_errors = {}
 captcha_store = {}

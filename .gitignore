@@ -23,3 +23,7 @@ config/auth_users.json
 config/resource_metrics.sqlite3
 cookies.txt
 .claude/
+config/custom_dashboards.json
+
+# 用户上传的看板背景图（运行时数据，随 config 目录挂载持久化）
+config/dashboard_assets/
