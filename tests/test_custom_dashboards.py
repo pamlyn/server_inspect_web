@@ -37,6 +37,27 @@ class NormalizeBlockTest(unittest.TestCase):
         self.assertLessEqual(layout['h'], dash_helpers.MAX_BLOCK_HEIGHT)
         self.assertLess(layout['x'], dash_helpers.GRID_COLUMNS)
 
+    def test_表格每列宽度只保留合法配置(self):
+        block = dash_helpers.normalize_block({
+            'type': 'table',
+            'columns': ['任务编码', '配送部件', '数量'],
+            'column_widths': {
+                '任务编码': 180,
+                '配送部件': '260',
+                '数量': 10,
+                '不存在的列': 300,
+                '非法值': 'wide',
+            },
+        })
+        self.assertEqual(block['column_widths'], {
+            '任务编码': 180, '配送部件': 260, '数量': 60,
+        })
+        all_columns = dash_helpers.normalize_block({
+            'type': 'table', 'columns': [],
+            'column_widths': {'动态列': 9999, '空值': ''},
+        })
+        self.assertEqual(all_columns['column_widths'], {'动态列': 1200})
+
     def test_刷新间隔下限(self):
         self.assertIsNotNone(dash_helpers.validate_refresh_seconds(5)[1])
         self.assertEqual(dash_helpers.validate_refresh_seconds(0)[0], 0)
@@ -73,6 +94,58 @@ class NormalizeBlockTest(unittest.TestCase):
         self.assertEqual(dash_helpers.to_number('1,024'), 1024.0)
         self.assertEqual(dash_helpers.to_number('12.5%'), 12.5)
         self.assertIsNone(dash_helpers.to_number('未知'))
+    def test_schema_v2修复字段错位并兼容旧配置(self):
+        chart = dash_helpers.normalize_block({
+            'type': 'line', 'value_column': '旧数值列', 'value_columns': ['新数值列']})
+        self.assertEqual(chart['value_columns'], ['新数值列'])
+        legacy_chart = dash_helpers.normalize_block({'type': 'line', 'value_column': '旧数值列'})
+        self.assertEqual(legacy_chart['value_columns'], ['旧数值列'])
+        progress = dash_helpers.normalize_block({'type': 'progress', 'max_value': 250})
+        self.assertEqual(progress['target_value'], '250')
+        metric = dash_helpers.normalize_block({'type': 'metric', 'compare_column': '上期'})
+        self.assertEqual(metric['compare_column'], '上期')
+        self.assertEqual(dash_helpers.normalize_dashboard({'name': 'v2'})['schema_version'], 2)
+
+    def test_宽度支持1到12格且高度支持120到1600像素(self):
+        low = dash_helpers.normalize_block({'layout': {'w': 0, 'height_px': 1}})['layout']
+        high = dash_helpers.normalize_block({'layout': {'w': 99, 'height_px': 9999}})['layout']
+        self.assertEqual((low['w'], low['height_px']), (1, 120))
+        self.assertEqual((high['w'], high['height_px']), (12, 1600))
+        legacy = dash_helpers.normalize_block({'layout': {'h': 3}})['layout']
+        self.assertEqual(legacy['h'], 3)
+        self.assertEqual(legacy['height_px'], 276)
+
+    def test_高级组件与饼图选项通过白名单(self):
+        for block_type in ('gauge', 'ranking', 'status', 'metric_group', 'comparison',
+                           'area', 'grouped_bar', 'stacked_bar', 'alert_list', 'timeline',
+                           'clock', 'section'):
+            with self.subTest(block_type=block_type):
+                self.assertEqual(dash_helpers.normalize_block({'type': block_type})['type'], block_type)
+        pie = dash_helpers.normalize_block({
+            'type': 'pie', 'pie_style': 'rose', 'show_labels': False, 'show_legend': False,
+            'value_columns': ['数量']})
+        self.assertEqual(pie['pie_style'], 'rose')
+        self.assertFalse(pie['show_labels'])
+        self.assertFalse(pie['show_legend'])
+
+    def test_排名默认降序且动态列表支持匀速滚动(self):
+        ranking = dash_helpers.normalize_block({
+            'type': 'ranking', 'value_columns': ['数量']})
+        self.assertEqual(ranking['sort'], {'column': '数量', 'direction': 'desc'})
+        alert = dash_helpers.normalize_block({
+            'type': 'alert_list', 'list_mode': 'marquee', 'marquee_speed': 28})
+        self.assertEqual((alert['list_mode'], alert['marquee_speed']), ('marquee', 28))
+        invalid = dash_helpers.normalize_block({
+            'type': 'timeline', 'list_mode': 'transform:evil', 'marquee_speed': 9999})
+        self.assertEqual((invalid['list_mode'], invalid['marquee_speed']), ('static', 400))
+
+    def test_高级组件仍不允许夹带SQL字段(self):
+        block = dash_helpers.normalize_block({
+            'type': 'gauge', 'script_id': 'safe-script', 'content': 'DELETE FROM t',
+            'source_sql': 'DROP TABLE t', 'database': 'mes'})
+        self.assertEqual(block['script_id'], 'safe-script')
+        for key in ('content', 'source_sql', 'database'):
+            self.assertNotIn(key, block)
 
 
 class BlockParamsTest(unittest.TestCase):
@@ -169,6 +242,45 @@ class DashboardApiTest(unittest.TestCase):
         response = self._run_with_perms(['inspection'], lambda: self.client.get('/api/custom_dashboards'))
         self.assertEqual(response.status_code, 403)
 
+    def test_只授权某个看板时列表与改删都按看板隔离(self):
+        """只被授权管理 d1 的人：列表只看得到 d1、不能新建、不能改 d2。"""
+        dash_helpers.dashboards[:] = [
+            dash_helpers.normalize_dashboard({'id': 'd1', 'name': '我的看板', 'owner': 'admin'}),
+            dash_helpers.normalize_dashboard({'id': 'd2', 'name': '别人的看板', 'owner': 'admin'}),
+        ]
+        self.login('boarder')
+        access = {'view': {'all': False, 'dashboard_ids': ['d1']},
+                  'manage': {'all': False, 'dashboard_ids': ['d1']}}
+        perms = ['custom_dashboard', 'custom_dashboard_manage']
+
+        def run(func):
+            with patch('modules.custom_dashboards.routes.get_custom_dashboard_access',
+                       lambda _u: access), \
+                 patch('modules.auth.helpers.get_custom_dashboard_access', lambda _u: access):
+                return self._run_with_perms(perms, func)
+
+        listed = run(lambda: self.client.get('/api/custom_dashboards')).get_json()
+        self.assertEqual([item['id'] for item in listed['dashboards']], ['d1'])
+        self.assertTrue(listed['dashboards'][0]['can_manage'])
+        self.assertFalse(listed['can_create'], '只被授权管理某几个看板的人不能新建')
+
+        self.assertEqual(run(lambda: self.client.post('/api/custom_dashboards',
+                                                      json={'name': '新的'})).status_code, 403)
+        self.assertEqual(run(lambda: self.client.put('/api/custom_dashboards/d1',
+                                                     json={'name': '改名'})).status_code, 200)
+        self.assertEqual(run(lambda: self.client.put('/api/custom_dashboards/d2',
+                                                     json={'name': '改名'})).status_code, 403)
+        self.assertEqual(run(lambda: self.client.delete('/api/custom_dashboards/d2')).status_code, 403)
+        self.assertEqual(run(lambda: self.client.get('/api/custom_dashboards/d2')).status_code, 403)
+        self.assertEqual(run(lambda: self.client.get(
+            '/api/custom_dashboards/d2/export')).status_code, 403)
+        self.assertEqual(run(lambda: self.client.get(
+            '/api/custom_dashboards/scripts?dashboard_id=d2')).status_code, 403)
+        self.assertEqual(run(lambda: self.client.get(
+            '/api/custom_dashboards/scripts?dashboard_id=d1')).status_code, 200)
+        self.assertEqual(run(lambda: self.client.post('/api/custom_dashboards/import',
+                                                      json={})).status_code, 403)
+
     def test_创建后可读取(self):
         self.login()
         perms = ['custom_dashboard', 'custom_dashboard_manage']
@@ -177,6 +289,7 @@ class DashboardApiTest(unittest.TestCase):
         created = self._run_with_perms(perms, lambda: self.client.post('/api/custom_dashboards', json=payload))
         self.assertEqual(created.status_code, 200)
         dashboard_id = created.get_json()['dashboard']['id']
+        self.assertEqual(created.get_json()['dashboard']['theme'], 'command_center')
 
         listed = self._run_with_perms(perms, lambda: self.client.get('/api/custom_dashboards'))
         self.assertEqual(listed.get_json()['dashboards'][0]['name'], '生产日报')
@@ -409,10 +522,13 @@ class DashboardBackgroundTest(unittest.TestCase):
         self.assertEqual(board['bg_blur'], 0)
 
     def test_新增主题在白名单内(self):
-        for theme in ('nebula', 'cyber', 'daylight', 'sakura', 'bronze', 'verdant', 'frost'):
+        for theme in ('command_center', 'cyber_cyan', 'deep_space', 'industrial_amber',
+                      'emerald_ops', 'black_gold', 'data_white', 'nebula', 'cyber',
+                      'daylight', 'sakura', 'bronze', 'verdant', 'frost'):
             with self.subTest(theme=theme):
                 self.assertEqual(
                     dash_helpers.normalize_dashboard({'name': 'x', 'theme': theme})['theme'], theme)
+        self.assertIn('data_white', dash_helpers.LIGHT_THEMES)
 
     def test_每种风格的主题都不少于25套(self):
         """用户要求每组不低于 25 套。前端按 group 分组，这里按 CSS 类是否定义来数——
@@ -573,7 +689,72 @@ class DashboardBackgroundTest(unittest.TestCase):
         self.assertIn('<colgroup>', sync)
         self.assertIn('Math.max(', sync, '取表头/数据两边的较大值，免得列名被挤到换行')
         self.assertIn('minWidth', sync, '装不下时两张表要一起横向溢出，不能各自被压缩')
+        self.assertIn('targetWidth - measuredWidth', sync, '容器余量要算出来供自动列分配，避免最右列被裁切')
+        self.assertIn('ResizeObserver', sync, '全屏或容器宽度变化后要重新计算列宽')
+        self.assertIn("table.style.width = ''", sync, '重新测量前必须移除上次写死的表宽')
         self.assertIn('headBox.scrollLeft = wrap.scrollLeft', sync, '横向滚动时表头要跟着走')
+
+    def test_全自动列宽按每列最长内容完整展示(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, 'static/js/custom_dashboard.js'), encoding='utf-8') as handle:
+            js = handle.read()
+        self.assertIn('function tableCellNaturalWidth', js)
+        sync = js.split('function syncTableColumns', 1)[1].split('\n    /* lazy', 1)[0]
+        self.assertIn("querySelectorAll('tbody tr')", sync, '不能只测第一行，要扫描当前全部数据行')
+        self.assertIn('tableCellNaturalWidth(row.children[i])', sync, '每列要以最长完整内容为准')
+        self.assertIn('context.measureText', js, '要用真实字体测量完整文字，不能依赖已被表格压缩的 DOM 宽度')
+        self.assertIn('const contentWidth = Math.max(1, widths[index] - 18);', sync,
+                      '文字容器宽度要扣掉左右 padding 并至少留 1px')
+        self.assertIn('text.style.width = `${contentWidth}px`', sync,
+                      '文字容器必须有明确宽度，防止 table-cell 裁切不稳定时越过相邻列')
+        append = js.split('function appendNextBatch', 1)[1].split('\n    // 滚动加载用', 1)[0]
+        self.assertIn('syncTableColumns(box)', append, '懒加载出现更长内容后要重新测宽')
+
+    def test_只配部分列时自动列要压进一屏(self):
+        """只手填几列时，剩下的自动列必须按比例压到剩余空间，不能把后面的列挤出屏幕。
+
+        「优先看到所有列」是明确的业务优先级：手填宽度照给，自动列让位。
+        """
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, 'static/js/custom_dashboard.js'), encoding='utf-8') as handle:
+            js = handle.read()
+        sync = js.split('function syncTableColumns', 1)[1].split('\n    /* lazy', 1)[0]
+        self.assertIn('if (wrap.clientWidth <= 0) return;', sync, '区块未显示时不能按 0 宽平分')
+        self.assertIn('const ratio = room / autoTotal;', sync, '自动列要按剩余空间比例压缩')
+        self.assertIn('MIN_AUTO_COLUMN', sync, '压缩要有下限，避免列窄到看不出内容')
+        self.assertIn('const naturalWidth = hasConfiguredWidths ? measuredWidth : wrap.clientWidth;', sync,
+                      '压缩后不能再用 auto 布局量到的表宽当目标，否则空间又被加回去')
+
+    def test_表格支持逐列配置宽度(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, 'static/js/custom_dashboard.js'), encoding='utf-8') as handle:
+            js = handle.read()
+        self.assertIn('data-column-width=', js, '编辑器和表头都要携带逐列宽度')
+        self.assertIn('block.column_widths', js, '逐列宽度要进入区块配置并参与渲染')
+        sync = js.split('function syncTableColumns', 1)[1].split('\n    /* lazy', 1)[0]
+        self.assertIn('headCells[i].dataset.columnWidth', sync, '手工宽度必须优先于自动测量')
+        self.assertIn('automatic.forEach', sync, '未配置宽度的列仍要自动分配剩余空间')
+        self.assertIn('tableWidth', sync, '表头和表体必须使用配置后相同的总宽度')
+        handler = js.split('function applyFieldChange', 1)[1].split('\n    /** 把第 from', 1)[0]
+        self.assertIn('target.dataset.columnWidth', handler)
+        self.assertIn('block.column_widths = {}', handler, '切换脚本要清掉旧脚本的列宽配置')
+
+    def test_固定列宽内容不能溢出到相邻列(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, 'static/js/custom_dashboard.js'), encoding='utf-8') as handle:
+            js = handle.read()
+        with open(os.path.join(root, 'static/css/styles.css'), encoding='utf-8') as handle:
+            css = handle.read()
+        self.assertIn('class="dash-table-cell-text"', js)
+        self.assertIn('<td title="${escapeHtml(display)}">', js, '截断后悬停要能看到完整单元格内容')
+        self.assertIn('function fitCellText', js,
+                      '要按真实像素宽度截断文本，作为 CSS 省略号之外的兜底')
+        self.assertIn('holder.dataset.fullText', js, '截断前要留住完整值，供重新测量和 title 使用')
+        sync = js.split('function syncTableColumns', 1)[1].split('\n    /* lazy', 1)[0]
+        self.assertIn('fitCellText(cell, contentWidth)', sync, '定好列宽后必须逐格按该宽度截字')
+        self.assertIn('.dash-table-cell-text { display:block; width:100%; max-width:100%; overflow:hidden;', css)
+        self.assertIn('text-overflow:ellipsis; white-space:nowrap; }', css)
+        self.assertIn('.dash-table td { padding:6px 9px; overflow:hidden;', css)
 
     def test_配色色板够用且按整行排(self):
         """色板原来只有 12 个、全是明亮色，配"底色"根本没有能压住文字的深色可选。
@@ -841,6 +1022,120 @@ class PublicDashboardTest(unittest.TestCase):
                                        json={'name': '借权限', 'owner': 'someone_else', 'blocks': []})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['dashboard']['owner'], 'admin')
+
+
+class DashboardScopeTest(unittest.TestCase):
+    """逐看板权限：查看和管理分开，且旧角色（没有 custom_dashboard_scope）不能被降权。"""
+
+    def _auth_data(self, role):
+        return {'roles': [dict(role, id='r1')],
+                'users': [{'username': 'u1', 'enabled': True, 'role_ids': ['r1']}]}
+
+    def _access(self, role):
+        from modules.auth import helpers as auth_helpers
+        with patch.object(auth_helpers, 'load_auth_data', lambda: self._auth_data(role)):
+            return auth_helpers.get_custom_dashboard_access('u1')
+
+    def _can(self, role, dashboard_id, action='view'):
+        from modules.auth import helpers as auth_helpers
+        with patch.object(auth_helpers, 'load_auth_data', lambda: self._auth_data(role)):
+            return auth_helpers.can_access_custom_dashboard('u1', dashboard_id, action)
+
+    def test_旧角色没有scope时保持全量(self):
+        """升级前的角色只有功能权限，缺 scope 不能被当成"没授权任何看板"。"""
+        access = self._access({'permissions': ['custom_dashboard', 'custom_dashboard_manage']})
+        self.assertTrue(access['view']['all'])
+        self.assertTrue(access['manage']['all'])
+        self.assertTrue(self._can({'permissions': ['custom_dashboard']}, 'any_board'))
+
+    def test_选定范围只放行指定看板(self):
+        role = {'permissions': ['custom_dashboard'],
+                'custom_dashboard_scope': {'view': {'mode': 'selected', 'dashboard_ids': ['d1']},
+                                           'manage': {'mode': 'selected', 'dashboard_ids': []}}}
+        self.assertTrue(self._can(role, 'd1'))
+        self.assertFalse(self._can(role, 'd2'))
+        self.assertFalse(self._can(role, 'd1', 'manage'))
+
+    def test_管理权限自带查看该看板(self):
+        role = {'permissions': ['custom_dashboard_manage'],
+                'custom_dashboard_scope': {'view': {'mode': 'selected', 'dashboard_ids': []},
+                                           'manage': {'mode': 'selected', 'dashboard_ids': ['d3']}}}
+        self.assertTrue(self._can(role, 'd3', 'manage'))
+        self.assertTrue(self._can(role, 'd3'), '能管理就必须能查看，否则编辑完自己看不了')
+        self.assertFalse(self._can(role, 'd4'))
+
+    def test_没有功能权限时scope不生效(self):
+        role = {'permissions': ['inspection'],
+                'custom_dashboard_scope': {'view': {'mode': 'all', 'dashboard_ids': []},
+                                           'manage': {'mode': 'all', 'dashboard_ids': []}}}
+        self.assertFalse(self._can(role, 'd1'))
+        self.assertFalse(self._can(role, 'd1', 'manage'))
+
+    def test_admin恒为全量(self):
+        from modules.auth import helpers as auth_helpers
+        access = auth_helpers.get_custom_dashboard_access(auth_helpers.ADMIN_USERNAME)
+        self.assertTrue(access['view']['all'] and access['manage']['all'])
+
+    def test_规范化会收敛非法输入(self):
+        from modules.auth import helpers as auth_helpers
+        scope = auth_helpers.normalize_custom_dashboard_scope(
+            {'view': {'mode': '乱填', 'dashboard_ids': ['d2', ' ', 'd1', 'd1']}, 'manage': None})
+        self.assertEqual(scope['view'], {'mode': 'all', 'dashboard_ids': ['d1', 'd2']})
+        self.assertEqual(scope['manage'], {'mode': 'all', 'dashboard_ids': []})
+        self.assertIsNone(auth_helpers.normalize_custom_dashboard_scope('不是字典'))
+
+
+class DashboardJsonPortabilityTest(unittest.TestCase):
+    """复制/导入看板 JSON：只按脚本名称对齐，不带 SQL 也不带库配置。"""
+
+    def setUp(self):
+        from modules.custom_dashboards import routes as dash_routes
+        self.routes = dash_routes
+        self.dashboard = dash_helpers.normalize_dashboard({
+            'id': 'd1', 'name': '生产日报', 'owner': 'admin', 'public': True,
+            'blocks': [{'type': 'table', 'title': '报工', 'script_id': 's1'}],
+        })
+
+    def test_导出不含id与SQL只留脚本名称(self):
+        with patch.object(self.routes, 'find_script', lambda _id: {'id': 's1', 'name': '报工明细'}):
+            payload = self.routes._dashboard_export_payload(self.dashboard)
+        self.assertEqual(payload['format'], 'server_inspect_dashboard')
+        for key in ('id', 'owner', 'created_at', 'updated_at', 'bg_image'):
+            self.assertNotIn(key, payload, f'{key} 不该跨项目带过去')
+        block = payload['blocks'][0]
+        self.assertEqual(block['script_name'], '报工明细')
+        self.assertNotIn('script_id', block, '脚本 id 在别的项目里对不上，只能按名称匹配')
+        self.assertFalse(self.routes.FORBIDDEN_BLOCK_FIELDS.intersection(block.keys()))
+
+    def _import(self, raw, scripts=()):
+        with app_module.app.test_request_context('/'):
+            with patch.object(self.routes, 'script_metadata', lambda _u: list(scripts)):
+                return self.routes._dashboard_import_payload(raw)
+
+    def test_导入拒绝非看板JSON(self):
+        payload, unmatched, error = self._import({'name': '随便一个json'})
+        self.assertIsNone(payload)
+        self.assertEqual(unmatched, [])
+        self.assertIn('不是有效的自定义看板 JSON', error)
+
+    def test_导入按名称匹配并标出缺失脚本(self):
+        raw = {'format': 'server_inspect_dashboard', 'format_version': 1, 'name': '生产日报',
+               'blocks': [{'type': 'table', 'script_name': '报工明细'},
+                          {'type': 'metric', 'script_name': '本项目没有的脚本'}]}
+        payload, unmatched, error = self._import(raw, [{'id': 's9', 'name': '报工明细'}])
+        self.assertIsNone(error)
+        self.assertEqual(unmatched, ['本项目没有的脚本'])
+        self.assertEqual(payload['blocks'][0]['script_id'], 's9')
+        self.assertEqual(payload['blocks'][1]['script_id'], '', '匹配不到就清空引用，等人重选')
+        self.assertNotIn('format', payload)
+
+    def test_导入不继承免登录开关(self):
+        """原看板可能是 public 的；导入到新项目默认关掉，避免无意开一个免登录入口。"""
+        raw = {'format': 'server_inspect_dashboard', 'name': '生产日报', 'public': True, 'blocks': []}
+        payload, _, _ = self._import(raw)
+        imported = dash_helpers.normalize_dashboard({**payload, 'id': None, 'public': False,
+                                                    'owner': 'admin'})
+        self.assertFalse(imported['public'])
 
 
 if __name__ == '__main__':

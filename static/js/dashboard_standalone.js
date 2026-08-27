@@ -8,7 +8,7 @@
     const root = document.getElementById('standaloneRoot');
     if (!root || !window.DashboardRender) return;
 
-    const { blockShell, renderBlockBody, escapeHtml, bindTableScroll, bindMarquee } = window.DashboardRender;
+    const { blockShell, renderBlockBody, escapeHtml, bindTableScroll, bindMarquee, bindClocks } = window.DashboardRender;
     const dashboardId = root.dataset.dashboardId;
     const refreshSeconds = Number(root.dataset.refresh) || 0;
     const grid = document.getElementById('standaloneGrid');
@@ -33,7 +33,7 @@
         }
         grid.innerHTML = blocks.map(block => blockShell(block, payloadMap ? payloadMap[block.id] : null)).join('');
         // innerHTML 重写会丢掉旧监听，所以每次渲染后都要重新绑一遍滚动加载。
-        bindTableScroll(grid); bindMarquee(grid);
+        bindTableScroll(grid); bindMarquee(grid); bindClocks(grid);
     }
 
     async function loadConfig() {
@@ -71,7 +71,7 @@
                 `/api/custom_dashboards/${encodeURIComponent(dashboardId)}/blocks/${encodeURIComponent(blockId)}/execute`,
                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
             body.innerHTML = renderBlockBody(block, await response.json());
-            bindTableScroll(body); bindMarquee(body);
+            bindTableScroll(body); bindMarquee(body); bindClocks(body);
         } catch (error) {
             body.innerHTML = `<div class="dash-block-error"><i class="fa fa-exclamation-triangle"></i><span>${escapeHtml(error.message || error)}</span></div>`;
         }

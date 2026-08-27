@@ -1,6 +1,7 @@
 let authAccess = null;
 let authRoles = [];
 let customSqlOptions = { categories: [], scripts: [] };
+let customDashboardOptions = [];
 
 function selectedValues(containerId) {
     return [...document.querySelectorAll(`#${containerId} input:checked`)].map(input => input.value);
@@ -20,6 +21,40 @@ function effectiveRolePermissions(permissions = []) {
 }
 function escapeAuthHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+function dashboardScope() {
+    const part = action => {
+        const mode = document.querySelector(`input[name="dashboard${action}Mode"]:checked`)?.value || 'all';
+        return { mode, dashboard_ids: mode === 'selected' ? selectedValues(`dashboard${action}Options`) : [] };
+    };
+    return { view: part('View'), manage: part('Manage') };
+}
+function renderDashboardScope(scope) {
+    const normalized = scope || { view: { mode: 'all', dashboard_ids: [] }, manage: { mode: 'all', dashboard_ids: [] } };
+    ['View', 'Manage'].forEach(action => {
+        const key = action.toLowerCase();
+        const item = normalized[key] || { mode: 'all', dashboard_ids: [] };
+        const mode = item.mode === 'selected' ? 'selected' : 'all';
+        const radio = document.querySelector(`input[name="dashboard${action}Mode"][value="${mode}"]`);
+        if (radio) radio.checked = true;
+        const box = document.getElementById(`dashboard${action}Options`);
+        if (box) {
+            box.innerHTML = customDashboardOptions.map(board => `<label class="flex items-center text-sm"><input type="checkbox" class="mr-2" value="${escapeAuthHtml(board.id)}" ${(item.dashboard_ids || []).includes(String(board.id)) ? 'checked' : ''}>${escapeAuthHtml(board.name)}</label>`).join('') || '<p class="text-xs text-gray-400">暂无看板</p>';
+            box.classList.toggle('hidden', mode !== 'selected');
+        }
+    });
+    updateDashboardScopeVisibility();
+}
+function updateDashboardScopeVisibility() {
+    const permissions = selectedValues('rolePermissionOptions');
+    const config = document.getElementById('customDashboardScopeConfig');
+    if (config) config.classList.toggle('hidden', !permissions.includes('custom_dashboard') && !permissions.includes('custom_dashboard_manage'));
+    [['View', 'custom_dashboard'], ['Manage', 'custom_dashboard_manage']].forEach(([action, permission]) => {
+        const section = document.getElementById(`dashboard${action}Scope`);
+        const mode = document.querySelector(`input[name="dashboard${action}Mode"]:checked`)?.value;
+        if (section) section.classList.toggle('hidden', !permissions.includes(permission));
+        document.getElementById(`dashboard${action}Options`)?.classList.toggle('hidden', !permissions.includes(permission) || mode !== 'selected');
+    });
 }
 function customSqlScope() {
     const mode = document.querySelector('input[name="customSqlScopeMode"]:checked')?.value || 'all';
@@ -50,12 +85,13 @@ function updateCustomSqlScopeVisibility() {
 function renderOptions(containerId, items, selected, labelKey, valueKey) {
     const container = document.getElementById(containerId);
     container.innerHTML = items.map(item => `<label class="flex items-center text-sm text-gray-700"><input type="checkbox" class="mr-2" value="${escapeAuthHtml(item[valueKey])}" ${selected.includes(item[valueKey]) ? 'checked' : ''}>${escapeAuthHtml(item[labelKey])}</label>`).join('');
-    if (containerId === 'rolePermissionOptions') container.querySelectorAll('input').forEach(input => input.addEventListener('change', updateCustomSqlScopeVisibility));
+    if (containerId === 'rolePermissionOptions') container.querySelectorAll('input').forEach(input => input.addEventListener('change', () => { updateCustomSqlScopeVisibility(); updateDashboardScopeVisibility(); }));
 }
 function resetRoleForm() {
     document.getElementById('roleId').value = ''; document.getElementById('roleName').value = ''; document.getElementById('roleDescription').value = '';
     renderOptions('rolePermissionOptions', rolePermissionItems(), [], 'name', 'id');
     renderCustomSqlScope();
+    renderDashboardScope();
 }
 function resetUserForm() {
     document.getElementById('userUsernameEdit').value = ''; document.getElementById('userUsername').value = ''; document.getElementById('userUsername').readOnly = false;
@@ -67,7 +103,14 @@ function renderRoles() {
     list.innerHTML = authRoles.map(role => {
         const scope = role.custom_sql_scope || { mode: 'all', category_names: [], script_ids: [] };
         const scopeSummary = (role.permissions || []).includes('custom_sql') ? ` · 自定义SQL：${scope.mode === 'selected' ? `分类${(scope.category_names || []).length}个，脚本${(scope.script_ids || []).length}个` : '全部'}` : '';
-        return `<div class="border rounded-lg p-3 flex justify-between gap-3"><div><p class="text-sm font-medium">${escapeAuthHtml(role.name)}</p><p class="text-xs text-gray-500">${escapeAuthHtml(role.description || '无说明')} · ${(role.permissions || []).map(id => escapeAuthHtml(authAccess.permission_labels[id] || id)).join('、') || '无功能权限'}${scopeSummary}</p></div><div>${role.id === 'system_admin' ? '<span class="text-xs text-gray-400">系统内置</span>' : `<button class="edit-role text-primary text-xs mr-2" data-id="${escapeAuthHtml(role.id)}">编辑</button><button class="delete-role text-red-500 text-xs" data-id="${escapeAuthHtml(role.id)}">删除</button>`}</div></div>`;
+        const boardScope = role.custom_dashboard_scope || {};
+        const boardSummary = [['custom_dashboard', 'view', '看板查看'], ['custom_dashboard_manage', 'manage', '看板管理']]
+            .filter(([permission]) => (role.permissions || []).includes(permission))
+            .map(([, key, label]) => {
+                const item = boardScope[key] || { mode: 'all', dashboard_ids: [] };
+                return ` · ${label}：${item.mode === 'selected' ? `${(item.dashboard_ids || []).length}个看板` : '全部'}`;
+            }).join('');
+        return `<div class="border rounded-lg p-3 flex justify-between gap-3"><div><p class="text-sm font-medium">${escapeAuthHtml(role.name)}</p><p class="text-xs text-gray-500">${escapeAuthHtml(role.description || '无说明')} · ${(role.permissions || []).map(id => escapeAuthHtml(authAccess.permission_labels[id] || id)).join('、') || '无功能权限'}${scopeSummary}${boardSummary}</p></div><div>${role.id === 'system_admin' ? '<span class="text-xs text-gray-400">系统内置</span>' : `<button class="edit-role text-primary text-xs mr-2" data-id="${escapeAuthHtml(role.id)}">编辑</button><button class="delete-role text-red-500 text-xs" data-id="${escapeAuthHtml(role.id)}">删除</button>`}</div></div>`;
     }).join('');
     list.querySelectorAll('.edit-role').forEach(btn => btn.onclick = () => {
         const role = authRoles.find(item => item.id === btn.dataset.id);
@@ -76,6 +119,7 @@ function renderRoles() {
         document.getElementById('roleDescription').value = role.description || '';
         renderOptions('rolePermissionOptions', rolePermissionItems(), effectiveRolePermissions(role.permissions), 'name', 'id');
         renderCustomSqlScope(role.custom_sql_scope || { mode: 'all', category_names: [], script_ids: [] });
+        renderDashboardScope(role.custom_dashboard_scope);
     });
     list.querySelectorAll('.delete-role').forEach(btn => btn.onclick = async () => { if (await showConfirm('确定删除该角色吗？', '删除角色')) fetch(`/api/auth/roles/${btn.dataset.id}`, { method: 'DELETE' }).then(handleResult); });
 }
@@ -99,16 +143,19 @@ async function loadPermissionManagement() {
     if (roleList) roleList.innerHTML = '<p class="text-sm text-gray-400">正在加载角色...</p>';
     if (userList) userList.innerHTML = '<p class="text-sm text-gray-400">正在加载人员...</p>';
     try {
-        const [rolesResponse, usersResponse, optionsResponse] = await Promise.all([
+        const [rolesResponse, usersResponse, optionsResponse, boardsResponse] = await Promise.all([
             fetch('/api/auth/roles'),
             fetch('/api/auth/users'),
             fetch('/api/auth/custom-sql-options'),
+            fetch('/api/auth/dashboard-options'),
         ]);
-        const [rolesData, usersData, optionsData] = await Promise.all([rolesResponse.json(), usersResponse.json(), optionsResponse.json()]);
+        const [rolesData, usersData, optionsData, boardsData] = await Promise.all([rolesResponse.json(), usersResponse.json(), optionsResponse.json(), boardsResponse.json()]);
         if (!rolesResponse.ok) throw new Error(rolesData.error || '加载角色失败');
         if (!usersResponse.ok) throw new Error(usersData.error || '加载人员失败');
         if (!optionsResponse.ok) throw new Error(optionsData.error || '加载自定义SQL授权项失败');
         customSqlOptions = { categories: optionsData.categories || [], scripts: optionsData.scripts || [] };
+        // 看板授权项加载失败不阻塞角色管理，退化为“暂无看板”。
+        customDashboardOptions = boardsResponse.ok ? (boardsData.dashboards || []) : [];
         authRoles = rolesData.roles || [];
         renderRoles();
         renderUsers(usersData.users || []);
@@ -164,12 +211,21 @@ async function loadAccess() {
 document.addEventListener('DOMContentLoaded', () => {
     loadAccess();
     document.querySelectorAll('input[name="customSqlScopeMode"]').forEach(input => input.addEventListener('change', updateCustomSqlScopeVisibility));
+    document.querySelectorAll('input[name="dashboardViewMode"], input[name="dashboardManageMode"]').forEach(input => input.addEventListener('change', updateDashboardScopeVisibility));
     document.getElementById('saveRoleBtn')?.addEventListener('click', () => {
         const id = document.getElementById('roleId').value;
         const permissions = selectedValues('rolePermissionOptions');
-        const payload = { name: document.getElementById('roleName').value.trim(), description: document.getElementById('roleDescription').value.trim(), permissions, custom_sql_scope: customSqlScope() };
+        const payload = { name: document.getElementById('roleName').value.trim(), description: document.getElementById('roleDescription').value.trim(), permissions, custom_sql_scope: customSqlScope(), custom_dashboard_scope: dashboardScope() };
         if (permissions.includes('custom_sql') && payload.custom_sql_scope.mode === 'selected' && !payload.custom_sql_scope.category_names.length && !payload.custom_sql_scope.script_ids.length) {
             showToast('请至少选择一个自定义SQL分类或脚本', 'warning');
+            return;
+        }
+        const boardInvalid = [['custom_dashboard', 'view', '查看'], ['custom_dashboard_manage', 'manage', '管理']]
+            .find(([permission, key]) => permissions.includes(permission)
+                && payload.custom_dashboard_scope[key].mode === 'selected'
+                && !payload.custom_dashboard_scope[key].dashboard_ids.length);
+        if (boardInvalid) {
+            showToast(`请至少选择一个可${boardInvalid[2]}的自定义看板`, 'warning');
             return;
         }
         fetch(id ? `/api/auth/roles/${id}` : '/api/auth/roles', { method: id ? 'PUT' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) }).then(handleResult);

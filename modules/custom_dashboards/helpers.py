@@ -30,13 +30,26 @@ from modules.inspection.helpers import execute_sql
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 DASHBOARDS_FILE = os.path.join(BASE_DIR, 'config', 'custom_dashboards.json')
 
-# 区块类型：指标卡 / 表格 / 柱状图 / 折线图 / 饼图 / 进度条 / 文本说明
-ALLOWED_BLOCK_TYPES = ('metric', 'table', 'bar', 'line', 'pie', 'progress', 'text')
+# schema v2 在保留旧区块的基础上增加大屏常用组件与高级趋势组件。
+SCHEMA_VERSION = 2
+ALLOWED_BLOCK_TYPES = (
+    'metric', 'table', 'bar', 'line', 'pie', 'progress', 'text',
+    'gauge', 'ranking', 'status', 'metric_group', 'comparison',
+    'area', 'grouped_bar', 'stacked_bar', 'alert_list', 'timeline',
+    'clock', 'section',
+)
 ALLOWED_SORT_DIRECTIONS = ('asc', 'desc')
 ALLOWED_AGGREGATES = ('first', 'sum', 'avg', 'max', 'min', 'count')
 ALLOWED_TRENDS = ('none', 'up_good', 'up_bad')
+ALLOWED_PIE_STYLES = ('standard', 'donut', 'rose', 'half')
+ALLOWED_CHART_STYLES = ('line', 'area')
+ALLOWED_BAR_MODES = ('grouped', 'stacked')
+ALLOWED_LIST_MODES = ('static', 'marquee')
 # 看板背景主题（独立页 + 画廊小块封面共用），只允许这几种，避免自由输入背景样式。
 ALLOWED_THEMES = (
+    # 高级大屏主题优先展示；旧主题全部保留兼容。
+    'command_center', 'quantum', 'matrix', 'obsidian_gold', 'polar_night', 'crimson_ops',
+    'cyber_cyan', 'deep_space', 'industrial_amber', 'emerald_ops', 'black_gold', 'data_white',
     # 深色系（挂大屏用得最多）
     'aurora', 'midnight', 'ocean', 'ember', 'forest', 'plum', 'slate',
     'indigo', 'teal', 'navy', 'olive', 'maroon', 'cocoa', 'denim', 'jade', 'rust',
@@ -73,6 +86,7 @@ ALLOWED_NAME_SIZES = ('xs', 'sm', 'md', 'lg', 'xl', 'xxl')
 # 浅色主题：舞台上的文字要反成深色（模板据此加 is-light 类）。
 # 单独列一份而不是靠算颜色亮度：主题色值是手挑的，深浅是设计意图，不该由代码猜。
 LIGHT_THEMES = (
+    'data_white',
     'daylight', 'linen', 'mint', 'sakura', 'sand', 'seafoam', 'pearl', 'blossom', 'celadon',
     'ivory', 'porcelain', 'peach', 'lilac', 'sky', 'oat', 'lemonade', 'rosewater', 'aqua',
     'cloud', 'honey', 'fresco', 'basil', 'parchment', 'glaze', 'coral', 'frost',
@@ -81,8 +95,14 @@ LIGHT_THEMES = (
 GRID_COLUMNS = 12
 MAX_BLOCKS = 30
 MAX_BLOCK_WIDTH = 12
+# v1 的 layout.h 是 92px 左右一档，v2 改为明确的像素高度；常量继续保留供旧配置兼容。
 MAX_BLOCK_HEIGHT = 8
+MIN_BLOCK_HEIGHT_PX = 120
+MAX_BLOCK_HEIGHT_PX = 1600
+LEGACY_BLOCK_HEIGHT_PX = 92
 MAX_PAGE_SIZE = 200
+MIN_TABLE_COLUMN_WIDTH = 60
+MAX_TABLE_COLUMN_WIDTH = 1200
 # 单区块最多返回的行数：看板是概览场景，超出部分截断并回传 truncated 标记，
 # 避免某个脚本返回十万行把浏览器和内存打满。
 MAX_BLOCK_ROWS = 1000
@@ -253,6 +273,25 @@ def _normalize_columns(value):
     return columns[:40]
 
 
+def _normalize_column_widths(value, columns):
+    """表格列宽：键必须是已选展示列，值是安全范围内的整数像素。"""
+    if not isinstance(value, dict):
+        return {}
+    allowed = set(columns) if columns else None
+    widths = {}
+    for key, item in list(value.items())[:40]:
+        name = _text(key, limit=120)
+        if not name or (allowed is not None and name not in allowed):
+            continue
+        # 空值/非法值表示自动宽度，不落库；合法数字夹在可用范围内。
+        try:
+            number = int(item)
+        except (TypeError, ValueError):
+            continue
+        widths[name] = max(MIN_TABLE_COLUMN_WIDTH, min(MAX_TABLE_COLUMN_WIDTH, number))
+    return widths
+
+
 def _normalize_sort(value):
     if not isinstance(value, dict):
         return {'column': '', 'direction': 'asc'}
@@ -285,11 +324,21 @@ def _normalize_params(value):
 
 def _normalize_layout(value):
     layout = value if isinstance(value, dict) else {}
+    legacy_h = _int(layout.get('h'), 2, 1, MAX_BLOCK_HEIGHT)
+    # v2 优先使用明确像素；旧配置只有 h 时按原来 92px/档折算并夹到新范围。
+    height_px = _int(
+        layout.get('height_px'),
+        max(MIN_BLOCK_HEIGHT_PX, legacy_h * LEGACY_BLOCK_HEIGHT_PX),
+        MIN_BLOCK_HEIGHT_PX,
+        MAX_BLOCK_HEIGHT_PX,
+    )
     return {
         'x': _int(layout.get('x'), 0, 0, GRID_COLUMNS - 1),
         'y': _int(layout.get('y'), 0, 0, 999),
-        'w': _int(layout.get('w'), 6, 2, MAX_BLOCK_WIDTH),
-        'h': _int(layout.get('h'), 2, 1, MAX_BLOCK_HEIGHT),
+        'w': _int(layout.get('w'), 6, 1, MAX_BLOCK_WIDTH),
+        # h 继续保留，旧客户端仍能读取；新客户端和渲染器以 height_px 为准。
+        'h': legacy_h,
+        'height_px': height_px,
     }
 
 
@@ -337,13 +386,17 @@ def normalize_block(raw, index=0):
         'value_px': _int(raw.get('value_px'), 0, 0, 400),
     }
 
-    if block_type == 'text':
+    if block_type in ('text', 'section', 'clock'):
         block['script_id'] = ''
-        block['body'] = _text(raw.get('body'), limit=1000)
+        if block_type != 'clock':
+            block['body'] = _text(raw.get('body'), limit=1000)
+        if block_type == 'clock':
+            block['clock_format'] = _choice(raw.get('clock_format'), ('time', 'datetime', 'date'), 'datetime')
         return block
 
     if block_type == 'table':
         block['columns'] = _normalize_columns(raw.get('columns'))
+        block['column_widths'] = _normalize_column_widths(raw.get('column_widths'), block['columns'])
         block['page_size'] = _int(raw.get('page_size'), 10, 1, MAX_PAGE_SIZE)
         block['sort'] = _normalize_sort(raw.get('sort'))
         block['table_mode'] = _choice(raw.get('table_mode'), ALLOWED_TABLE_MODES, 'paged')
@@ -356,7 +409,7 @@ def normalize_block(raw, index=0):
         block['marquee_speed'] = _int(raw.get('marquee_speed'), 30, 4, 400)
         return block
 
-    if block_type == 'metric':
+    if block_type in ('metric', 'gauge', 'status', 'comparison'):
         block['value_column'] = _text(raw.get('value_column'), limit=120)
         block['aggregate'] = _choice(raw.get('aggregate'), ALLOWED_AGGREGATES, 'first')
         block['unit'] = _text(raw.get('unit'), limit=12)
@@ -364,36 +417,75 @@ def normalize_block(raw, index=0):
         block['trend'] = _choice(raw.get('trend'), ALLOWED_TRENDS, 'none')
         block['warn_value'] = _text(raw.get('warn_value'), limit=32)
         block['critical_value'] = _text(raw.get('critical_value'), limit=32)
+        # v1 前端已经消费 compare_column，但后端没有落库；v2 起正式纳入 schema。
+        block['compare_column'] = _text(raw.get('compare_column'), limit=120)
+        if block_type == 'gauge':
+            block['min_value'] = _text(raw.get('min_value'), '0', limit=32)
+            block['max_value'] = _text(raw.get('max_value'), '100', limit=32)
+            block['target_value'] = _text(raw.get('target_value'), limit=32)
+        if block_type == 'status':
+            block['status_column'] = _text(raw.get('status_column') or raw.get('value_column'), limit=120)
         return block
 
     if block_type == 'progress':
         block['value_column'] = _text(raw.get('value_column'), limit=120)
+        block['label_column'] = _text(raw.get('label_column'), limit=120)
         block['aggregate'] = _choice(raw.get('aggregate'), ALLOWED_AGGREGATES, 'first')
-        block['target_value'] = _text(raw.get('target_value'), '100', limit=32)
+        # v1 前端叫 max_value、后端叫 target_value；读取旧字段后统一保存为 target_value。
+        block['target_value'] = _text(raw.get('target_value', raw.get('max_value')), '100', limit=32)
         block['unit'] = _text(raw.get('unit'), limit=12)
         block['decimals'] = _int(raw.get('decimals'), 1, 0, 4)
         return block
 
-    # bar / line / pie 共用：标签列 + 一至多个数值列
+    # 图表/列表共用标签列 + 一至多个数值列。兼容 v1 单数 value_column。
     block['label_column'] = _text(raw.get('label_column'), limit=120)
-    block['value_columns'] = _normalize_columns(raw.get('value_columns'))[:4]
+    raw_values = raw.get('value_columns')
+    if not isinstance(raw_values, list) or not raw_values:
+        legacy_value = _text(raw.get('value_column'), limit=120)
+        raw_values = [legacy_value] if legacy_value else []
+    block['value_columns'] = _normalize_columns(raw_values)[:8]
     block['max_items'] = _int(raw.get('max_items'), 12, 1, 60)
     block['sort'] = _normalize_sort(raw.get('sort'))
     block['unit'] = _text(raw.get('unit'), limit=12)
     block['decimals'] = _int(raw.get('decimals'), 0, 0, 4)
+    if block_type == 'pie':
+        block['pie_style'] = _choice(raw.get('pie_style'), ALLOWED_PIE_STYLES, 'donut')
+        block['show_labels'] = raw.get('show_labels') is not False
+        block['show_legend'] = raw.get('show_legend') is not False
+    if block_type in ('line', 'area'):
+        block['chart_style'] = _choice(raw.get('chart_style'), ALLOWED_CHART_STYLES,
+                                       'area' if block_type == 'area' else 'line')
+    if block_type in ('bar', 'grouped_bar', 'stacked_bar'):
+        default_mode = 'stacked' if block_type == 'stacked_bar' else 'grouped'
+        block['bar_mode'] = _choice(raw.get('bar_mode'), ALLOWED_BAR_MODES, default_mode)
+    if block_type in ('alert_list', 'timeline', 'ranking'):
+        block['detail_column'] = _text(raw.get('detail_column'), limit=120)
+        block['status_column'] = _text(raw.get('status_column'), limit=120)
+    if block_type == 'ranking' and not block['sort']['column']:
+        # 排名榜默认按所选数值列从大到小；用户显式选择排序列时仍以配置为准。
+        block['sort'] = {
+            'column': block['value_columns'][0] if block['value_columns'] else '',
+            'direction': 'desc',
+        }
+    if block_type in ('alert_list', 'timeline'):
+        block['list_mode'] = _choice(raw.get('list_mode'), ALLOWED_LIST_MODES, 'static')
+        block['marquee_speed'] = _int(raw.get('marquee_speed'), 24, 4, 400)
     return block
 
 
-def normalize_dashboard(raw):
+def normalize_dashboard(raw, default_theme='aurora'):
+    """规范化看板；default_theme 只供新建流程覆盖，旧配置缺主题时仍回落极光紫。"""
     raw = raw if isinstance(raw, dict) else {}
     blocks = raw.get('blocks') if isinstance(raw.get('blocks'), list) else []
     return {
+        'schema_version': SCHEMA_VERSION,
         'id': _safe_id(raw.get('id')),
         'name': _text(raw.get('name'), '未命名看板', limit=60),
         'description': _text(raw.get('description'), limit=200),
         'refresh_seconds': _int(raw.get('refresh_seconds'), 0, 0, MAX_REFRESH_SECONDS) or 0,
         # 背景主题：从预设里选，独立页与画廊小块都按它上色。
-        'theme': _choice(raw.get('theme'), ALLOWED_THEMES, 'aurora'),
+        'theme': _choice(raw.get('theme'), ALLOWED_THEMES,
+                         _choice(default_theme, ALLOWED_THEMES, 'aurora')),
         # 背景图：只存资源 id，不存 URL。存 URL 等于让配置者指定任意外链，
         # 既会把看板打开时的请求发给第三方，也能拿来探内网地址。
         'bg_image': _asset_id(raw.get('bg_image')),
@@ -492,7 +584,7 @@ def execute_block(block, username):
     异常与错误统一抛 RuntimeError，由调用方捕获实现区块级隔离。
     """
     block_type = block.get('type')
-    if block_type == 'text':
+    if block_type in ('text', 'section', 'clock'):
         return {'columns': [], 'rows': [], 'truncated': False, 'script_name': ''}
 
     script = find_script(block.get('script_id'))
@@ -536,7 +628,8 @@ def execute_block(block, username):
 
     columns = list(columns or [])
     rows = _dict_rows_to_lists(columns, rows)
-    if block_type in ('table', 'bar', 'line', 'pie'):
+    if block_type in ('table', 'bar', 'line', 'pie', 'area', 'grouped_bar', 'stacked_bar',
+                      'ranking', 'alert_list', 'timeline', 'metric_group'):
         rows = _sorted_rows(columns, rows, block.get('sort'))
 
     truncated = len(rows) > MAX_BLOCK_ROWS

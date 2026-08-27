@@ -10,10 +10,13 @@ import os
 
 from flask import Blueprint, jsonify, request, send_file, session
 
-from modules.auth.helpers import login_required, permission_required
+from modules.auth.helpers import (
+    can_access_custom_dashboard, get_custom_dashboard_access, login_required,
+    permission_required,
+)
 from modules.custom_dashboards import assets as dashboard_assets
 from modules.custom_dashboards.helpers import (
-    MAX_BLOCKS, dashboards, execute_block, find_dashboard, load_dashboards,
+    MAX_BLOCKS, dashboards, execute_block, find_dashboard, find_script, load_dashboards,
     normalize_dashboard, save_dashboards, script_metadata, validate_refresh_seconds,
 )
 from modules.custom_dashboards.helpers import _asset_id as normalize_asset_id
@@ -24,13 +27,32 @@ custom_dashboards_bp = Blueprint('custom_dashboards', __name__, url_prefix='/api
 FORBIDDEN_BLOCK_FIELDS = {'content', 'database', 'source_sql', 'target_sql', 'source_db', 'target_db', 'sql'}
 
 
-def _can_manage():
-    return 'custom_dashboard_manage' in _permissions()
+def _can_manage(dashboard_id=None):
+    username = session.get('username', '')
+    if not username or 'custom_dashboard_manage' not in _permissions():
+        return False
+    return dashboard_id is None or can_access_custom_dashboard(username, dashboard_id, 'manage')
 
 
 def _permissions():
     from modules.auth.helpers import get_user_permissions
     return get_user_permissions(session.get('username', ''))
+
+
+def _has_dashboard_feature():
+    """有「看板」或「看板配置」任一功能权限。
+
+    原先 app.py 按 /api/custom_dashboards 前缀统一要求 custom_dashboard，
+    改成逐看板鉴权后前缀检查已去掉，这里给不针对单个看板的口子（素材库）兜底。
+    """
+    return bool(_permissions() & {'custom_dashboard', 'custom_dashboard_manage'})
+
+
+def _can_create():
+    username = session.get('username', '')
+    access = get_custom_dashboard_access(username)
+    return bool(username and 'custom_dashboard_manage' in _permissions()
+                and access['manage']['all'])
 
 
 def _dashboard_summary(dashboard, video_ids=None):
@@ -68,13 +90,10 @@ def _viewer_may_read(dashboard):
     只有这一个判定入口：页面、整板执行、单块执行、背景素材四个口子都走它，
     分散判会漏（漏一个就是页面能开但图裂/数据空，或者反过来把不该开的开了）。
     """
-    from modules.auth.helpers import get_user_permissions
     username = session.get('username', '')
     if dashboard.get('public') is True:
         return True, (dashboard.get('owner') or '')
-    if not username:
-        return False, ''
-    if 'custom_dashboard' not in get_user_permissions(username):
+    if not username or not can_access_custom_dashboard(username, dashboard.get('id'), 'view'):
         return False, ''
     return True, username
 
@@ -101,21 +120,31 @@ def _reject_raw_sql(payload):
 
 @custom_dashboards_bp.route('/scripts', methods=['GET'])
 @login_required
-@permission_required('custom_dashboard')
 def dashboard_scripts():
     """仅暴露当前用户可执行脚本的元数据，不暴露 SQL 内容。"""
+    dashboard_id = str(request.args.get('dashboard_id') or '').strip()
+    if dashboard_id:
+        if not _can_manage(dashboard_id):
+            return jsonify({'success': False, 'error': '没有该看板的管理权限'}), 403
+    elif not _can_create():
+        return jsonify({'success': False, 'error': '没有新建看板权限'}), 403
     return jsonify({'success': True, 'scripts': script_metadata(session.get('username', ''))})
 
 
 @custom_dashboards_bp.route('/preview', methods=['POST'])
 @login_required
-@permission_required('custom_dashboard')
 def preview_script():
     """试跑一次脚本，返回列名和少量样例行，供编辑器把列填进下拉框。
 
     非开发人员不知道 SQL 会返回什么列，这个接口让他们"先看一眼再选列"。
     """
     data = request.get_json() or {}
+    dashboard_id = str(data.get('dashboard_id') or '').strip()
+    if dashboard_id:
+        if not _can_manage(dashboard_id):
+            return jsonify({'success': False, 'error': '没有该看板的管理权限'}), 403
+    elif not _can_create():
+        return jsonify({'success': False, 'error': '没有新建看板权限'}), 403
     script_id = str(data.get('script_id') or '').strip()
     if not script_id:
         return jsonify({'success': False, 'error': '请选择 SQL 脚本'}), 400
@@ -143,19 +172,23 @@ def preview_script():
 
 @custom_dashboards_bp.route('', methods=['GET', 'POST'])
 @login_required
-@permission_required('custom_dashboard')
 def dashboards_api():
+    if not _has_dashboard_feature():
+        return jsonify({'success': False, 'error': '没有该功能权限'}), 403
     if request.method == 'GET':
         # 资源索引只读一次：每个看板各查一次会把索引文件读 N 遍。
         video_ids = {item.get('id') for item in dashboard_assets.list_assets()
                      if dashboard_assets.is_video(item.get('ext'))}
+        visible = [item for item in dashboards
+                   if can_access_custom_dashboard(session.get('username', ''), item.get('id'), 'view')]
         return jsonify({
             'success': True,
-            'can_manage': _can_manage(),
-            'dashboards': [_dashboard_summary(item, video_ids) for item in dashboards],
+            'can_create': _can_create(),
+            'dashboards': [dict(_dashboard_summary(item, video_ids),
+                                can_manage=_can_manage(item.get('id'))) for item in visible],
         })
 
-    if not _can_manage():
+    if not _can_create():
         return jsonify({'success': False, 'error': '没有看板配置权限，无法新增看板'}), 403
 
     payload = request.get_json() or {}
@@ -171,10 +204,85 @@ def dashboards_api():
     # owner 取 session，不取 payload：它决定免登录访问时按谁的权限跑脚本，
     # 让提交方自己填等于可以借任意账号的权限。
     dashboard = normalize_dashboard({**payload, 'id': None, 'refresh_seconds': refresh_seconds,
-                                     'owner': session.get('username', '')})
+                                     'owner': session.get('username', '')},
+                                    default_theme='command_center')
     dashboards.append(dashboard)
     save_dashboards()
     return jsonify({'success': True, 'dashboard': dashboard, 'message': '看板创建成功'})
+
+
+def _dashboard_export_payload(dashboard):
+    """生成可跨项目复制的看板 JSON；只带脚本名称，不带 SQL 或数据库配置。"""
+    payload = {key: value for key, value in dashboard.items()
+               if key not in {'id', 'owner', 'created_at', 'updated_at', 'bg_image'}}
+    payload['format'] = 'server_inspect_dashboard'
+    payload['format_version'] = 1
+    blocks = []
+    for raw in dashboard.get('blocks') or []:
+        block = dict(raw)
+        script = find_script(block.get('script_id'))
+        block['script_name'] = str(script.get('name') or '') if script else ''
+        block.pop('script_id', None)
+        blocks.append(block)
+    payload['blocks'] = blocks
+    return payload
+
+
+def _dashboard_import_payload(raw):
+    """按脚本名称匹配本项目脚本；匹配不到时保留区块并清空脚本引用。"""
+    if not isinstance(raw, dict) or raw.get('format') != 'server_inspect_dashboard':
+        return None, [], '不是有效的自定义看板 JSON'
+    payload = dict(raw)
+    payload.pop('format', None)
+    payload.pop('format_version', None)
+    available = {item['name']: item['id'] for item in script_metadata(session.get('username', ''))}
+    unmatched = []
+    blocks = []
+    for raw_block in payload.get('blocks') or []:
+        block = dict(raw_block) if isinstance(raw_block, dict) else {}
+        script_name = str(block.pop('script_name', '') or '').strip()
+        block['script_id'] = available.get(script_name, '')
+        if script_name and not block['script_id']:
+            unmatched.append(script_name)
+        blocks.append(block)
+    payload['blocks'] = blocks
+    return payload, sorted(set(unmatched)), None
+
+
+@custom_dashboards_bp.route('/<dashboard_id>/export', methods=['GET'])
+@login_required
+def export_dashboard(dashboard_id):
+    dashboard = find_dashboard(dashboard_id)
+    if not dashboard:
+        return jsonify({'success': False, 'error': '看板不存在'}), 404
+    # 导出等于把看板配置整份带走，按管理权限而不是查看权限放行。
+    if not _can_manage(dashboard_id):
+        return jsonify({'success': False, 'error': '没有该看板的管理权限，无法复制JSON'}), 403
+    return jsonify({'success': True, 'dashboard_json': _dashboard_export_payload(dashboard)})
+
+
+@custom_dashboards_bp.route('/import', methods=['POST'])
+@login_required
+def import_dashboard():
+    if not _can_create():
+        return jsonify({'success': False, 'error': '没有导入看板权限'}), 403
+    body = request.get_json() or {}
+    # 兼容两种粘贴方式：包一层 {"dashboard_json": {...}}，或直接把导出的 JSON 整份贴进来。
+    raw = body.get('dashboard_json') if isinstance(body.get('dashboard_json'), dict) else body
+    payload, unmatched, error = _dashboard_import_payload(raw)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    reject_error = _reject_raw_sql(payload)
+    if reject_error:
+        return jsonify({'success': False, 'error': reject_error}), 400
+    imported = normalize_dashboard({**payload, 'id': None, 'public': False,
+                                    'owner': session.get('username', '')},
+                                   default_theme='command_center')
+    imported['name'] = f"{imported['name']}（导入）"
+    dashboards.append(imported)
+    save_dashboards()
+    return jsonify({'success': True, 'dashboard': imported, 'unmatched_scripts': unmatched,
+                    'message': '看板导入成功'})
 
 
 @custom_dashboards_bp.route('/<dashboard_id>', methods=['GET', 'PUT', 'DELETE'])
@@ -196,10 +304,11 @@ def dashboard_api(dashboard_id):
             return jsonify({'success': False, 'error': '没有查看自定义看板的权限'}), 403
         # owner 是账号名，免登录访问时不该回给匿名访客。
         payload = {key: value for key, value in dashboard.items() if key != 'owner'}
-        return jsonify({'success': True, 'dashboard': payload, 'can_manage': _can_manage()})
+        return jsonify({'success': True, 'dashboard': payload,
+                        'can_manage': _can_manage(dashboard_id)})
 
-    if not _can_manage():
-        return jsonify({'success': False, 'error': '没有看板配置权限，无法修改看板'}), 403
+    if not _can_manage(dashboard_id):
+        return jsonify({'success': False, 'error': '没有该看板的管理权限，无法修改看板'}), 403
 
     if request.method == 'DELETE':
         dashboards.remove(dashboard)
@@ -286,12 +395,14 @@ def execute_single_block(dashboard_id, block_id):
 
 @custom_dashboards_bp.route('/assets', methods=['GET', 'POST'])
 @login_required
-@permission_required('custom_dashboard')
 def dashboard_assets_api():
     """背景图列表 / 上传。
 
     只有配置权限能上传：能往服务器写文件的口子不该对所有看板查看者开放。
+    列表放开到「有看板查看或管理任一权限」：只被授权管理某几个看板的人也要能挑背景。
     """
+    if not _has_dashboard_feature():
+        return jsonify({'success': False, 'error': '没有该功能权限'}), 403
     if request.method == 'GET':
         return jsonify({'success': True, 'assets': dashboard_assets.list_assets()})
 
@@ -333,12 +444,10 @@ def serve_dashboard_asset(asset_id):
     素材库不会因为开了一个看板就整个对外。
     """
     normalized = normalize_asset_id(asset_id)
-    from modules.auth.helpers import get_user_permissions
     if normalized not in _public_asset_ids():
-        username = session.get('username', '')
-        if not username:
+        if not session.get('username', ''):
             return jsonify({'success': False, 'error': '请先登录'}), 401
-        if 'custom_dashboard' not in get_user_permissions(username):
+        if not _has_dashboard_feature():
             return jsonify({'success': False, 'error': '没有该功能权限'}), 403
     asset = dashboard_assets.find_asset(normalized)
     if not asset:

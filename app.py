@@ -59,7 +59,6 @@ def enforce_api_permissions():
     permission_prefixes = (
         ('/api/logs/dashboard', 'dashboard'),
         ('/api/pg', 'pg_config'), ('/api/custom_scripts', 'custom_sql'),
-        ('/api/custom_dashboards', 'custom_dashboard'),
         ('/api/logs', 'logs'), ('/api/arthas', 'diagnostics'),
         ('/api/inspect', 'inspection'), ('/api/clear_slow_sql_logs', 'inspection'),
         ('/api/test_custom_script', 'custom_sql'),

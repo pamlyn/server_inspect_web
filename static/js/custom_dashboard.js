@@ -16,29 +16,41 @@
     const PALETTE = ['#5b6cff', '#0f9f75', '#dd7a1d', '#7c5ce5', '#148aa3', '#d55261', '#c2a012', '#4f8ef7', '#2f9e6f', '#b4632f'];
 
     const BLOCK_TYPES = [
-        { value: 'metric', label: '单个数字', icon: 'fa-bolt', hint: '突出显示一个关键数字，比如「今日报工 1,284 条」。' },
+        { value: 'metric', label: '核心指标', icon: 'fa-bolt', hint: '突出显示一个关键数字，可配置环比列。' },
+        { value: 'metric_group', label: '指标组', icon: 'fa-th', hint: '一块展示多个核心指标，适合总览首行。' },
+        { value: 'gauge', label: '仪表盘', icon: 'fa-tachometer', hint: '展示当前值、上下限与目标值。' },
+        { value: 'ranking', label: '排名榜', icon: 'fa-list-ol', hint: '按数值展示带进度条的 Top 排名。' },
+        { value: 'status', label: '状态牌', icon: 'fa-circle', hint: '突出展示正常、告警、异常等当前状态。' },
+        { value: 'comparison', label: '对比指标', icon: 'fa-exchange', hint: '并列展示当前值、对比值和变化幅度。' },
         { value: 'table', label: '明细表格', icon: 'fa-table', hint: '按行列展示明细数据，适合核对具体记录。' },
-        { value: 'bar', label: '柱状图', icon: 'fa-bar-chart', hint: '比较各分类的大小，比如各车间的产量对比。' },
-        { value: 'line', label: '折线图', icon: 'fa-line-chart', hint: '看随时间的变化趋势，比如近 7 天每天的数量。' },
-        { value: 'pie', label: '占比饼图', icon: 'fa-pie-chart', hint: '看各部分占总量的比例，分类别太多时不好看。' },
-        { value: 'progress', label: '进度条', icon: 'fa-tasks', hint: '用百分比条展示完成率、达成率这类指标。' },
-        { value: 'text', label: '说明文字', icon: 'fa-font', hint: '不查数据库，只放一段说明，用来给看板分区或写口径。' }
+        { value: 'line', label: '多系列折线', icon: 'fa-line-chart', hint: '一张图展示多条趋势线。' },
+        { value: 'area', label: '面积趋势', icon: 'fa-area-chart', hint: '用面积强调趋势规模，可展示多系列。' },
+        { value: 'grouped_bar', label: '分组柱图', icon: 'fa-bar-chart', hint: '同一分类并排比较多个指标。' },
+        { value: 'stacked_bar', label: '堆叠柱图', icon: 'fa-bar-chart', hint: '观察总量以及各组成部分。' },
+        { value: 'bar', label: '柱状图', icon: 'fa-bar-chart', hint: '兼容旧看板的单系列柱状图。' },
+        { value: 'pie', label: '占比图', icon: 'fa-pie-chart', hint: '支持标准、环形、玫瑰与半环四种样式。' },
+        { value: 'progress', label: '进度条', icon: 'fa-tasks', hint: '按目标值展示完成率、达成率。' },
+        { value: 'alert_list', label: '告警列表', icon: 'fa-warning', hint: '动态展示告警级别、标题与详情。' },
+        { value: 'timeline', label: '事件时间线', icon: 'fa-clock-o', hint: '按时间顺序展示动态事件。' },
+        { value: 'clock', label: '时钟', icon: 'fa-clock-o', hint: '无需脚本，显示当前日期时间。' },
+        { value: 'section', label: '分区标题', icon: 'fa-header', hint: '无需脚本，为大屏内容分区。' },
+        { value: 'text', label: '说明文字', icon: 'fa-font', hint: '无需脚本，展示口径与说明。' }
     ];
 
-    const WIDTH_PRESETS = [
-        { value: 3, label: '四分之一宽（一行放 4 块）' },
-        { value: 4, label: '三分之一宽（一行放 3 块）' },
-        { value: 6, label: '半宽（一行放 2 块）' },
-        { value: 8, label: '三分之二宽' },
-        { value: 12, label: '整行通栏' }
-    ];
+    const WIDTH_PRESETS = Array.from({ length: 12 }, (_, index) => ({
+        value: index + 1,
+        label: `${index + 1} 格（${index + 1}/12）${index === 11 ? ' · 整行' : ''}`
+    }));
 
-    const HEIGHT_PRESETS = [
-        { value: 1, label: '矮（适合单个数字）' },
-        { value: 2, label: '标准（适合图表）' },
-        { value: 3, label: '高（适合表格）' },
-        { value: 5, label: '很高（长表格）' }
+    const PIE_STYLES = [
+        { value: 'standard', label: '标准饼图' }, { value: 'donut', label: '环形图' },
+        { value: 'rose', label: '南丁格尔玫瑰图' }, { value: 'half', label: '半环图' }
     ];
+    const PREVIEW_SIZES = {
+        auto: { label: '自适应', width: 0, height: 0 },
+        hd: { label: '1920 × 1080', width: 1920, height: 1080 },
+        laptop: { label: '1366 × 768', width: 1366, height: 768 }
+    };
 
     const AGGREGATES = [
         { value: 'first', label: '取第一行的值' },
@@ -53,6 +65,18 @@
     // 背景主题。分三组是为了让挑选的人一眼知道深浅——白天挂的看板选浅色组不刺眼。
     // 这里的 value 必须和后端 ALLOWED_THEMES 完全一致，否则保存时会被打回默认值。
     const THEMES = [
+        { value: 'command_center', label: '指挥中心', group: '高级大屏', featured: true },
+        { value: 'quantum', label: '量子蓝', group: '高级大屏', featured: true },
+        { value: 'matrix', label: '矩阵绿', group: '高级大屏', featured: true },
+        { value: 'obsidian_gold', label: '曜石金', group: '高级大屏', featured: true },
+        { value: 'polar_night', label: '极地夜', group: '高级大屏', featured: true },
+        { value: 'crimson_ops', label: '赤焰战情', group: '高级大屏', featured: true },
+        { value: 'cyber_cyan', label: '赛博青', group: '高级大屏', featured: true },
+        { value: 'deep_space', label: '深空星云', group: '高级大屏', featured: true },
+        { value: 'industrial_amber', label: '工业琥珀', group: '高级大屏', featured: true },
+        { value: 'emerald_ops', label: '运维翡翠', group: '高级大屏', featured: true },
+        { value: 'black_gold', label: '黑金经营', group: '高级大屏', featured: true },
+        { value: 'data_white', label: '数据白', group: '高级大屏', featured: true },
         { value: 'aurora', label: '极光紫', group: '深色' },
         { value: 'midnight', label: '午夜蓝', group: '深色' },
         { value: 'ocean', label: '深海青', group: '深色' },
@@ -137,9 +161,9 @@
         { value: 'coral', label: '珊瑚', group: '浅色' },
         { value: 'frost', label: '霜蓝', group: '浅色' }
     ];
-    const THEME_GROUPS = ['深色', '渐变', '浅色'];
+    const THEME_GROUPS = ['高级大屏', '深色', '渐变', '浅色'];
     // 浅色主题：舞台上的文字要用深色，模板和预览都靠这个列表判断。
-    const LIGHT_THEMES = ['daylight', 'linen', 'mint', 'sakura', 'sand', 'seafoam', 'pearl', 'blossom',
+    const LIGHT_THEMES = ['data_white', 'daylight', 'linen', 'mint', 'sakura', 'sand', 'seafoam', 'pearl', 'blossom',
         'celadon', 'ivory', 'porcelain', 'peach', 'lilac', 'sky', 'oat', 'lemonade', 'rosewater',
         'aqua', 'cloud', 'honey', 'fresco', 'basil', 'parchment', 'glaze', 'coral', 'frost'];
 
@@ -256,6 +280,8 @@
     let initialized = false;
     // 缓存键 -> {columns, rows, total, error}；避免同一脚本反复预览。
     const previewCache = new Map();
+    // block id -> 请求序号。切换脚本/变量后旧请求即使晚返回，也不能覆盖新脚本的预览。
+    const previewRequests = new Map();
 
     /** 缓存键要带上变量值：同一脚本换了变量就是另一条 SQL，不能复用上一次的结果。 */
     function previewKey(block) {
@@ -331,17 +357,36 @@
 
     // ---------- 图表渲染（手绘 SVG） ----------
 
-    /** 从区块结果里抽出 [{label, value}]，标签列缺省时用行号。 */
+    /** 从区块结果里抽出 [{label, value}]；v2 统一从 value_columns 取，兼容旧 value_column。 */
     function seriesFrom(block, result) {
         const columns = result.columns || [];
         const rows = result.rows || [];
         const labelKey = block.label_column || columns[0];
-        const valueKey = block.value_column || columns[1] || columns[0];
+        const valueKeys = Array.isArray(block.value_columns) && block.value_columns.length
+            ? block.value_columns : [block.value_column || columns[1] || columns[0]];
+        const valueKey = valueKeys[0];
         return rows.map((row, index) => {
             const rawLabel = block.label_column ? cellValue(row, columns, labelKey) : (columns.length > 1 ? cellValue(row, columns, labelKey) : index + 1);
             const value = toNumber(cellValue(row, columns, valueKey));
             return { label: rawLabel === null || rawLabel === undefined || rawLabel === '' ? `第 ${index + 1} 行` : String(rawLabel), value: value === null ? 0 : value };
-        }).filter(item => item.value !== null);
+        });
+    }
+
+    /** 多系列图表的统一数据结构，最多 8 条，字段名同时作为图例名称。 */
+    function multiSeriesFrom(block, result) {
+        const columns = result.columns || [];
+        const rows = (result.rows || []).slice(0, block.max_items || 60);
+        const labelKey = block.label_column || columns[0];
+        let keys = Array.isArray(block.value_columns) ? block.value_columns.filter(key => columns.includes(key)) : [];
+        if (!keys.length && block.value_column) keys = [block.value_column];
+        if (!keys.length) keys = columns.filter(key => key !== labelKey).slice(0, 1);
+        return {
+            labels: rows.map((row, index) => String(cellValue(row, columns, labelKey) ?? `第 ${index + 1} 行`)),
+            series: keys.slice(0, 8).map((key, seriesIndex) => ({
+                name: key, color: PALETTE[seriesIndex % PALETTE.length],
+                values: rows.map(row => toNumber(cellValue(row, columns, key)) || 0)
+            }))
+        };
     }
 
     function renderBar(series) {
@@ -482,47 +527,209 @@
         return svg;
     }
 
-    function renderPie(series) {
-        if (!series.length) return emptyBody('这个脚本没有返回可用于绘图的数据');
-        const data = series.slice(0, 10).filter(item => item.value > 0);
-        if (!data.length) return emptyBody('数值全部为 0，饼图画不出来');
-        const total = data.reduce((sum, item) => sum + item.value, 0);
-        const size = 180;
-        const radius = 72;
-        const center = size / 2;
-        let angle = -Math.PI / 2;
+    function renderMultiLine(block, result) {
+        const data = multiSeriesFrom(block, result);
+        if (!data.labels.length || !data.series.length) return emptyBody('没有可用于绘图的数据');
+        const width = 520, height = 230, left = 46, right = 18, top = 18, bottom = 36;
+        const plotW = width - left - right, plotH = height - top - bottom;
+        const all = data.series.flatMap(item => item.values);
+        const max = niceCeil(Math.max(...all, 0), 4), min = Math.min(...all, 0), span = max - min || 1;
+        const x = i => left + (data.labels.length > 1 ? i * plotW / (data.labels.length - 1) : plotW / 2);
+        const y = value => top + plotH - (value - min) / span * plotH;
+        let svg = `<svg class="dash-chart" viewBox="0 0 ${width} ${height}" role="img">`;
+        for (let i = 0; i <= 4; i++) {
+            const gy = top + i * plotH / 4, tick = max - i * span / 4;
+            svg += `<line class="dash-chart-grid" x1="${left}" y1="${gy}" x2="${width-right}" y2="${gy}"></line>`;
+            svg += `<text class="dash-chart-label" x="${left-6}" y="${gy+3}" text-anchor="end">${escapeHtml(formatNumber(tick, span < 4 ? 1 : 0))}</text>`;
+        }
+        data.series.forEach(item => {
+            const path = item.values.map((value, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(value).toFixed(1)}`).join(' ');
+            if (block.type === 'area') svg += `<path class="dash-chart-series-area" style="fill:${item.color}" d="${path} L${x(item.values.length-1)},${top+plotH} L${x(0)},${top+plotH} Z"></path>`;
+            svg += `<path class="dash-chart-series" style="stroke:${item.color}" d="${path}"></path>`;
+        });
+        const every = Math.max(1, Math.ceil(data.labels.length / 8));
+        data.labels.forEach((label, i) => { if (i % every === 0 || i === data.labels.length - 1) svg += `<text class="dash-chart-label" x="${x(i)}" y="${height-10}" text-anchor="middle">${escapeHtml(axisLabel(label))}</text>`; });
+        svg += '</svg>';
+        return svg + renderSeriesLegend(data.series);
+    }
 
-        let svg = `<svg class="dash-chart" viewBox="0 0 ${size} ${size}" style="max-width:200px;margin:0 auto;" role="img">`;
+    function renderSeriesLegend(series) {
+        return `<div class="dash-legend">${series.map(item => `<span class="dash-legend-item"><i class="dash-legend-dot" style="background:${item.color}"></i>${escapeHtml(item.name)}</span>`).join('')}</div>`;
+    }
+
+    function renderPie(series, block) {
+        const data = series.slice(0, 10).filter(item => item.value > 0);
+        if (!data.length) return emptyBody('数值全部为 0，占比图画不出来');
+        const total = data.reduce((sum, item) => sum + item.value, 0);
+        const style = allow(block && block.pie_style, ['standard', 'donut', 'rose', 'half'], 'donut');
+        const size = 210, center = size / 2, maxRadius = style === 'half' ? 82 : 76;
+        const startAngle = style === 'half' ? Math.PI : -Math.PI / 2;
+        const fullAngle = style === 'half' ? Math.PI : Math.PI * 2;
+        let angle = startAngle;
+        let svg = `<svg class="dash-chart dash-pie-${style}" viewBox="0 0 ${size} ${style === 'half' ? 126 : size}" style="max-width:230px;margin:0 auto" role="img">`;
         data.forEach((item, index) => {
-            const sweep = (item.value / total) * Math.PI * 2;
+            const sweep = item.value / total * fullAngle;
             const end = angle + sweep;
-            const color = PALETTE[index % PALETTE.length];
-            if (data.length === 1) {
-                svg += `<circle cx="${center}" cy="${center}" r="${radius}" fill="${color}"></circle>`;
-            } else {
-                const x1 = center + radius * Math.cos(angle);
-                const y1 = center + radius * Math.sin(angle);
-                const x2 = center + radius * Math.cos(end);
-                const y2 = center + radius * Math.sin(end);
-                const largeArc = sweep > Math.PI ? 1 : 0;
-                svg += `<path class="dash-chart-slice" fill="${color}" d="M${center},${center} L${x1.toFixed(2)},${y1.toFixed(2)} A${radius},${radius} 0 ${largeArc} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"><title>${escapeHtml(item.label)}: ${escapeHtml(formatNumber(item.value))}（${(item.value / total * 100).toFixed(1)}%）</title></path>`;
+            const radius = style === 'rose' ? maxRadius * (.42 + .58 * Math.sqrt(item.value / Math.max(...data.map(d => d.value)))) : maxRadius;
+            const x1 = center + radius * Math.cos(angle), y1 = center + radius * Math.sin(angle);
+            const x2 = center + radius * Math.cos(end), y2 = center + radius * Math.sin(end);
+            const largeArc = sweep > Math.PI ? 1 : 0;
+            svg += `<path class="dash-chart-slice" fill="${PALETTE[index % PALETTE.length]}" d="M${center},${center} L${x1.toFixed(2)},${y1.toFixed(2)} A${radius},${radius} 0 ${largeArc} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"><title>${escapeHtml(item.label)}: ${escapeHtml(formatNumber(item.value))}</title></path>`;
+            if (block && block.show_labels !== false) {
+                const middle = angle + sweep / 2, lr = radius * .68;
+                svg += `<text class="dash-pie-label" x="${center + lr * Math.cos(middle)}" y="${center + lr * Math.sin(middle)}" text-anchor="middle">${(item.value / total * 100).toFixed(0)}%</text>`;
             }
             angle = end;
         });
-        svg += `<circle cx="${center}" cy="${center}" r="${radius * 0.55}" fill="var(--surface)"></circle>`;
-        svg += `<text x="${center}" y="${center - 2}" text-anchor="middle" style="fill:var(--muted);font-size:9px;">合计</text>`;
-        svg += `<text x="${center}" y="${center + 13}" text-anchor="middle" style="fill:var(--ink);font-size:14px;font-weight:700;">${escapeHtml(formatNumber(total))}</text>`;
+        if (style === 'donut' || style === 'half') {
+            const inner = style === 'half' ? 49 : 42;
+            svg += `<circle cx="${center}" cy="${center}" r="${inner}" fill="var(--surface)"></circle>`;
+            svg += `<text x="${center}" y="${style === 'half' ? center - 4 : center + 4}" text-anchor="middle" class="dash-pie-total">${escapeHtml(formatNumber(total))}</text>`;
+        }
         svg += '</svg>';
+        if (!block || block.show_legend !== false) svg += renderSeriesLegend(data.map((item, index) => ({ name: `${item.label} ${(item.value / total * 100).toFixed(1)}%`, color: PALETTE[index % PALETTE.length] })));
+        return svg;
+    }
 
-        const legend = data.map((item, index) => `<span class="dash-legend-item"><i class="dash-legend-dot" style="background:${PALETTE[index % PALETTE.length]};"></i>${escapeHtml(shortenLabel(item.label, 12))} <strong>${(item.value / total * 100).toFixed(1)}%</strong></span>`).join('');
-        return `${svg}<div class="dash-legend">${legend}</div>`;
+    function renderMultiBar(block, result) {
+        const data = multiSeriesFrom(block, result);
+        if (!data.labels.length || !data.series.length) return emptyBody('没有可用于绘图的数据');
+        const width = 520, height = 230, left = 42, right = 12, top = 16, bottom = 38;
+        const plotW = width - left - right, plotH = height - top - bottom;
+        const stacked = block.type === 'stacked_bar';
+        const totals = data.labels.map((_, i) => stacked ? data.series.reduce((sum, s) => sum + Math.max(0, s.values[i]), 0) : Math.max(...data.series.map(s => s.values[i]), 0));
+        const max = niceCeil(Math.max(...totals, 1), 4), groupW = plotW / data.labels.length;
+        let svg = `<svg class="dash-chart" viewBox="0 0 ${width} ${height}" role="img">`;
+        for (let i = 0; i <= 4; i++) {
+            const gy = top + i * plotH / 4;
+            svg += `<line class="dash-chart-grid" x1="${left}" y1="${gy}" x2="${width-right}" y2="${gy}"></line>`;
+        }
+        data.labels.forEach((label, i) => {
+            let stackY = top + plotH;
+            data.series.forEach((series, si) => {
+                const value = Math.max(0, series.values[i]), barH = value / max * plotH;
+                const barW = stacked ? groupW * .62 : groupW * .72 / data.series.length;
+                const x = stacked ? left + i * groupW + groupW * .19 : left + i * groupW + groupW * .14 + si * barW;
+                const y = stacked ? stackY - barH : top + plotH - barH;
+                svg += `<rect class="dash-chart-multi-bar" fill="${series.color}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(2, barW-2).toFixed(1)}" height="${Math.max(1, barH).toFixed(1)}"><title>${escapeHtml(label)} · ${escapeHtml(series.name)}: ${escapeHtml(formatNumber(value))}</title></rect>`;
+                if (stacked) stackY = y;
+            });
+            svg += `<text class="dash-chart-label" x="${left + (i+.5)*groupW}" y="${height-11}" text-anchor="middle">${escapeHtml(axisLabel(label))}</text>`;
+        });
+        svg += '</svg>';
+        return svg + renderSeriesLegend(data.series);
+    }
+
+    function renderGauge(block, result) {
+        const value = metricValue(block, result);
+        const min = toNumber(block.min_value) ?? 0, max = toNumber(block.max_value) ?? 100;
+        const ratio = Math.max(0, Math.min(1, ((toNumber(value) ?? min) - min) / ((max - min) || 1)));
+        const angle = -135 + ratio * 270, rad = angle * Math.PI / 180;
+        const x = 100 + Math.cos(rad) * 58, y = 96 + Math.sin(rad) * 58;
+        const target = toNumber(block.target_value);
+        let targetMark = '';
+        if (target !== null && target >= min && target <= max) {
+            const targetRatio = (target - min) / ((max - min) || 1);
+            const targetRad = (-135 + targetRatio * 270) * Math.PI / 180;
+            const tx1 = 100 + Math.cos(targetRad) * 65, ty1 = 96 + Math.sin(targetRad) * 65;
+            const tx2 = 100 + Math.cos(targetRad) * 78, ty2 = 96 + Math.sin(targetRad) * 78;
+            targetMark = `<line class="dash-gauge-target" x1="${tx1.toFixed(1)}" y1="${ty1.toFixed(1)}" x2="${tx2.toFixed(1)}" y2="${ty2.toFixed(1)}"><title>目标值 ${escapeHtml(formatNumber(target, block.decimals))}</title></line>`;
+        }
+        return `<div class="dash-gauge"><svg viewBox="0 0 200 145" role="img">
+            <path class="dash-gauge-track" d="M50 130 A72 72 0 1 1 150 130"></path>
+            <path class="dash-gauge-value" pathLength="100" stroke-dasharray="${(ratio*100).toFixed(1)} 100" d="M50 130 A72 72 0 1 1 150 130"></path>
+            ${targetMark}<line class="dash-gauge-needle" x1="100" y1="96" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"></line><circle cx="100" cy="96" r="5" class="dash-gauge-hub"></circle>
+            <text x="100" y="121" text-anchor="middle" class="dash-gauge-number">${escapeHtml(formatNumber(value, block.decimals))}${escapeHtml(block.unit || '')}</text>
+            <text x="36" y="142" class="dash-chart-label">${escapeHtml(min)}</text><text x="164" y="142" text-anchor="end" class="dash-chart-label">${escapeHtml(max)}</text>
+        </svg>${target !== null ? `<span class="dash-gauge-target-label">目标 ${escapeHtml(formatNumber(target, block.decimals))}${escapeHtml(block.unit || '')}</span>` : ''}</div>`;
+    }
+
+    function metricValue(block, result) {
+        const columns = result.columns || [], rows = result.rows || [], key = block.value_column || columns[0];
+        if (block.aggregate === 'count') return typeof result.total === 'number' ? result.total : rows.length;
+        const values = rows.map(row => toNumber(cellValue(row, columns, key))).filter(value => value !== null);
+        if (block.aggregate === 'sum') return values.reduce((sum, value) => sum + value, 0);
+        if (block.aggregate === 'avg') return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+        if (block.aggregate === 'max') return values.length ? Math.max(...values) : null;
+        if (block.aggregate === 'min') return values.length ? Math.min(...values) : null;
+        return values.length ? values[0] : cellValue(rows[0], columns, key);
+    }
+
+    function renderRanking(block, result) {
+        const direction = block.sort && block.sort.direction === 'asc' ? 1 : -1;
+        const data = seriesFrom(block, result)
+            .sort((left, right) => (left.value - right.value) * direction)
+            .slice(0, block.max_items || 10);
+        if (!data.length) return emptyBody('没有可用于排名的数据');
+        const max = Math.max(...data.map(item => item.value), 1);
+        return `<div class="dash-ranking">${data.map((item, index) => `<div class="dash-ranking-row"><b>${index+1}</b><span>${escapeHtml(item.label)}</span><i><em style="width:${Math.max(3,item.value/max*100)}%"></em></i><strong>${escapeHtml(formatNumber(item.value, block.decimals))}</strong></div>`).join('')}</div>`;
+    }
+
+    function statusClass(value) {
+        const text = String(value ?? '').toLowerCase();
+        if (/严重|异常|失败|critical|error|down/.test(text)) return 'is-critical';
+        if (/告警|警告|warning|warn|待处理/.test(text)) return 'is-warning';
+        if (/正常|成功|online|success|ok|运行/.test(text)) return 'is-success';
+        return 'is-neutral';
+    }
+
+    function renderStatus(block, result) {
+        const columns = result.columns || [], rows = result.rows || [], key = block.status_column || block.value_column || columns[0];
+        const value = cellValue(rows[0], columns, key);
+        return `<div class="dash-status ${statusClass(value)}"><i></i><strong>${escapeHtml(value ?? '未知')}</strong><span>${escapeHtml(block.description || '当前运行状态')}</span></div>`;
+    }
+
+    function renderMetricGroup(block, result) {
+        const data = multiSeriesFrom(block, result).series;
+        return `<div class="dash-metric-group">${data.map(item => `<div><span>${escapeHtml(item.name)}</span><strong>${escapeHtml(formatNumber(item.values[0], block.decimals))}<small>${escapeHtml(block.unit || '')}</small></strong></div>`).join('')}</div>`;
+    }
+
+    function renderComparison(block, result) {
+        const columns = result.columns || [], rows = result.rows || [];
+        const current = toNumber(metricValue(block, result));
+        const previous = toNumber(cellValue(rows[0], columns, block.compare_column));
+        const currentText = current === null ? '-' : formatNumber(current, block.decimals);
+        const previousText = previous === null ? '-' : formatNumber(previous, block.decimals);
+        let deltaText = '暂无对比', trendClass = 'dash-trend--flat', arrow = '→';
+        if (current !== null && previous !== null) {
+            const delta = previous === 0 ? null : (current - previous) / Math.abs(previous) * 100;
+            if (delta !== null) {
+                arrow = delta > .05 ? '↑' : (delta < -.05 ? '↓' : '→');
+                deltaText = `${arrow} ${Math.abs(delta).toFixed(1)}%`;
+                if (block.trend === 'up_good') trendClass = delta > .05 ? 'dash-trend--good' : (delta < -.05 ? 'dash-trend--bad' : trendClass);
+                if (block.trend === 'up_bad') trendClass = delta > .05 ? 'dash-trend--bad' : (delta < -.05 ? 'dash-trend--good' : trendClass);
+            } else {
+                deltaText = current === previous ? '→ 0.0%' : '基期为 0';
+            }
+        }
+        const unit = escapeHtml(block.unit || '');
+        return `<div class="dash-comparison">
+            <div><span>当前值</span><strong>${escapeHtml(currentText)}<small>${unit}</small></strong></div>
+            <div><span>对比值</span><strong>${escapeHtml(previousText)}<small>${unit}</small></strong></div>
+            <em class="dash-metric-trend ${trendClass}">${escapeHtml(deltaText)}</em>
+        </div>`;
+    }
+
+    function renderDynamicList(block, result, timeline) {
+        const columns = result.columns || [], rows = (result.rows || []).slice(0, block.max_items || 12);
+        if (!rows.length) return emptyBody('没有可展示的动态数据');
+        const label = block.label_column || columns[0], detail = block.detail_column || columns[1], status = block.status_column || columns[2];
+        const items = rows.map(row => {
+            const title = cellValue(row, columns, label), note = cellValue(row, columns, detail), state = cellValue(row, columns, status);
+            return `<div class="${timeline ? 'dash-timeline-item' : `dash-alert-item ${statusClass(state)}`}"><i></i><div><strong>${escapeHtml(title ?? '-')}</strong><span>${escapeHtml(note ?? '')}</span></div>${state != null ? `<em>${escapeHtml(state)}</em>` : ''}</div>`;
+        }).join('');
+        const moving = block.list_mode === 'marquee' && rows.length >= 4;
+        const speed = clampInt(block.marquee_speed, 24, 4, 400);
+        return `<div class="dash-dynamic-wrap${moving ? ' is-marquee' : ''}"${moving ? ` data-marquee="${escapeHtml(block.id)}" data-marquee-px="${speed}"` : ''}>
+            <div class="${timeline ? 'dash-timeline' : 'dash-alert-list'}" data-marquee-track>${items}${moving ? items : ''}</div>
+        </div>`;
     }
 
     function renderProgress(block, result) {
         const series = seriesFrom(block, result);
         if (!series.length) return emptyBody('没有可展示的数据');
         // 未指定基准时按最大值归一，保证条形有可比性。
-        const base = toNumber(block.max_value) || Math.max(...series.map(item => item.value)) || 1;
+        const base = toNumber(block.target_value) || toNumber(block.max_value) || Math.max(...series.map(item => item.value)) || 1;
         return series.slice(0, 12).map(item => {
             const percent = Math.max(0, Math.min(100, (item.value / base) * 100));
             return `<div class="dash-progress-row">
@@ -579,9 +786,12 @@
 
     /** 表格一行的 HTML。lazy 模式追加行时也用它，保证追加出来的行和首屏一致。 */
     function tableRow(row, allColumns, showColumns) {
+        // 这里始终写完整值，title 也是完整值；真正的截断在 syncTableColumns 里
+        // 按定好的列宽用 fitCellText 逐格做（那时才知道每列有多少像素可用）。
         return `<tr>${showColumns.map(name => {
             const value = cellValue(row, allColumns, name);
-            return `<td>${value === null || value === undefined || value === '' ? '-' : escapeHtml(value)}</td>`;
+            const display = value === null || value === undefined || value === '' ? '-' : String(value);
+            return `<td title="${escapeHtml(display)}"><span class="dash-table-cell-text">${escapeHtml(display)}</span></td>`;
         }).join('')}</tr>`;
     }
 
@@ -592,9 +802,13 @@
        两个要求在同一个滚动框里没法同时满足，所以把表头挪出滚动框：
        行被滚动框的 overflow 裁掉，物理上进不到表头那一行，表头就能放心全透明。
        代价是两张表的列宽要对齐，靠 syncTableColumns() 量完再写死（见那个函数的注释）。 */
-    function tableHead(showColumns) {
+    function tableHead(showColumns, columnWidths) {
+        const widths = columnWidths && typeof columnWidths === 'object' ? columnWidths : {};
         return `<div class="dash-table-headbox"><table class="dash-table dash-table-head"><thead><tr>${
-            showColumns.map(name => `<th>${escapeHtml(name)}</th>`).join('')}</tr></thead></table></div>`;
+            showColumns.map(name => {
+                const width = clampInt(widths[name], 0, 60, 1200);
+                return `<th${width ? ` data-column-width="${width}"` : ''} title="${escapeHtml(name)}"><span class="dash-table-cell-text">${escapeHtml(name)}</span></th>`;
+            }).join('')}</tr></thead></table></div>`;
     }
 
     function renderTable(block, result) {
@@ -605,7 +819,7 @@
         const mode = allow(block.table_mode, TABLE_MODES, 'paged');
         const pageSize = Math.max(1, Number(block.page_size) || 20);
         const total = typeof result.total === 'number' ? result.total : rows.length;
-        const head = tableHead(showColumns);
+        const head = tableHead(showColumns, block.column_widths);
 
         // paged 之外的三种都要能看到全部取回的行，所以首屏渲染量不同：
         // scroll/marquee 一次全渲染（靠滚动看完），lazy 先渲染一批（滚到底再追加）。
@@ -636,7 +850,7 @@
             // 行数据挂在 DOM 上给滚动追加用：数据本来就已经在浏览器里了，
             // 存一份引用比每次滚动都回后端要快，也不会因为翻页触发重复查询。
             const key = `tbl_${block.id}`;
-            tableCache[key] = { rows, allColumns, showColumns, next: shown.length, pageSize };
+            tableCache[key] = { rows, allColumns, showColumns, columnWidths: block.column_widths || {}, next: shown.length, pageSize };
             const remain = rows.length - shown.length;
             const hint = mode === 'lazy' && remain > 0
                 ? `<div class="dash-lazy-hint" data-lazy-hint="${escapeHtml(block.id)}"><i class="fa fa-angle-double-down"></i>向下滚动加载更多（还有 ${remain} 行）</div>`
@@ -657,51 +871,191 @@
         </div>${foot}`;
     }
 
+    /** 单元格完整内容所需宽度：Canvas 直接按真实字体量文字，不受表格当前压缩宽度影响。 */
+    /** 单元格测量共用的 canvas 上下文，字体取自单元格真实计算样式。 */
+    function cellTextContext(cell) {
+        const style = window.getComputedStyle(cell);
+        const canvas = tableCellNaturalWidth.canvas || (tableCellNaturalWidth.canvas = document.createElement('canvas'));
+        const context = canvas.getContext('2d');
+        if (context) context.font = style.font || `${style.fontSize} ${style.fontFamily}`;
+        return { context, style, letterSpacing: parseFloat(style.letterSpacing) || 0 };
+    }
+
+    /** 按可用像素宽度把文字截到放得下，末尾补省略号。
+     *
+     * 为何不只靠 CSS text-overflow：表头挪出滚动框后两张表各自 table-layout:fixed，
+     * 部分浏览器对 table-cell 的 overflow 裁切不稳定，长文本会画到相邻列上（用户反复反馈
+     * "内容会和其他列重叠"）。这里在文本层面就截断，是与浏览器无关的兜底。
+     */
+    function fitCellText(cell, available) {
+        const holder = cell.querySelector('.dash-table-cell-text');
+        if (!holder) return;
+        const full = holder.dataset.fullText !== undefined ? holder.dataset.fullText : holder.textContent;
+        holder.dataset.fullText = full;
+        if (!full || available <= 0) { holder.textContent = full; return; }
+        const { context, letterSpacing } = cellTextContext(cell);
+        if (!context) { holder.textContent = full; return; }
+        const measure = text => context.measureText(text).width + Math.max(0, text.length - 1) * letterSpacing;
+        if (measure(full) <= available) { holder.textContent = full; return; }
+        // 二分找最长能放下的前缀，比逐字符缩短快，长文本也只测 log(n) 次。
+        let low = 0;
+        let high = full.length;
+        while (low < high) {
+            const mid = Math.ceil((low + high) / 2);
+            if (measure(`${full.slice(0, mid)}…`) <= available) low = mid; else high = mid - 1;
+        }
+        holder.textContent = low > 0 ? `${full.slice(0, low)}…` : '…';
+    }
+
+    function tableCellNaturalWidth(cell) {
+        const text = cell.querySelector('.dash-table-cell-text');
+        // 必须量完整值：重新同步时 DOM 里可能已经是上一轮截断过的文字，
+        // 拿它当自然宽度会让列越量越窄。
+        const value = text
+            ? (text.dataset.fullText !== undefined ? text.dataset.fullText : text.textContent)
+            : cell.textContent;
+        const { context, style, letterSpacing } = cellTextContext(cell);
+        const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+        if (!context) return Math.ceil((text ? text.scrollWidth : cell.scrollWidth) + padding + 1);
+        return Math.ceil(context.measureText(value || '').width + Math.max(0, (value || '').length - 1) * letterSpacing + padding + 2);
+    }
+
     /* 把表头那张表的列宽对到数据表上。
-       为何必须量：表头挪出滚动框后是两张独立的表，各自按自己的内容自动分配列宽，
+       为何必须量：表头挪出滚动框后是两张独立的表，各自按自己的内容分配列宽，
        "任务编码"那列在表头表里只有标题那么宽、在数据表里是一长串编号的宽度，
        不对齐就是列名和数据错位——比原来的穿行更难看。
-       量数据表的第一行就够：auto 布局分配列宽时已经把所有行都算进去了。
-       取表头/数据两边的较大值，免得列名自己被挤到换行。
-       量完写进 colgroup 并切 table-layout:fixed：不切的话浏览器仍会按内容微调，白量一遍。 */
+       自动列扫描当前已渲染的每一行，按该列最长完整内容定宽；只测第一行会漏掉后面
+       更长的编码。量完写进 colgroup 并切 table-layout:fixed，装不下时整体横向滚动。 */
     function syncTableColumns(box) {
         const headTable = box.querySelector('.dash-table-head');
         const bodyTable = box.querySelector('.dash-table-body');
-        if (!headTable || !bodyTable) return;
-        const firstRow = bodyTable.querySelector('tbody tr');
-        const headCells = headTable.querySelectorAll('th');
-        if (!firstRow || !headCells.length) return;
-        const bodyCells = firstRow.children;
-        if (bodyCells.length !== headCells.length) return;
-        // 先回到 auto 布局再量，否则量到的是上一次写死的宽度（刷新后列宽会越量越偏）。
-        headTable.style.tableLayout = 'auto';
-        bodyTable.style.tableLayout = 'auto';
-        headTable.style.minWidth = '';
-        bodyTable.style.minWidth = '';
-        const widths = [];
-        for (let i = 0; i < headCells.length; i++) {
-            widths.push(Math.ceil(Math.max(
-                headCells[i].getBoundingClientRect().width,
-                bodyCells[i].getBoundingClientRect().width)));
-        }
-        const totalWidth = widths.reduce((sum, w) => sum + w, 0);
-        const cols = `<colgroup>${widths.map(w => `<col style="width:${w}px">`).join('')}</colgroup>`;
-        [headTable, bodyTable].forEach(table => {
-            const old = table.querySelector('colgroup');
-            if (old) old.remove();
-            table.insertAdjacentHTML('afterbegin', cols);
-            table.style.tableLayout = 'fixed';
-            // min-width 让两张表在装不下时一起横向溢出，而不是各自被压缩到不同宽度。
-            table.style.minWidth = `${totalWidth}px`;
-        });
-        // 横向滚动时表头要跟着走，否则一往右拉列名就和数据错开。
         const wrap = box.querySelector('.dash-table-wrap');
         const headBox = box.querySelector('.dash-table-headbox');
-        if (wrap && headBox && wrap.dataset.headSync !== '1') {
+        if (!headTable || !bodyTable || !wrap || !headBox) return;
+        const bodyRows = bodyTable.querySelectorAll('tbody tr');
+        const headCells = headTable.querySelectorAll('th');
+        if (!bodyRows.length || !headCells.length) return;
+        const firstCells = bodyRows[0].children;
+        if (firstCells.length !== headCells.length) return;
+        // 区块还没显示出来时 clientWidth 是 0，按 0 平分会把每列钉成 1px。
+        // 直接放弃这次同步，等 ResizeObserver 在真正有宽度时再算。
+        if (wrap.clientWidth <= 0) return;
+
+        // 重新测量前必须同时移除旧 colgroup 和固定宽度；只改回 auto 仍会受旧列宽约束，
+        // 全屏、预览放大或容器变宽后就不是真正的自适应。
+        [headTable, bodyTable].forEach(table => {
+            table.querySelector('colgroup')?.remove();
+            table.style.tableLayout = 'auto';
+            table.style.width = '';
+            table.style.minWidth = '';
+        });
+        const hasConfiguredWidths = Array.from(headCells).some(cell =>
+            clampInt(cell.dataset.columnWidth, 0, 60, 1200) > 0);
+        const widths = [];
+        const automatic = [];
+        for (let i = 0; i < headCells.length; i++) {
+            const configured = clampInt(headCells[i].dataset.columnWidth, 0, 60, 1200);
+            if (configured) {
+                widths.push(configured);
+            } else {
+                automatic.push(i);
+                if (!hasConfiguredWidths) {
+                    // 所有列都未配置时，业务优先级是“同屏看全所有列”，不是完整显示每个长值。
+                    // 平分可视宽度，长内容由省略号处理，绝不通过横向扩宽把后面的列挤出屏幕。
+                    widths.push(Math.max(1, Math.floor(wrap.clientWidth / headCells.length)));
+                } else {
+                    let width = tableCellNaturalWidth(headCells[i]);
+                    bodyRows.forEach(row => {
+                        if (row.children[i]) width = Math.max(width, tableCellNaturalWidth(row.children[i]));
+                    });
+                    widths.push(width);
+                }
+            }
+        }
+        // 只配了几列时，剩下的自动列按最长内容量出来往往加起来超过一屏，结果又要横向拉。
+        // 业务优先级是「先看到所有列」：手填的宽度照给，自动列按比例压到剩余空间里，
+        // 每列不低于 MIN_AUTO_COLUMN 以免压成看不出内容的窄条。压不进去才允许横向滚动。
+        if (automatic.length && hasConfiguredWidths) {
+            const MIN_AUTO_COLUMN = 56;
+            const fixedTotal = widths.reduce((sum, width, index) =>
+                sum + (automatic.includes(index) ? 0 : width), 0);
+            const autoTotal = automatic.reduce((sum, index) => sum + widths[index], 0);
+            const room = wrap.clientWidth - fixedTotal;
+            if (autoTotal > room && room >= automatic.length * MIN_AUTO_COLUMN) {
+                const ratio = room / autoTotal;
+                automatic.forEach(index => {
+                    widths[index] = Math.max(MIN_AUTO_COLUMN, Math.floor(widths[index] * ratio));
+                });
+            }
+        }
+        const measuredWidth = widths.reduce((sum, width) => sum + width, 0);
+        // 自动列压缩过之后不能再拿 auto 布局下量到的表宽当目标：那是「没压缩」的宽度，
+        // 用它算 targetWidth 会把刚压掉的空间又加回来，横向滚动照旧出现。
+        const naturalWidth = hasConfiguredWidths ? measuredWidth : wrap.clientWidth;
+        // 表格比容器窄时把余量分给未手工配置的列；宽度统一取整，吸收折叠边框和
+        // 小数像素误差，避免表头表与数据表在最右侧差一个像素。
+        // 以数据滚动区的可视宽度为准，不能取表头容器宽度：传统滚动条会占掉
+        // 数据区十几像素，按表头宽度铺表就会让最后一列落到滚动条下面。
+        const targetWidth = Math.ceil(Math.max(naturalWidth, wrap.clientWidth));
+        const spare = Math.max(0, targetWidth - measuredWidth);
+        // 余量只分给自动列；每列都手填时保持用户给出的总宽，装不下就横向滚动。
+        // 不能再把余量强塞给最后一列，否则用户配置的最后一列宽度又会被自动逻辑覆盖。
+        if (spare && automatic.length) {
+            const each = Math.floor(spare / automatic.length);
+            let remainder = spare - each * automatic.length;
+            automatic.forEach(index => {
+                widths[index] += each + (remainder > 0 ? 1 : 0);
+                remainder = Math.max(0, remainder - 1);
+            });
+        }
+        const tableWidth = widths.reduce((sum, width) => sum + width, 0);
+        const cols = `<colgroup>${widths.map(width => `<col style="width:${width}px">`).join('')}</colgroup>`;
+        [headTable, bodyTable].forEach(table => {
+            table.insertAdjacentHTML('afterbegin', cols);
+            table.style.tableLayout = 'fixed';
+            table.style.width = `${tableWidth}px`;
+            table.style.minWidth = `${tableWidth}px`;
+        });
+        // Safari/部分 Chromium 对 table-cell 的 overflow 裁切不稳定，给文字容器明确内容宽度，
+        // 彻底阻止长文本画进下一列。宽度扣掉左右 padding，并至少保留 1px。
+        const applyCell = (cell, index) => {
+            const text = cell.querySelector('.dash-table-cell-text');
+            if (!widths[index]) return;
+            const contentWidth = Math.max(1, widths[index] - 18);
+            cell.style.width = `${widths[index]}px`;
+            cell.style.minWidth = `${widths[index]}px`;
+            cell.style.maxWidth = `${widths[index]}px`;
+            if (text) text.style.width = `${contentWidth}px`;
+            // 定好列宽后按真实像素截字：CSS 省略号在两张固定布局表上不总生效。
+            fitCellText(cell, contentWidth);
+        };
+        headCells.forEach(applyCell);
+        bodyRows.forEach(row => Array.from(row.children).forEach(applyCell));
+        // 表格重算总宽后，浏览器可能保留上一次的 scrollLeft。首次同步强制从最左开始；
+        // 后续 ResizeObserver 重算则保留用户正在看的位置，并把表头校正到同一位置。
+        if (wrap.dataset.widthSynced !== '1') {
+            wrap.scrollLeft = 0;
+            wrap.dataset.widthSynced = '1';
+        }
+        headBox.scrollLeft = wrap.scrollLeft;
+        // 横向滚动时表头要跟着走，否则一往右拉列名就和数据错开。
+        if (wrap.dataset.headSync !== '1') {
             wrap.dataset.headSync = '1';
             wrap.addEventListener('scroll', () => {
                 headBox.scrollLeft = wrap.scrollLeft;
             });
+        }
+        // 宽屏切换、全屏和浏览器缩放都会改变区块宽度，变化后重新按内容和容器计算。
+        if (!box._dashTableResizeObserver && window.ResizeObserver) {
+            let previousWidth = box.clientWidth;
+            box._dashTableResizeObserver = new ResizeObserver(() => {
+                const currentWidth = box.clientWidth;
+                if (!box.isConnected) { box._dashTableResizeObserver.disconnect(); return; }
+                if (Math.abs(currentWidth - previousWidth) < 1) return;
+                previousWidth = currentWidth;
+                requestAnimationFrame(() => syncTableColumns(box));
+            });
+            box._dashTableResizeObserver.observe(box);
         }
     }
 
@@ -736,6 +1090,9 @@
             if (remain > 0) hint.innerHTML = `<i class="fa fa-angle-double-down"></i>向下滚动加载更多（还有 ${remain} 行）`;
             else hint.remove();
         }
+        // 新批次可能出现更长内容，自动列要按新增行重新计算；手工列宽仍会保持原值。
+        const box = wrap.closest('.dash-table-box');
+        if (box) syncTableColumns(box);
         return true;
     }
 
@@ -805,7 +1162,8 @@
                scrollHeight 还含着 thead，用 scrollHeight/2 会比真正的接缝早半个表头高度，
                每圈都可见地"跳"一下（表头字号越大跳得越明显）。 */
             const body = wrap.querySelector('tbody');
-            const loopLen = () => (body ? body.offsetHeight / 2 : wrap.scrollHeight / 2);
+            const track = wrap.querySelector('[data-marquee-track]');
+            const loopLen = () => (body ? body.offsetHeight / 2 : (track ? track.offsetHeight / 2 : wrap.scrollHeight / 2));
             if (loopLen() <= 4) return;
             // 一屏就装得下时不用滚。这里比的是可滚动距离，不是一圈长度。
             if (wrap.scrollHeight <= wrap.clientHeight + 4) return;
@@ -830,7 +1188,7 @@
                 // 标签页切走再切回来时 now 会跳很大一截，夹住 dt 免得一帧滚过好几屏。
                 const dt = Math.min((now - last) / 1000, 0.25);
                 last = now;
-                if (!paused) {
+                if (!paused && !document.hidden) {
                     const len = loopLen();
                     pos += pxPerSec * dt;
                     if (len > 0) { while (pos >= len) pos -= len; }
@@ -851,19 +1209,49 @@
         return `<div class="dash-block-nodata"><i class="fa fa-inbox"></i>${escapeHtml(message)}</div>`;
     }
 
+    let clockTimer = 0;
+
+    function updateClocks(scope) {
+        if (document.hidden) return;
+        (scope || document).querySelectorAll('[data-dashboard-clock]').forEach(clock => {
+            const now = new Date();
+            const format = clock.dataset.dashboardClock || 'datetime';
+            const date = now.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
+            const time = now.toLocaleTimeString('zh-CN', { hour12: false });
+            clock.innerHTML = `${format !== 'date' ? `<strong>${escapeHtml(time)}</strong>` : ''}${format !== 'time' ? `<span>${escapeHtml(date)}</span>` : ''}`;
+        });
+    }
+
+    /** 时钟每秒扫描当前文档，避免定时器一直引用已被重绘移除的旧预览节点。 */
+    function bindClocks(root) {
+        updateClocks(root || document);
+        if (!clockTimer) clockTimer = window.setInterval(() => updateClocks(document), 1000);
+    }
+
     function renderBlockBody(block, payload) {
-        if (block.type === 'text') return `<div class="dash-text-block">${escapeHtml(block.body || block.description || '')}</div>`;
+        if (block.type === 'text' || block.type === 'section') return `<div class="${block.type === 'section' ? 'dash-section-block' : 'dash-text-block'}">${escapeHtml(block.body || block.description || '')}</div>`;
+        if (block.type === 'clock') {
+            return `<div class="dash-clock" data-dashboard-clock="${escapeHtml(block.clock_format || 'datetime')}"></div>`;
+        }
         if (!payload) return '<div class="dash-block-loading"><i class="fa fa-spinner fa-spin"></i>加载中…</div>';
         if (!payload.success) return `<div class="dash-block-error"><i class="fa fa-exclamation-triangle"></i><span>${escapeHtml(payload.error || '区块执行失败')}</span></div>`;
 
         const result = payload.result || {};
         try {
             if (block.type === 'metric') return renderMetric(block, result);
+            if (block.type === 'comparison') return renderComparison(block, result);
+            if (block.type === 'metric_group') return renderMetricGroup(block, result);
+            if (block.type === 'gauge') return renderGauge(block, result);
+            if (block.type === 'ranking') return renderRanking(block, result);
+            if (block.type === 'status') return renderStatus(block, result);
             if (block.type === 'table') return renderTable(block, result);
             if (block.type === 'progress') return renderProgress(block, result);
-            if (block.type === 'bar') return renderBar(seriesFrom(block, result));
-            if (block.type === 'line') return renderLine(seriesFrom(block, result));
-            if (block.type === 'pie') return renderPie(seriesFrom(block, result));
+            if (block.type === 'grouped_bar' || block.type === 'stacked_bar') return renderMultiBar(block, result);
+            if (block.type === 'bar') return (block.value_columns || []).length > 1 ? renderMultiBar(block, result) : renderBar(seriesFrom(block, result));
+            if (block.type === 'line' || block.type === 'area') return renderMultiLine(block, result);
+            if (block.type === 'pie') return renderPie(seriesFrom(block, result), block);
+            if (block.type === 'alert_list') return renderDynamicList(block, result, false);
+            if (block.type === 'timeline') return renderDynamicList(block, result, true);
         } catch (error) {
             return `<div class="dash-block-error"><i class="fa fa-exclamation-triangle"></i><span>渲染失败: ${escapeHtml(error.message || error)}</span></div>`;
         }
@@ -919,7 +1307,8 @@
                     <span class="dash-tile-foot-main">在新窗口打开<i class="fa fa-external-link ml-1.5"></i></span>
                     <span class="dash-tile-acts">
                         <span class="dash-tile-act" data-dashboard-copy="${escapeHtml(item.id)}" title="复制看板地址"><i class="fa fa-link"></i></span>
-                        ${canManage ? `<span class="dash-tile-act" data-dashboard-edit="${escapeHtml(item.id)}" title="编辑看板"><i class="fa fa-pencil"></i></span>
+                        ${item.can_manage ? `<span class="dash-tile-act" data-dashboard-json="${escapeHtml(item.id)}" title="复制看板JSON（可导入其他项目）"><i class="fa fa-code"></i></span>
+                        <span class="dash-tile-act" data-dashboard-edit="${escapeHtml(item.id)}" title="编辑看板"><i class="fa fa-pencil"></i></span>
                         <span class="dash-tile-act is-danger" data-dashboard-delete="${escapeHtml(item.id)}" title="删除看板"><i class="fa fa-trash-o"></i></span>` : ''}
                     </span>
                 </span>
@@ -938,11 +1327,61 @@
         }
     }
 
+    /** 复制看板 JSON：只带脚本名称，不带 SQL，便于其他项目粘贴导入。 */
+    async function copyDashboardJson(dashboardId) {
+        try {
+            const response = await fetch(`/api/custom_dashboards/${encodeURIComponent(dashboardId)}/export`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '导出看板JSON失败');
+            const text = JSON.stringify(data.dashboard_json, null, 2);
+            try {
+                await navigator.clipboard.writeText(text);
+                toast('看板JSON已复制，到其他项目点「导入JSON」粘贴即可', 'success');
+            } catch (error) {
+                window.prompt('复制这段看板JSON：', text);
+            }
+        } catch (error) {
+            toast(error.message || '导出看板JSON失败', 'error');
+        }
+    }
+
+    /** 导入看板 JSON：按脚本名称匹配本项目脚本，匹配不到的区块保留但需重选。 */
+    async function importDashboardJson() {
+        const text = window.prompt('粘贴看板JSON（从其他项目的「复制看板JSON」得到）：', '');
+        if (!text || !text.trim()) return;
+        let payload;
+        try {
+            payload = JSON.parse(text);
+        } catch (error) {
+            toast('JSON 格式不对，检查一下是否复制完整', 'error');
+            return;
+        }
+        try {
+            const response = await fetch('/api/custom_dashboards/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dashboard_json: payload }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '导入看板失败');
+            const unmatched = data.unmatched_scripts || [];
+            toast(unmatched.length
+                ? `已导入，但这些脚本本项目没有，需要在编辑里重选：${unmatched.join('、')}`
+                : '看板已导入', unmatched.length ? 'warning' : 'success');
+            await loadDashboards();
+            if (data.dashboard && data.dashboard.id) await openEditorFor(data.dashboard.id);
+        } catch (error) {
+            toast(error.message || '导入看板失败', 'error');
+        }
+    }
+
     function blockShell(block, payload) {
-        const width = Math.max(2, Math.min(GRID_COLUMNS, block.layout && block.layout.w ? block.layout.w : 6));
-        // 高度按 1 单位 ≈ 92px 折算成 min-height，比固定行高更耐内容变化。
-        const minHeight = Math.max(1, block.layout && block.layout.h ? block.layout.h : 2) * 92;
-        const reload = block.type === 'text' ? '' :
+        const width = Math.max(1, Math.min(GRID_COLUMNS, block.layout && block.layout.w ? block.layout.w : 6));
+        // v2 直接保存像素高度；旧 layout.h 仍按 92px/档兼容折算。
+        const legacyHeight = Math.max(1, block.layout && block.layout.h ? block.layout.h : 2) * 92;
+        const minHeight = clampInt(block.layout && block.layout.height_px, Math.max(120, legacyHeight), 120, 1600);
+        const noScript = block.type === 'text' || block.type === 'section' || block.type === 'clock';
+        const reload = noScript ? '' :
             `<button type="button" class="dash-block-reload" data-reload-block="${escapeHtml(block.id)}" title="只刷新这一块"><i class="fa fa-refresh"></i></button>`;
         // 自定义配色通过 CSS 变量下发，样式表里用 var(--block-x, 主题色) 兜底，
         // 这样"不选颜色"就是跟随主题，不用在 JS 里到处拼 style。
@@ -975,7 +1414,7 @@
         ].filter(Boolean).join(' ');
         const titleAlign = allow(block.title_align, ALIGNS, 'left');
         const valueAlign = allow(block.value_align, ALIGNS, 'left');
-        return `<div class="dash-block ${styleClasses}" style="grid-column:span ${width};min-height:${minHeight}px;${vars}${pxVars}--block-bg-a:${opacity};" data-block-id="${escapeHtml(block.id)}">
+        return `<div class="dash-block ${styleClasses}" style="--block-grid-span:${width};grid-column:span ${width};height:${minHeight}px;${vars}${pxVars}--block-bg-a:${opacity};" data-block-id="${escapeHtml(block.id)}">
             <div class="dash-block-head${titleAlign !== 'left' ? ` is-align-${titleAlign}` : ''}">
                 <div class="min-w-0">
                     <div class="dash-block-title">${escapeHtml(block.title || '未命名')}</div>
@@ -992,7 +1431,8 @@
             const response = await fetch(`/api/custom_dashboards/${encodeURIComponent(dashboardId)}`);
             const data = await response.json();
             if (!data.success) { toast(data.error || '看板加载失败', 'error'); return; }
-            await loadScriptCatalog(true);
+            if (data.can_manage === false) { toast('没有该看板的管理权限，无法编辑', 'warning'); return; }
+            await loadScriptCatalog(true, dashboardId);
             openEditor(data.dashboard);
         } catch (error) {
             toast(`看板加载失败: ${error.message || error}`, 'error');
@@ -1005,7 +1445,9 @@
             const data = await response.json();
             if (!data.success) { toast(data.error || '看板列表加载失败', 'error'); return; }
             dashboardSummaries = data.dashboards || [];
-            canManage = Boolean(data.can_manage);
+            // 新建权限（can_create）与逐看板管理权限（item.can_manage）分开：
+            // 只被授权管理某几个看板的人不能新建，但要能编辑那几个。
+            canManage = Boolean(data.can_create);
             applyManagePermission();
             renderGallery();
         } catch (error) {
@@ -1015,17 +1457,19 @@
 
     /** 无「配置」权限时藏掉新建/编辑/删除，避免非授权用户点了才报错。 */
     function applyManagePermission() {
-        ['dashboardCreateBtn', 'dashboardEditBtn', 'dashboardDeleteBtn'].forEach(id => {
+        ['dashboardCreateBtn', 'dashboardImportBtn', 'dashboardEditBtn', 'dashboardDeleteBtn'].forEach(id => {
             el(id)?.classList.toggle('hidden', !canManage);
         });
     }
 
-    async function loadScriptCatalog(force) {
+    async function loadScriptCatalog(force, dashboardId) {
         // 自定义SQL 随时可能新增脚本，默认每次打开配置器都重新拉一次，
         // 否则新存的脚本在下拉里选不到（必须刷新整页才出现）。
         if (scriptCatalog.length && !force) return scriptCatalog;
+        // 带上 dashboard_id：只被授权管理某几个看板的人凭该看板的管理权限取脚本目录。
+        const query = dashboardId ? `?dashboard_id=${encodeURIComponent(dashboardId)}` : '';
         try {
-            const response = await fetch('/api/custom_dashboards/scripts');
+            const response = await fetch(`/api/custom_dashboards/scripts${query}`);
             const data = await response.json();
             scriptCatalog = data.success ? (data.scripts || []) : [];
         } catch (error) {
@@ -1074,7 +1518,7 @@
      * 看起来跟布局条上的宽度不一致。
      */
     function widthOptions(current) {
-        const width = Math.max(2, Math.min(GRID_COLUMNS, Number(current) || 6));
+        const width = Math.max(1, Math.min(GRID_COLUMNS, Number(current) || 6));
         if (WIDTH_PRESETS.some(preset => preset.value === width)) return selectOptions(WIDTH_PRESETS, width);
         const merged = WIDTH_PRESETS.concat([{ value: width, label: `拖出来的宽度（${width}/12）` }])
             .sort((a, b) => a.value - b.value);
@@ -1232,7 +1676,7 @@
      * 填了值＝这个看板永远用这个值。后者是常见误用，所以填了就立刻显红字警示。
      */
     function paramsSection(block, index) {
-        if (block.type === 'text' || !block.script_id) return '';
+        if (block.type === 'text' || block.type === 'section' || block.type === 'clock' || !block.script_id) return '';
         const script = scriptCatalog.find(item => item.id === block.script_id);
         const variables = (script && script.variables) || [];
         if (!variables.length) return '';
@@ -1261,6 +1705,23 @@
         </details>`;
     }
 
+    function columnWidthEditor(block, columns, index) {
+        const displayed = block.columns && block.columns.length
+            ? block.columns.filter(name => columns.includes(name)) : columns;
+        const widths = block.column_widths && typeof block.column_widths === 'object' ? block.column_widths : {};
+        const rows = displayed.map(name => {
+            const width = clampInt(widths[name], 0, 60, 1200);
+            return `<label class="dash-column-width-row">
+                <span title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                <input type="number" min="60" max="1200" step="10" class="${INPUT_CLASS}" ${INPUT_STYLE}
+                    data-block-index="${index}" data-column-width="${escapeHtml(name)}"
+                    value="${width || ''}" placeholder="自动">
+                <em>px</em>
+            </label>`;
+        }).join('');
+        return `<div class="dash-column-widths">${rows}</div>`;
+    }
+
     function blockEditorCard(block, index) {
         const type = BLOCK_TYPES.find(item => item.value === block.type) || BLOCK_TYPES[0];
         const preview = block.script_id ? previewCache.get(previewKey(block)) : null;
@@ -1277,7 +1738,8 @@
         });
 
         let dataSection = '';
-        if (block.type !== 'text') {
+        const noScriptType = block.type === 'text' || block.type === 'section' || block.type === 'clock';
+        if (!noScriptType) {
             dataSection += field('数据来源：选一个自定义SQL脚本',
                 `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="script_id">${scriptSelectOptions(block.script_id)}</select>`,
                 '只能选你有权限执行的脚本。想加新查询请先去「自定义SQL」里保存一个。');
@@ -1294,12 +1756,16 @@
         }
 
         let mapping = '';
-        if (block.type === 'text') {
-            mapping = field('要显示的文字',
+        if (block.type === 'text' || block.type === 'section') {
+            mapping = field(block.type === 'section' ? '分区标题 / 说明' : '要显示的文字',
                 `<textarea class="${INPUT_CLASS}" ${INPUT_STYLE} rows="3" data-block-index="${index}" data-field="body" placeholder="例如：以下数据统计口径为「已审核报工单」，每日 08:00 后为准。">${escapeHtml(block.body || '')}</textarea>`,
                 '用来给看板分区、写统计口径或注意事项，不查数据库。');
+        } else if (block.type === 'clock') {
+            mapping = field('时钟显示内容', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="clock_format">${selectOptions([
+                { value: 'datetime', label: '日期 + 时间' }, { value: 'time', label: '只显示时间' }, { value: 'date', label: '只显示日期' }
+            ], block.clock_format || 'datetime')}</select>`, '时钟由浏览器本地时间驱动，不执行 SQL。');
         } else if (columns.length) {
-            if (block.type === 'metric') {
+            if (['metric', 'gauge', 'status', 'comparison'].includes(block.type)) {
                 mapping += field('怎么算出这个数字',
                     `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="aggregate">${selectOptions(AGGREGATES, block.aggregate || 'first')}</select>`,
                     '脚本只返回一行时选「取第一行的值」；返回多行想看总数选「统计行数」。');
@@ -1307,6 +1773,14 @@
                     mapping += field('数字取哪一列',
                         `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="value_column">${selectOptions(columns, block.value_column)}</select>`,
                         '选一个数值列，比如「数量」「金额」。');
+                }
+                if (block.type === 'gauge') {
+                    mapping += field('仪表下限', `<input type="number" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="min_value" value="${escapeHtml(block.min_value == null ? '0' : block.min_value)}">`, '仪表刻度起点。');
+                    mapping += field('仪表上限', `<input type="number" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="max_value" value="${escapeHtml(block.max_value == null ? '100' : block.max_value)}">`, '仪表刻度终点。');
+                    mapping += field('目标值（选填）', `<input type="number" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="target_value" value="${escapeHtml(block.target_value || '')}">`, '用于标记业务目标。');
+                }
+                if (block.type === 'status') {
+                    mapping += field('状态取哪一列', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="status_column">${selectOptions(columns, block.status_column || block.value_column)}</select>`, '正常/成功显示绿色，告警显示橙色，异常/失败显示红色。');
                 }
                 mapping += field('单位（选填）',
                     `<input type="text" maxlength="10" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="unit" value="${escapeHtml(block.unit || '')}" placeholder="条 / 台 / %">`,
@@ -1327,6 +1801,8 @@
                 mapping += field('要展示的列（不选=全部）',
                     `<select class="${INPUT_CLASS}" ${INPUT_STYLE} multiple size="5" data-block-index="${index}" data-field="columns">${selectOptions(columns, null).replace(/ selected/g, '')}</select>`,
                     '按住 Ctrl（Mac 用 Command）可多选，顺序就是表格里的列顺序。');
+                mapping += field('每列宽度（选填）', columnWidthEditor(block, columns, index),
+                    '单位为 px，支持 60-1200；留空就是自动宽度。内容较多时表格可左右滚动。');
                 const mode = allow(block.table_mode, TABLE_MODES, 'paged');
                 mapping += field('行数多的时候怎么显示',
                     `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="table_mode">${selectOptions(TABLE_MODE_OPTIONS, mode)}</select>`,
@@ -1351,15 +1827,39 @@
                 }
             } else {
                 const labelHint = block.type === 'pie' ? '每个扇形代表哪一类，比如「车间名称」。' : '横轴的分类，比如「日期」「车间名称」。';
-                mapping += field(block.type === 'pie' ? '分类取哪一列' : '横轴取哪一列',
+                mapping += field(block.type === 'pie' ? '分类取哪一列' : '横轴 / 名称取哪一列',
                     `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="label_column">${selectOptions(columns, block.label_column)}</select>`, labelHint);
-                mapping += field(block.type === 'progress' ? '百分比按哪一列算' : '数值取哪一列',
-                    `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="value_column">${selectOptions(columns, block.value_column)}</select>`,
-                    '必须是数值列。文本列画不出图。');
+                const multi = ['line', 'area', 'bar', 'grouped_bar', 'stacked_bar', 'metric_group'].includes(block.type);
+                if (multi) {
+                    mapping += field('数值列（可多选）',
+                        `<select class="${INPUT_CLASS}" ${INPUT_STYLE} multiple size="5" data-block-index="${index}" data-field="value_columns">${selectOptions(columns, null).replace(/ selected/g, '')}</select>`,
+                        '按住 Ctrl（Mac 用 Command）选择多个系列，最多 8 个。');
+                } else {
+                    mapping += field(block.type === 'progress' ? '进度按哪一列算' : '数值取哪一列',
+                        `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="value_column">${selectOptions(columns, block.value_column || (block.value_columns || [])[0])}</select>`,
+                        '必须是数值列。文本列画不出图。');
+                }
                 if (block.type === 'progress') {
-                    mapping += field('100% 对应多少（选填）',
-                        `<input type="number" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="max_value" value="${escapeHtml(block.max_value === null || block.max_value === undefined ? '' : block.max_value)}" placeholder="留空则以最大值为 100%">`,
+                    mapping += field('100% 对应的目标值',
+                        `<input type="number" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="target_value" value="${escapeHtml(block.target_value == null ? '100' : block.target_value)}">`,
                         '比如目标产量是 1000，就填 1000。');
+                }
+                if (block.type === 'pie') {
+                    mapping += field('占比图样式', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="pie_style">${selectOptions(PIE_STYLES, block.pie_style || 'donut')}</select>`, '标准、环形、玫瑰、半环四种样式。');
+                    mapping += field('显示选项', `<label class="dash-check"><input type="checkbox" data-block-index="${index}" data-field="show_labels"${block.show_labels === false ? '' : ' checked'}> 标签</label><label class="dash-check"><input type="checkbox" data-block-index="${index}" data-field="show_legend"${block.show_legend === false ? '' : ' checked'}> 图例</label>`, '可按大屏空间自由取舍。');
+                }
+                if (['ranking', 'alert_list', 'timeline'].includes(block.type)) {
+                    mapping += field('详情列（选填）', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="detail_column"><option value="">不显示详情</option>${selectOptions(columns, block.detail_column)}</select>`, '展示补充说明或事件内容。');
+                    mapping += field('状态列（选填）', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="status_column"><option value="">不显示状态</option>${selectOptions(columns, block.status_column)}</select>`, '正常/告警/严重会自动配色。');
+                }
+                if (['alert_list', 'timeline'].includes(block.type)) {
+                    const listMode = allow(block.list_mode, ['static', 'marquee'], 'static');
+                    mapping += field('动态列表播放方式', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="list_mode">${selectOptions([
+                        { value: 'static', label: '静态展示' }, { value: 'marquee', label: '自动匀速滚动' }
+                    ], listMode)}</select>`, '数据较多时可循环滚动，鼠标悬停会暂停。');
+                    if (listMode === 'marquee') {
+                        mapping += field('滚动速度', `<input type="number" min="4" max="400" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="marquee_speed" value="${escapeHtml(block.marquee_speed || 24)}">`, '每秒滚动的像素数，推荐 20-35。');
+                    }
                 }
             }
         } else if (block.script_id && preview && !preview.error) {
@@ -1390,8 +1890,8 @@
                 ${dataSection}
                 ${paramsSection(block, index)}
                 ${mapping}
-                ${field('这一块占多宽', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="width">${widthOptions((block.layout && block.layout.w) || 6)}</select>`, '一行总共 12 格，摆不下会自动换行。也可以在上面的布局条里拖右边缘改宽度。')}
-                ${field('这一块占多高', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="height">${selectOptions(HEIGHT_PRESETS, (block.layout && block.layout.h) || 2)}</select>`, '数字块选「矮」，表格选「高」。')}
+                ${field('这一块占多宽', `<select class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="width">${widthOptions((block.layout && block.layout.w) || 6)}</select>`, '一行总共 12 格，可精确选择 1-12 格。也可拖布局条右边缘。')}
+                ${field('这一块高度（像素）', `<input type="number" min="120" max="1600" step="10" class="${INPUT_CLASS}" ${INPUT_STYLE} data-block-index="${index}" data-field="height_px" value="${escapeHtml((block.layout && block.layout.height_px) || Math.max(120, ((block.layout && block.layout.h) || 2) * 92))}">`, '支持 120-1600px。旧看板的高度档位会自动换算。')}
             </div>
             <details class="dash-color-box" data-style-box="${index}"${block._styleOpen ? ' open' : ''}>
                 <summary class="dash-color-summary">
@@ -1426,11 +1926,12 @@
         const active = activeBlockIndex();
         strip.innerHTML = editorState.blocks.map((block, index) => {
             const type = BLOCK_TYPES.find(item => item.value === block.type) || BLOCK_TYPES[0];
-            const width = Math.max(2, Math.min(GRID_COLUMNS, (block.layout && block.layout.w) || 6));
-            const height = Math.max(1, (block.layout && block.layout.h) || 2);
+            const width = Math.max(1, Math.min(GRID_COLUMNS, (block.layout && block.layout.w) || 6));
+            const heightPx = clampInt(block.layout && block.layout.height_px,
+                Math.max(120, ((block.layout && block.layout.h) || 2) * 92), 120, 1600);
             const accent = safeColor(block.accent_color) || safeColor(block.value_color);
             return `<div class="dash-layout-cell${index === active ? ' is-active' : ''}" data-layout-index="${index}"
-                style="grid-column:span ${width};min-height:${28 + height * 12}px;${accent ? `--cell-accent:${accent};` : ''}"
+                style="grid-column:span ${width};min-height:${Math.max(42, Math.round(heightPx / 7))}px;${accent ? `--cell-accent:${accent};` : ''}"
                 title="${escapeHtml(block.title || '未命名')}（${escapeHtml(type.label)}）｜宽 ${width}/12">
                 <span class="dash-layout-grip" data-layout-grip="${index}" title="按住拖动换位置"><i class="fa fa-arrows"></i></span>
                 <span class="dash-layout-cell-name"><i class="fa ${type.icon} mr-1"></i>${escapeHtml(block.title || `第 ${index + 1} 块`)}</span>
@@ -1456,6 +1957,12 @@
         // 边打字边看效果，所以读输入框而不是 editorState.name（后者只在保存时才同步）。
         const input = el('dashboardNameInput');
         title.textContent = (input && input.value.trim()) || editorState.name || '未命名看板';
+        const desc = el('dashboardPreviewDesc');
+        const descInput = el('dashboardDescInput');
+        if (desc) {
+            desc.textContent = (descInput && descInput.value.trim()) || editorState.description || '';
+            desc.classList.toggle('hidden', !desc.textContent);
+        }
         const align = allow(editorState.name_align, ALIGNS, 'left');
         headline.className = `min-w-0 dash-stage-headline${align === 'left' ? '' : ` is-name-${align}`}`;
         const color = safeColor(editorState.name_color);
@@ -1465,6 +1972,39 @@
         else stage.style.removeProperty('--stage-name-color');
         if (px) stage.style.setProperty('--stage-name-px', `${px}px`);
         else stage.style.removeProperty('--stage-name-px');
+    }
+
+    function applyPreviewSize() {
+        const canvas = el('dashboardPreviewCanvas');
+        const frame = el('dashboardPreviewFrame');
+        const select = el('dashboardPreviewSize');
+        if (!canvas || !frame || !select) return;
+        const preset = PREVIEW_SIZES[select.value] || PREVIEW_SIZES.auto;
+        if (!preset.width) {
+            canvas.classList.remove('is-fixed');
+            canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.transform = '';
+            frame.style.setProperty('--preview-scaled-height', 'auto');
+            return;
+        }
+        canvas.classList.add('is-fixed');
+        const available = Math.max(320, frame.clientWidth - 20);
+        const scale = Math.min(1, available / preset.width);
+        canvas.style.width = `${preset.width}px`; canvas.style.height = `${preset.height}px`;
+        canvas.style.transform = `scale(${scale})`;
+        frame.style.setProperty('--preview-scaled-height', `${Math.round(preset.height * scale)}px`);
+    }
+
+    function togglePreviewWide() {
+        const modal = el('dashboardEditorModal');
+        if (!modal) return;
+        modal.classList.toggle('is-preview-wide');
+        requestAnimationFrame(applyPreviewSize);
+    }
+
+    function togglePreviewZoom() {
+        const box = el('dashboardPreviewBox');
+        if (!box) return;
+        if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen?.();
     }
 
     function renderVisualPreview() {
@@ -1525,7 +2065,7 @@
         }
 
         grid.innerHTML = editorState.blocks.map(block => {
-            if (block.type === 'text') return blockShell(block, null);
+            if (block.type === 'text' || block.type === 'section' || block.type === 'clock') return blockShell(block, null);
             if (!block.script_id) {
                 return blockShell(block, { success: false, error: '还没选脚本，选完就能在这里看到真实数据' });
             }
@@ -1538,7 +2078,8 @@
             });
         }).join('');
         // innerHTML 重画会丢监听，滚动加载模式的表格要重新绑一次。
-        bindTableScroll(grid); bindMarquee(grid);
+        bindTableScroll(grid); bindMarquee(grid); bindClocks(grid);
+        requestAnimationFrame(applyPreviewSize);
     }
 
     /** 把 activeIndex 夹回合法范围；没有块时返回 -1。 */
@@ -1573,20 +2114,29 @@
             const select = container.querySelector(`select[data-block-index="${index}"][data-field="columns"]`);
             if (select) Array.from(select.options).forEach(option => { option.selected = block.columns.includes(option.value); });
         }
+        const valuesSelect = container.querySelector(`select[data-block-index="${index}"][data-field="value_columns"]`);
+        if (valuesSelect) {
+            const selected = Array.isArray(block.value_columns) ? block.value_columns : [];
+            Array.from(valuesSelect.options).forEach(option => { option.selected = selected.includes(option.value); });
+        }
     }
 
     /** 试跑脚本拿列名，并按列类型给区块填一套能直接出图的默认值。 */
     async function ensurePreview(scriptId, blockIndex) {
         if (!scriptId) return;
         const target = editorState && editorState.blocks[blockIndex];
-        // 试跑时带上区块自己的变量值，这样列名和样例行跟看板上真正会跑的 SQL 一致。
-        const params = (target && target.params) || {};
-        const key = target ? previewKey(target) : scriptId;
+        if (!target || target.script_id !== scriptId) return;
+        const blockId = target.id;
+        const requestId = (previewRequests.get(blockId) || 0) + 1;
+        previewRequests.set(blockId, requestId);
+        const params = target.params || {};
+        const key = previewKey(target);
         if (!previewCache.has(key)) {
             try {
                 const response = await fetch('/api/custom_dashboards/preview', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ script_id: scriptId, params })
+                    // dashboard_id 用于逐看板管理权限鉴权；新建时为空，走「可新建」判断。
+                    body: JSON.stringify({ script_id: scriptId, params, dashboard_id: (editorState && editorState.id) || '' })
                 });
                 const data = await response.json();
                 previewCache.set(key, data.success
@@ -1596,26 +2146,28 @@
                 previewCache.set(key, { error: error.message || String(error) });
             }
         }
+        // 编辑器已关闭、区块已删除/换脚本、或有更新请求时，丢弃这个异步结果。
+        const block = editorState && editorState.blocks.find(item => item.id === blockId);
+        if (!block || block.script_id !== scriptId || previewRequests.get(blockId) !== requestId) return;
         const preview = previewCache.get(key);
-        const block = editorState && editorState.blocks[blockIndex];
-        if (block && preview && !preview.error) {
+        if (preview && !preview.error) {
             const guess = guessColumns(preview.columns, preview.rows);
-            if (!block.value_column) block.value_column = guess.numeric[0] || preview.columns[0] || '';
-            if (!block.label_column) block.label_column = guess.textual[0] || preview.columns[0] || '';
-            if (!block.title) {
-                const script = scriptCatalog.find(item => item.id === scriptId);
-                if (script) block.title = script.name;
+            if (!Array.isArray(block.value_columns) || !block.value_columns.length) {
+                block.value_columns = [guess.numeric[0] || preview.columns[0] || ''].filter(Boolean);
             }
+            if (!block.value_column) block.value_column = block.value_columns[0] || '';
+            if (!block.label_column) block.label_column = guess.textual[0] || preview.columns[0] || '';
         }
         renderEditorBlocks();
     }
 
     /** 各展示方式的默认尺寸：切换类型和新建时都用这一份，避免两处各写一遍。 */
     function defaultLayoutFor(type) {
-        if (type === 'metric') return { w: 3, h: 1 };
-        if (type === 'table') return { w: 12, h: 3 };
-        if (type === 'text') return { w: 12, h: 1 };
-        return { w: 6, h: 2 };
+        if (type === 'metric' || type === 'status') return { w: 3, h: 2, height_px: 160 };
+        if (type === 'gauge' || type === 'comparison') return { w: 4, h: 3, height_px: 280 };
+        if (type === 'table' || type === 'alert_list' || type === 'timeline') return { w: 12, h: 4, height_px: 420 };
+        if (type === 'text' || type === 'section' || type === 'clock') return { w: 12, h: 2, height_px: 140 };
+        return { w: 6, h: 3, height_px: 300 };
     }
 
     /**
@@ -1629,8 +2181,10 @@
         const blockType = allow(type, BLOCK_TYPES.map(item => item.value), 'metric');
         editorState.blocks.push({
             id: newBlockId(), type: blockType, title: '', description: '', script_id: '',
-            aggregate: 'first', value_column: '', label_column: '', columns: [], page_size: 20,
-            sort: {}, trend: 'up_good', layout: defaultLayoutFor(blockType)
+            aggregate: 'first', value_column: '', value_columns: [], label_column: '', columns: [], column_widths: {}, page_size: 20,
+            sort: {}, trend: 'up_good', pie_style: 'donut', show_labels: true, show_legend: true,
+            target_value: blockType === 'progress' ? '100' : '', list_mode: 'static', marquee_speed: 24,
+            layout: defaultLayoutFor(blockType)
         });
         // 新块直接成为"正在配置的那一块"，右边立刻显示它的表单。
         editorState.activeIndex = editorState.blocks.length - 1;
@@ -1659,15 +2213,15 @@
     function renderThemePicker() {
         const box = el('dashboardThemePicker');
         if (!box || !editorState) return;
-        const current = editorState.theme || 'aurora';
+        const current = editorState.theme || 'command_center';
         const currentTheme = THEMES.filter(theme => theme.value === current)[0];
         box.innerHTML = THEME_GROUPS.map(group => {
             const items = THEMES.filter(theme => theme.group === group);
             if (!items.length) return '';
             const options = items.map(theme => `
-                <button type="button" class="dash-theme-opt dash-theme-${theme.value}${theme.value === current ? ' is-on' : ''}"
+                <button type="button" class="dash-theme-opt dash-theme-${theme.value}${theme.value === current ? ' is-on' : ''}${theme.featured ? ' is-featured' : ''}"
                     data-theme-set="${theme.value}" title="${escapeHtml(theme.label)}" aria-label="${escapeHtml(theme.label)}">
-                    <span class="dash-theme-swatch"></span>
+                    <span class="dash-theme-swatch"></span><span class="dash-theme-name">${escapeHtml(theme.label)}</span>
                 </button>`).join('');
             const picked = currentTheme && currentTheme.group === group
                 ? `<em class="dash-theme-picked">${escapeHtml(currentTheme.label)}</em>` : '';
@@ -1831,7 +2385,7 @@
                 blocks: dashboard.blocks || []
             }))
             : {
-                id: null, name: '', description: '', refresh_seconds: 0, theme: 'aurora',
+                id: null, name: '', description: '', refresh_seconds: 0, theme: 'command_center',
                 bg_image: '', bg_fit: 'cover', bg_dim: 35, bg_blur: 0,
                 name_size: 'md', name_px: 0, name_color: '', name_align: 'left',
                 public: false, blocks: []
@@ -1887,11 +2441,15 @@
         };
         for (let i = 0; i < editorState.blocks.length; i += 1) {
             const block = editorState.blocks[i];
-            if (block.type === 'text') {
-                if (!String(block.body || '').trim()) { jumpTo(i, `第 ${i + 1} 块是说明文字，请填写要显示的内容`); return; }
+            const noValueTypes = ['table', 'status', 'alert_list', 'timeline'];
+            if (block.type === 'text' || block.type === 'section') {
+                if (!String(block.body || '').trim()) { jumpTo(i, `第 ${i + 1} 块是文字区块，请填写内容`); return; }
+            } else if (block.type === 'clock') {
+                continue;
             } else if (!block.script_id) {
                 jumpTo(i, `第 ${i + 1} 块还没有选 SQL 脚本`); return;
-            } else if (block.type !== 'table' && block.aggregate !== 'count' && !block.value_column) {
+            } else if (!noValueTypes.includes(block.type) && block.aggregate !== 'count'
+                    && !block.value_column && !(block.value_columns || []).length) {
                 jumpTo(i, `第 ${i + 1} 块还没有选数值列`); return;
             }
         }
@@ -1900,7 +2458,7 @@
             name,
             description: el('dashboardDescInput').value.trim(),
             refresh_seconds: Number(el('dashboardRefreshInput').value) || 0,
-            theme: editorState.theme || 'aurora',
+            theme: editorState.theme || 'command_center',
             bg_image: editorState.bg_image || '',
             bg_fit: editorState.bg_fit || 'cover',
             bg_dim: editorState.bg_dim === undefined ? 35 : editorState.bg_dim,
@@ -1949,6 +2507,21 @@
         const index = Number(target.dataset.blockIndex);
         const block = editorState.blocks[index];
         if (!block) return false;
+        // 每列表宽输入使用真实 SQL 列名作键，不进入固定 data-field 分支。
+        if (target.dataset.columnWidth) {
+            const widths = Object.assign({}, block.column_widths);
+            const name = target.dataset.columnWidth;
+            const value = String(target.value || '').trim();
+            if (value) {
+                widths[name] = clampInt(value, 60, 60, 1200);
+                target.value = String(widths[name]);
+            } else {
+                delete widths[name];
+            }
+            block.column_widths = widths;
+            return 'preview';
+        }
+
         // 变量覆盖值走单独一条分支：键名是脚本里的变量名，不是固定字段。
         if (target.dataset.paramName) {
             const name = target.dataset.paramName;
@@ -1974,20 +2547,40 @@
         let needsRerender = 'preview';
 
         if (key === 'script_id') {
+            const oldScript = scriptCatalog.find(item => item.id === block.script_id);
+            const newScript = scriptCatalog.find(item => item.id === target.value);
+            const oldName = oldScript ? oldScript.name : '';
+            // 空标题或仍等于旧脚本名，说明用户没有手工改名，跟随新脚本；自定义标题完整保留。
+            if (!String(block.title || '').trim() || (oldName && block.title === oldName)) {
+                block.title = newScript ? newScript.name : '';
+            }
             block.script_id = target.value;
             // 换脚本等于换数据源，之前选的列不一定还存在，全部清掉重新猜。
-            block.value_column = ''; block.label_column = ''; block.columns = []; block.compare_column = ''; block.sort = {};
+            block.value_column = ''; block.value_columns = []; block.label_column = '';
+            block.columns = []; block.column_widths = {}; block.compare_column = ''; block.detail_column = '';
+            block.status_column = ''; block.sort = {};
+            previewRequests.set(block.id, (previewRequests.get(block.id) || 0) + 1);
             renderEditorBlocks();
             ensurePreview(block.script_id, index);
             return false;
         }
-        if (key === 'columns') {
-            block.columns = Array.from(target.selectedOptions).map(option => option.value);
+        if (key === 'columns' || key === 'value_columns') {
+            block[key] = Array.from(target.selectedOptions).map(option => option.value).slice(0, key === 'value_columns' ? 8 : 40);
+            if (key === 'columns') {
+                if (block.columns.length) {
+                    const allowed = new Set(block.columns);
+                    block.column_widths = Object.fromEntries(
+                        Object.entries(block.column_widths || {}).filter(([name]) => allowed.has(name)));
+                }
+                needsRerender = true;
+            }
+        } else if (key === 'show_labels' || key === 'show_legend') {
+            block[key] = target.checked;
         } else if (key === 'width') {
-            block.layout = Object.assign({}, block.layout, { w: Number(target.value) || 6 });
+            block.layout = Object.assign({}, block.layout, { w: clampInt(target.value, 6, 1, 12) });
             needsRerender = true;
-        } else if (key === 'height') {
-            block.layout = Object.assign({}, block.layout, { h: Number(target.value) || 2 });
+        } else if (key === 'height_px') {
+            block.layout = Object.assign({}, block.layout, { height_px: clampInt(target.value, 184, 120, 1600) });
             needsRerender = true;
         } else if (key === 'sort_column') {
             block.sort = target.value ? { column: target.value, direction: (block.sort && block.sort.direction) || 'desc' } : {};
@@ -2005,14 +2598,14 @@
             block[key] = target.value === '' ? 0 : clampInt(target.value, 0, 0, 200);
         } else if (key === 'value_px') {
             block[key] = target.value === '' ? 0 : clampInt(target.value, 0, 0, 400);
-        } else if (key === 'bg_preset' || key === 'table_mode') {
+        } else if (key === 'bg_preset' || key === 'table_mode' || key === 'list_mode') {
             // 这几项会改变后面还要不要显示别的字段（自定义色、滚动速度…），所以要重画。
             block[key] = target.value;
             // 重画会把折叠区收起来，选了底色档还得再展开一次才能填自定义色——所以先钉住展开状态。
             block._styleOpen = key === 'bg_preset';
             needsRerender = true;
-        } else if (key === 'max_value') {
-            block.max_value = target.value === '' ? null : Number(target.value);
+        } else if (key === 'target_value') {
+            block.target_value = target.value === '' && block.type === 'progress' ? '100' : target.value;
         } else if (key === 'aggregate' || key === 'compare_column') {
             block[key] = target.value;
             needsRerender = true;  // 这两项会改变后续要显示哪些字段
@@ -2179,14 +2772,14 @@
             const block = editorState.blocks[index];
             if (!block) return;
             const startX = event.clientX;
-            const startWidth = Math.max(2, Math.min(GRID_COLUMNS, (block.layout && block.layout.w) || 6));
+            const startWidth = Math.max(1, Math.min(GRID_COLUMNS, (block.layout && block.layout.w) || 6));
             // 一栏的像素宽度：整条宽度含 11 道间隙，折算时一并算进去。
             const columnPx = (strip.getBoundingClientRect().width - 11 * 6) / GRID_COLUMNS;
             handle.setPointerCapture(event.pointerId);
 
             const onMove = moveEvent => {
                 const delta = Math.round((moveEvent.clientX - startX) / Math.max(1, columnPx));
-                const next = Math.max(2, Math.min(GRID_COLUMNS, startWidth + delta));
+                const next = Math.max(1, Math.min(GRID_COLUMNS, startWidth + delta));
                 if (next === ((block.layout && block.layout.w) || 6)) return;
                 block.layout = Object.assign({}, block.layout, { w: next });
                 // 只改这一格的栏宽，不重建整条：重建会把正在拖的那格连同 pointer capture
@@ -2244,7 +2837,7 @@
             }
             // 变量输入框只带 data-param-name（键名是脚本里的变量名，不是固定字段），
             // 所以这里必须两个都选；只选 data-field 会让变量值永远回不到 block.params。
-            const target = event.target.closest('[data-field],[data-param-name]');
+            const target = event.target.closest('[data-field],[data-param-name],[data-column-width]');
             if (!target) return;
             const result = applyFieldChange(target);
             if (result === 'title') {
@@ -2391,10 +2984,11 @@
         // 看板名称边打边在预览里跟上。用 input 而不是 change：change 要等失焦才发，
         // 打完字不点别处就看不到效果。这里只补文字/颜色/位置，不整块重绘（重绘会丢焦点）。
         const nameInput = el('dashboardNameInput');
-        if (nameInput) nameInput.addEventListener('input', () => {
+        const descInput = el('dashboardDescInput');
+        [nameInput, descInput].forEach(input => input?.addEventListener('input', () => {
             const stage = el('dashboardPreviewStage');
             if (stage && editorState) renderPreviewName(stage);
-        });
+        }));
         // 手填像素同理：change 要失焦才发，边调边看不到。
         const namePxInput = el('dashboardNamePxInput');
         if (namePxInput) namePxInput.addEventListener('input', () => {
@@ -2404,6 +2998,10 @@
             if (stage) renderPreviewName(stage);
         });
         bindLayoutEvents();
+        el('dashboardPreviewSize')?.addEventListener('change', applyPreviewSize);
+        el('dashboardPreviewWide')?.addEventListener('click', togglePreviewWide);
+        el('dashboardPreviewZoom')?.addEventListener('click', togglePreviewZoom);
+        window.addEventListener('resize', applyPreviewSize);
         el('dashboardEditorSave').addEventListener('click', saveEditor);
         el('dashboardEditorCancel').addEventListener('click', closeEditor);
         el('dashboardEditorClose').addEventListener('click', closeEditor);
@@ -2418,6 +3016,8 @@
                 // 命中它们时必须阻止默认跳转，否则会顺带打开新窗口。
                 const copy = event.target.closest('[data-dashboard-copy]');
                 if (copy) { event.preventDefault(); copyDashboardUrl(copy.dataset.dashboardCopy); return; }
+                const json = event.target.closest('[data-dashboard-json]');
+                if (json) { event.preventDefault(); copyDashboardJson(json.dataset.dashboardJson); return; }
                 const edit = event.target.closest('[data-dashboard-edit]');
                 if (edit) { event.preventDefault(); openEditorFor(edit.dataset.dashboardEdit); return; }
                 const remove = event.target.closest('[data-dashboard-delete]');
@@ -2437,6 +3037,9 @@
             }
             openEditor(null);
         });
+
+        const importBtn = el('dashboardImportBtn');
+        if (importBtn) importBtn.addEventListener('click', () => importDashboardJson());
     }
 
     function initialize() {
@@ -2465,7 +3068,7 @@
 
     // 供看板独立页（/dashboard/<id>）复用同一套渲染器，避免两处各写一份图表代码。
     // 独立页复用这里的渲染器，避免两套代码各画一遍表格/指标，样式和口径必然会走偏。
-    window.DashboardRender = { blockShell, renderBlockBody, escapeHtml, bindTableScroll, bindMarquee, stopMarquee, THEMES, LIGHT_THEMES };
+    window.DashboardRender = { blockShell, renderBlockBody, escapeHtml, bindTableScroll, bindMarquee, bindClocks, stopMarquee, THEMES, LIGHT_THEMES };
 
     document.addEventListener('DOMContentLoaded', () => {
         if (el('customDashboardContent')) initialize();

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ project_name | default('服务器巡检系统') }}</title>
     <link href="{{ url_for('static', filename='css/font-awesome.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260826-table-marquee" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260827-board-scope-json" rel="stylesheet">
     <!-- 外部JS模块（app.js必须最先加载，提供共享工具函数） -->
     <script src="{{ url_for('static', filename='js/app.js') }}?v=20260826-headsplit"></script>
 </head>
@@ -47,8 +47,8 @@
     <script src="{{ url_for('static', filename='js/inspection.js') }}?v=20260822-inspection-cancel"></script>
     <script src="{{ url_for('static', filename='js/log_view.js') }}?v=20260823-unified-inspection-duration"></script>
     <script src="{{ url_for('static', filename='js/pg_config.js') }}?v=20260822-pg-container"></script>
-    <script src="{{ url_for('static', filename='js/user_permission.js') }}?v=20260823-dashboard-permission"></script>
-    <script src="{{ url_for('static', filename='js/custom_dashboard.js') }}?v=20260826-table-marquee"></script>
+    <script src="{{ url_for('static', filename='js/user_permission.js') }}?v=20260827-board-scope-json"></script>
+    <script src="{{ url_for('static', filename='js/custom_dashboard.js') }}?v=20260827-board-scope-json"></script>
     {# Arthas诊断模块已隐藏 - 使用Jinja2注释防止渲染 #}
 </body>
 

@@ -148,6 +148,62 @@ def can_access_custom_script(username, script):
     return category in access['category_names'] or str(script.get('id')) in access['script_ids']
 
 
+def normalize_custom_dashboard_scope(scope):
+    """规范化角色的看板范围；旧角色无此字段时由聚合函数按功能权限兼容。"""
+    if not isinstance(scope, dict):
+        return None
+    result = {}
+    for action in ('view', 'manage'):
+        item = scope.get(action)
+        if not isinstance(item, dict):
+            item = {}
+        mode = 'selected' if item.get('mode') == 'selected' else 'all'
+        dashboard_ids = sorted({str(value).strip() for value in item.get('dashboard_ids', [])
+                                if str(value).strip()})
+        result[action] = {'mode': mode, 'dashboard_ids': dashboard_ids}
+    return result
+
+
+def get_custom_dashboard_access(username):
+    """合并用户各角色的看板查看/管理范围，并兼容旧角色的全量功能权限。"""
+    if username == ADMIN_USERNAME:
+        return {'view': {'all': True, 'dashboard_ids': []},
+                'manage': {'all': True, 'dashboard_ids': []}}
+    data = load_auth_data()
+    user = next((item for item in data['users']
+                 if item.get('username') == username and item.get('enabled')), None)
+    result = {'view': {'all': False, 'dashboard_ids': set()},
+              'manage': {'all': False, 'dashboard_ids': set()}}
+    if not user:
+        return {'view': {'all': False, 'dashboard_ids': []},
+                'manage': {'all': False, 'dashboard_ids': []}}
+    role_map = {role.get('id'): role for role in data['roles']}
+    for role_id in user.get('role_ids', []):
+        role = role_map.get(role_id, {})
+        permissions = set(role.get('permissions', []))
+        scope = normalize_custom_dashboard_scope(role.get('custom_dashboard_scope'))
+        for action, permission in (('view', 'custom_dashboard'), ('manage', 'custom_dashboard_manage')):
+            if permission not in permissions:
+                continue
+            # 旧角色没有 scope：保持升级前的全量权限。
+            item = scope.get(action) if scope else {'mode': 'all', 'dashboard_ids': []}
+            if item['mode'] == 'all':
+                result[action]['all'] = True
+                result[action]['dashboard_ids'].clear()
+            elif not result[action]['all']:
+                result[action]['dashboard_ids'].update(item['dashboard_ids'])
+    return {action: {'all': value['all'], 'dashboard_ids': sorted(value['dashboard_ids'])}
+            for action, value in result.items()}
+
+
+def can_access_custom_dashboard(username, dashboard_id, action='view'):
+    """按看板 id 判断查看/管理权限；管理权限同时允许查看该看板。"""
+    access = get_custom_dashboard_access(username)
+    dashboard_id = str(dashboard_id or '')
+    actions = ('view', 'manage') if action == 'view' else ('manage',)
+    return any(access[item]['all'] or dashboard_id in access[item]['dashboard_ids'] for item in actions)
+
+
 def authenticate(username, password):
     user = find_user(username)
     if not user or not user.get('enabled'): return False

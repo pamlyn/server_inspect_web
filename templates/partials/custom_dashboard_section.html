@@ -21,6 +21,10 @@
                     <button type="button" id="dashboardRefreshBtn" class="dash-hero-btn is-ghost" title="重新加载看板列表">
                         <i class="fa fa-refresh mr-1.5"></i>刷新
                     </button>
+                    <button type="button" id="dashboardImportBtn" data-permission="custom_dashboard_manage"
+                        class="dash-hero-btn is-ghost hidden" title="粘贴其他项目的看板JSON导入">
+                        <i class="fa fa-download mr-1.5"></i>导入JSON
+                    </button>
                     <button type="button" id="dashboardCreateBtn" data-permission="custom_dashboard_manage"
                         class="dash-hero-btn hidden">
                         <i class="fa fa-plus mr-1.5"></i>新建看板
@@ -178,10 +182,20 @@
                         <!-- 效果预览：用看板页同一套渲染代码 + 试跑拿到的样例数据画一遍 -->
                         <details id="dashboardPreviewBox" class="dash-vp-box hidden" open>
                             <summary class="dash-vp-summary">
-                                <i class="fa fa-eye mr-1.5"></i>效果预览
-                                <span class="dash-vp-note">按当前主题、底色、字号画一遍，数据是试跑取回的样例（最多 20 行）</span>
+                                <span><i class="fa fa-eye mr-1.5"></i>真实舞台预览</span>
+                                <span class="dash-vp-note">复用正式页舞台、区块和图表渲染</span>
+                                <span class="dash-vp-tools" onclick="event.preventDefault();event.stopPropagation();">
+                                    <select id="dashboardPreviewSize" aria-label="预览画布尺寸">
+                                        <option value="auto">自适应画布</option>
+                                        <option value="hd">1920 × 1080</option>
+                                        <option value="laptop">1366 × 768</option>
+                                    </select>
+                                    <button type="button" id="dashboardPreviewWide"><i class="fa fa-arrows-h"></i> 全宽</button>
+                                    <button type="button" id="dashboardPreviewZoom"><i class="fa fa-search-plus"></i> 放大</button>
+                                </span>
                             </summary>
-                            <div class="dash-vp-frame">
+                            <div class="dash-vp-frame" id="dashboardPreviewFrame">
+                                <div id="dashboardPreviewCanvas" class="dash-vp-canvas">
                                 <div id="dashboardPreviewStage" class="dash-stage dash-vp-stage">
                                     <div class="dash-stage-bg" aria-hidden="true">
                                         <span class="dash-stage-mesh"></span>
@@ -200,10 +214,19 @@
                                          预览里不画就等于配了看不见效果，只能保存后开一次看板才知道。 -->
                                     <div id="dashboardPreviewHead" class="dash-stage-head dash-vp-head">
                                         <div class="min-w-0 dash-stage-headline" id="dashboardPreviewHeadline">
+                                            <div class="dash-stage-crumb"><span>服务器巡检系统</span><i class="fa fa-angle-right"></i><span>自定义看板</span></div>
                                             <h1 class="dash-stage-title" id="dashboardPreviewTitle"></h1>
+                                            <p class="dash-stage-desc hidden" id="dashboardPreviewDesc"></p>
+                                        </div>
+                                        <div class="dash-stage-tools dash-vp-stage-tools" aria-hidden="true">
+                                            <span class="dash-stage-stamp">样例数据预览</span>
+                                            <span class="dash-stage-btn"><i class="fa fa-refresh"></i><span>刷新</span></span>
+                                            <span class="dash-stage-btn"><i class="fa fa-arrows-alt"></i><span>全屏</span></span>
                                         </div>
                                     </div>
                                     <div id="dashboardPreviewGrid" class="dash-grid dash-stage-grid-area dash-vp-grid"></div>
+                                    <footer class="dash-stage-foot dash-vp-foot"><span>配置预览 · 最多 20 行样例数据</span><span>自定义看板</span></footer>
+                                </div>
                                 </div>
                             </div>
                         </details>

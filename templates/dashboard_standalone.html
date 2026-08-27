@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if dashboard %}{{ dashboard.name }}{% else %}看板{% endif %} - {{ project_name or '服务器巡检系统' }}</title>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260826-table-marquee" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}?v=20260827-board-scope-json" rel="stylesheet">
 </head>
 <body class="dash-standalone-body">
 {% if denied %}
@@ -96,8 +96,8 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='js/custom_dashboard.js') }}?v=20260826-table-marquee"></script>
-    <script src="{{ url_for('static', filename='js/dashboard_standalone.js') }}?v=20260826-table-marquee"></script>
+    <script src="{{ url_for('static', filename='js/custom_dashboard.js') }}?v=20260827-board-scope-json"></script>
+    <script src="{{ url_for('static', filename='js/dashboard_standalone.js') }}?v=20260826-dashboard-pro"></script>
 {% endif %}
 </body>
 </html>

@@ -9,7 +9,7 @@
 
 from flask import Blueprint, redirect, render_template, session, url_for
 
-from modules.auth.helpers import get_public_user_identity, get_user_permissions
+from modules.auth.helpers import can_access_custom_dashboard, get_public_user_identity
 from modules.custom_dashboards.helpers import LIGHT_THEMES, find_dashboard
 
 dashboard_pages_bp = Blueprint('dashboard_pages', __name__)
@@ -33,8 +33,8 @@ def dashboard_page(dashboard_id):
         return redirect(url_for('auth.login'))
 
     # 免登录看板对匿名访客不查权限；登录用户照旧要有 custom_dashboard 权限。
-    if not is_public and 'custom_dashboard' not in get_user_permissions(username):
-        return render_template('dashboard_standalone.html', denied='没有查看自定义看板的权限',
+    if not is_public and not can_access_custom_dashboard(username, dashboard_id, 'view'):
+        return render_template('dashboard_standalone.html', denied='没有查看该自定义看板的权限',
                                dashboard=None, current_user=get_public_user_identity(username)), 403
 
     if not dashboard:
@@ -46,7 +46,7 @@ def dashboard_page(dashboard_id):
         'dashboard_standalone.html',
         denied=None,
         dashboard=dashboard,
-        can_manage=bool(username) and 'custom_dashboard_manage' in get_user_permissions(username),
+        can_manage=bool(username) and can_access_custom_dashboard(username, dashboard_id, 'manage'),
         # 匿名访客看到的页面要去掉「全部看板」「返回主界面」这些登录后才有意义的入口。
         is_anonymous=not username,
         project_name=get_config('projectName', '服务器巡检系统'),

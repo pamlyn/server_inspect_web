@@ -2,7 +2,7 @@
 import uuid
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash
-from modules.auth.helpers import (ADMIN_USERNAME, ALL_PERMISSIONS, admin_required, authenticate, captcha_store, get_custom_sql_access, get_public_user_identity, get_user_permissions, get_user_roles, load_auth_data, login_required, normalize_custom_sql_scope, password_errors, save_auth_data, valid_username)
+from modules.auth.helpers import (ADMIN_USERNAME, ALL_PERMISSIONS, admin_required, authenticate, captcha_store, get_custom_dashboard_access, get_custom_sql_access, get_public_user_identity, get_user_permissions, get_user_roles, load_auth_data, login_required, normalize_custom_dashboard_scope, normalize_custom_sql_scope, password_errors, save_auth_data, valid_username)
 from modules.auth.helpers import generate_captcha
 
 auth_bp = Blueprint('auth', __name__)
@@ -56,7 +56,7 @@ def get_captcha():
 @login_required
 def access():
     username = session['username']
-    return jsonify({'username': username, 'roles': get_user_roles(username), 'permissions': sorted(get_user_permissions(username)), 'is_admin': username == ADMIN_USERNAME, 'permission_labels': ALL_PERMISSIONS, 'custom_sql_access': get_custom_sql_access(username)})
+    return jsonify({'username': username, 'roles': get_user_roles(username), 'permissions': sorted(get_user_permissions(username)), 'is_admin': username == ADMIN_USERNAME, 'permission_labels': ALL_PERMISSIONS, 'custom_sql_access': get_custom_sql_access(username), 'custom_dashboard_access': get_custom_dashboard_access(username)})
 
 
 @auth_bp.route('/api/auth/custom-sql-options')
@@ -78,6 +78,17 @@ def custom_sql_options():
     })
 
 
+@auth_bp.route('/api/auth/dashboard-options')
+@admin_required
+def dashboard_options():
+    """返回角色授权所需的看板基本信息，不返回区块配置。"""
+    from modules.custom_dashboards.helpers import dashboards
+    return jsonify({'dashboards': [
+        {'id': str(item.get('id')), 'name': str(item.get('name') or item.get('id'))}
+        for item in dashboards
+    ]})
+
+
 @auth_bp.route('/api/auth/roles', methods=['GET', 'POST'])
 @admin_required
 def roles():
@@ -88,9 +99,17 @@ def roles():
     if any(r.get('name') == name for r in data['roles']): return jsonify({'error': '角色名称已存在'}), 400
     permissions = [p for p in payload.get('permissions', []) if p in ALL_PERMISSIONS]
     custom_sql_scope = normalize_custom_sql_scope(payload.get('custom_sql_scope'))
+    custom_dashboard_scope = normalize_custom_dashboard_scope(payload.get('custom_dashboard_scope'))
+    if custom_dashboard_scope is None:
+        custom_dashboard_scope = normalize_custom_dashboard_scope({})
     if 'custom_sql' in permissions and custom_sql_scope['mode'] == 'selected' and not (custom_sql_scope['category_names'] or custom_sql_scope['script_ids']):
         return jsonify({'error': '指定自定义SQL范围时，至少选择一个分类或脚本'}), 400
-    data['roles'].append({'id': uuid.uuid4().hex[:12], 'name': name, 'description': str(payload.get('description') or '').strip(), 'permissions': permissions, 'custom_sql_scope': custom_sql_scope})
+    data['roles'].append({
+        'id': uuid.uuid4().hex[:12], 'name': name,
+        'description': str(payload.get('description') or '').strip(),
+        'permissions': permissions, 'custom_sql_scope': custom_sql_scope,
+        'custom_dashboard_scope': custom_dashboard_scope,
+    })
     save_auth_data(data); return jsonify({'message': '角色创建成功'})
 
 
@@ -108,9 +127,16 @@ def role_detail(role_id):
     if any(r.get('name') == name and r.get('id') != role_id for r in data['roles']): return jsonify({'error': '角色名称已存在'}), 400
     permissions = [p for p in payload.get('permissions', []) if p in ALL_PERMISSIONS]
     custom_sql_scope = normalize_custom_sql_scope(payload.get('custom_sql_scope'))
+    custom_dashboard_scope = normalize_custom_dashboard_scope(payload.get('custom_dashboard_scope'))
+    if custom_dashboard_scope is None:
+        custom_dashboard_scope = normalize_custom_dashboard_scope({})
     if 'custom_sql' in permissions and custom_sql_scope['mode'] == 'selected' and not (custom_sql_scope['category_names'] or custom_sql_scope['script_ids']):
         return jsonify({'error': '指定自定义SQL范围时，至少选择一个分类或脚本'}), 400
-    role.update({'name': name, 'description': str(payload.get('description') or '').strip(), 'permissions': permissions, 'custom_sql_scope': custom_sql_scope})
+    role.update({
+        'name': name, 'description': str(payload.get('description') or '').strip(),
+        'permissions': permissions, 'custom_sql_scope': custom_sql_scope,
+        'custom_dashboard_scope': custom_dashboard_scope,
+    })
     save_auth_data(data); return jsonify({'message': '角色更新成功'})
 
 
