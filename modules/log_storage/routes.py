@@ -243,6 +243,7 @@ def resource_history():
         return jsonify({'success': False, 'error': f'加载资源历史失败: {e}', 'samples': []}), 500
 
 
+@log_bp.route('/export', methods=['GET'])
 @login_required
 def export_logs():
     """按当前筛选条件导出巡检日志列表。"""
